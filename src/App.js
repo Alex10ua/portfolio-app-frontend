@@ -10,7 +10,7 @@ function App() {
   return (
     <div>
       <Routes>
-        <Route path="/" element={<PortfolioList />} />
+        <Route path="*" element={<PortfolioList />} />
         <Route path="/:portfolioId" element={<HoldingsDetail />} />
       </Routes>
     </div>

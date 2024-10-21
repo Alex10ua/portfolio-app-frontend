@@ -145,7 +145,7 @@ function HoldingsDetail() {
                             margin="dense"
                             name="quantity"
                             label="Quantity"
-                            type="text"
+                            type="double"
                             fullWidth
                             variant="outlined"
                             value={newTransaction.quantity}
@@ -155,7 +155,7 @@ function HoldingsDetail() {
                             margin="dense"
                             name="price"
                             label="Price"
-                            type="text"
+                            type="double"
                             fullWidth
                             variant="outlined"
                             value={newTransaction.price}
@@ -165,7 +165,7 @@ function HoldingsDetail() {
                             margin="dense"
                             name="totalAmount"
                             label="Total"
-                            type="text"
+                            type="double"
                             fullWidth
                             variant="outlined"
                             value={newTransaction.totalAmount}
@@ -175,7 +175,7 @@ function HoldingsDetail() {
                             margin="dense"
                             name="commission"
                             label="commission"
-                            type="text"
+                            type="double"
                             fullWidth
                             variant="outlined"
                             value={newTransaction.commission}

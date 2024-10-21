@@ -1,23 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import '../Holdings/HoldingDetalis.css';
 import axios from 'axios';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
+import {
+    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Paper, Typography, Button, Box, IconButton, TextField
+} from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import {
+    Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
+} from '@mui/material';
 
 function HoldingsDetail() {
     const { portfolioId } = useParams();
     const navigate = useNavigate();
     const [holdings, setHoldings] = useState(null);
+    const [transaction, setTransaction] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    useEffect(() => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [open, setOpen] = useState(false);
+    const [newTransaction, setNewTransaction] = useState({
+        date: '',
+        assetName: '',
+        tickerSymbol: '',
+        quantity: '',
+        price: '',
+        totalAmount: '',
+        commission: '',
+    });
+    // Function to fetch holdings data
+    // Use useCallback to memoize fetchHoldings
+    const fetchHoldingsList = useCallback(() => {
         axios.get(`http://localhost:8080/api/v1/${portfolioId}`)
             .then(response => {
                 setHoldings(response.data);
@@ -30,42 +44,219 @@ function HoldingsDetail() {
             });
     }, [portfolioId]);
 
+    useEffect(() => {
+        fetchHoldingsList();
+    }, [fetchHoldingsList]);
+
+    // Function to handle dialog open
+    const handleClickOpen = () => {
+        setOpen(true);
+    };
+
+    // Function to handle dialog close
+    const handleClose = () => {
+        setOpen(false);
+    };
+
+    // Function to handle input change
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setNewTransaction({
+            ...newTransaction,
+            [name]: value,
+        });
+    };
+
+    // Function to handle transaction creation
+    const handleCreateTransaction = () => {
+        axios.post(`http://localhost:8080/api/v1/${portfolioId}/createTransaction`, newTransaction)
+            .then(response => {
+                setTransaction([...transaction, response.data]); // Add new transaction to the list
+                fetchHoldingsList(); // Refresh holdings data
+                handleClose(); // Close the dialog
+            })
+            .catch(error => {
+                console.error('Error creating transaction:', error);
+            });
+    };
+
     if (loading) return <p>Loading holdings ...</p>;
     if (error) return <p>Error loading holdings: {error.message}</p>;
     if (!holdings) return <p>Holdings not found.</p>;
 
+    const filteredHoldings = holdings.filter(holding =>
+        (holding.tickerSymbol || '').toLowerCase().includes(searchTerm || ''.toLowerCase())
+    );
+
 
     return (
-        <div>
-            <button onClick={() => navigate(-1)} className="back-button">Back to Portfolios</button>
+        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+            {/* Header */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h4" component="h1">
+                    {holdings.name}
+                </Typography>
+                <Button variant="contained" color="primary" onClick={() => navigate('/')}>
+                    Back to Portfolios
+                </Button>
+                <Button variant="contained" color="primary" onClick={handleClickOpen}>
+                    Create New Transaction
+                </Button>
+
+                <Dialog open={open} onClose={handleClose}>
+                    <DialogTitle>Create New Transaction</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            Please enter transaction details.
+                        </DialogContentText>
+                        <TextField
+                            autoFocus
+                            margin="dense"
+                            name="date"
+                            label="Date"
+                            type="date"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.date}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            autoFocus
+                            margin="dense"
+                            name="assetName"
+                            label="AssetName"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.assetName}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            margin="dense"
+                            name="tickerSymbol"
+                            label="Ticker"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.tickerSymbol}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            margin="dense"
+                            name="quantity"
+                            label="Quantity"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.quantity}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            margin="dense"
+                            name="price"
+                            label="Price"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.price}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            margin="dense"
+                            name="totalAmount"
+                            label="Total"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.totalAmount}
+                            onChange={handleInputChange}
+                        />
+                        <TextField
+                            margin="dense"
+                            name="commission"
+                            label="commission"
+                            type="text"
+                            fullWidth
+                            variant="outlined"
+                            value={newTransaction.commission}
+                            onChange={handleInputChange}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleClose} color="secondary">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleCreateTransaction} color="primary">
+                            Create
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+            </Box>
+
+            {/* Search Bar */}
+            <TextField
+                variant="outlined"
+                label="Search Holdings"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                sx={{ marginTop: '20px', marginBottom: '20px', width: '300px' }}
+            />
+
+            {/* Table */}
             <TableContainer component={Paper}>
                 <Table>
                     <TableHead>
                         <TableRow>
-
-                            <TableCell>Holding Name</TableCell>
-                            <TableCell>Ticker</TableCell>
-                            <TableCell>Quantity</TableCell>
-                            <TableCell>Average Price</TableCell>
-                            <TableCell>Asset Type</TableCell>
+                            <TableCell>Holding</TableCell>
+                            <TableCell>Shares</TableCell>
+                            <TableCell>Cost per Share</TableCell>
+                            <TableCell>Current Value</TableCell>
+                            <TableCell>Dividends</TableCell>
+                            <TableCell>Dividend Yield</TableCell>
+                            <TableCell>Total Profit</TableCell>
+                            <TableCell>Daily Change</TableCell>
+                            <TableCell align="center">Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {holdings.map((holding) => (
-                            <TableRow key={holding.holdingId}>
-
-                                <TableCell>{holding.name}</TableCell>
-                                <TableCell>{holding.tickerSymbol}</TableCell>
+                        {filteredHoldings.map((holding, index) => (
+                            <TableRow key={index}>
+                                <TableCell>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <img
+                                            src={holding.logoBase64}//add logo as base64
+                                            alt={holding.tickerSymbol}
+                                            style={{ width: 24, height: 24, marginRight: 10 }}
+                                        />
+                                        <Typography>{holding.tickerSymbol}</Typography>
+                                    </Box>
+                                </TableCell>
                                 <TableCell>{holding.quantity}</TableCell>
-                                <TableCell>{holding.averagePurchasePrice}</TableCell>
-                                <TableCell>{holding.assetType}</TableCell>
+                                <TableCell>${holding.averagePurchasePrice}</TableCell>
+                                <TableCell>${holding.currentValue}</TableCell>
+                                <TableCell>${holding.dividends}</TableCell>
+                                <TableCell>{holding.dividendYield}%</TableCell>
+                                <TableCell
+                                    sx={{ color: holding.totalProfit > 0 ? 'green' : 'red' }}
+                                >
+                                    ${holding.totalProfit} ({holding.totalProfitPercentage}%)
+                                </TableCell>
+                                <TableCell
+                                    sx={{ color: holding.dailyChange > 0 ? 'green' : 'red' }}
+                                >
+                                    ${holding.dailyChange}
+                                </TableCell>
+                                <TableCell align="center">
+                                    <IconButton>
+                                        <MoreVertIcon />
+                                    </IconButton>
+                                </TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </TableContainer>
-        </div>
-
+        </Box>
     );
 }
 

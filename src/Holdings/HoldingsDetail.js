@@ -133,12 +133,12 @@ function HoldingsDetail() {
                         />
                         <TextField
                             margin="dense"
-                            name="tickerSymbol"
+                            name="ticker"
                             label="Ticker"
                             type="text"
                             fullWidth
                             variant="outlined"
-                            value={newTransaction.tickerSymbol}
+                            value={newTransaction.ticker}
                             onChange={handleInputChange}
                         />
                         <TextField
@@ -213,6 +213,7 @@ function HoldingsDetail() {
                             <TableCell>Current Value</TableCell>
                             <TableCell>Dividends</TableCell>
                             <TableCell>Dividend Yield</TableCell>
+                            <TableCell>Dividend Yield On Cost</TableCell>
                             <TableCell>Total Profit</TableCell>
                             <TableCell>Daily Change</TableCell>
                             <TableCell align="center">Actions</TableCell>
@@ -224,18 +225,19 @@ function HoldingsDetail() {
                                 <TableCell>
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                                         <img
-                                            src={holding.logoBase64}//add logo as base64
-                                            alt={holding.tickerSymbol}
+                                            src={`/images/${holding.ticker}_icon.png`}
+                                            alt={holding.ticker}
                                             style={{ width: 24, height: 24, marginRight: 10 }}
                                         />
-                                        <Typography>{holding.tickerSymbol}</Typography>
+                                        <Typography>{holding.ticker}</Typography>
                                     </Box>
                                 </TableCell>
-                                <TableCell>{holding.quantity}</TableCell>
-                                <TableCell>${holding.averagePurchasePrice}</TableCell>
-                                <TableCell>${holding.currentValue}</TableCell>
-                                <TableCell>${holding.dividends}</TableCell>
+                                <TableCell>{holding.shareAmount}</TableCell>
+                                <TableCell>${holding.costPerShare}</TableCell>
+                                <TableCell>${holding.currentShareValue}</TableCell>
+                                <TableCell>${holding.dividend}</TableCell>
                                 <TableCell>{holding.dividendYield}%</TableCell>
+                                <TableCell>{holding.dividendYieldOnCost}%</TableCell>
                                 <TableCell
                                     sx={{ color: holding.totalProfit > 0 ? 'green' : 'red' }}
                                 >

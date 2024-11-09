@@ -4,12 +4,11 @@ import '../Holdings/HoldingDetalis.css';
 import axios from 'axios';
 import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Paper, Typography, Button, Box, IconButton, TextField
+    Paper, Typography, Button, Box, IconButton, TextField,
+    Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+    FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import {
-    Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle
-} from '@mui/material';
 
 function HoldingsDetail() {
     const { portfolioId } = useParams();
@@ -21,12 +20,11 @@ function HoldingsDetail() {
     const [searchTerm, setSearchTerm] = useState('');
     const [open, setOpen] = useState(false);
     const [newTransaction, setNewTransaction] = useState({
-        date: '',
-        assetName: '',
-        tickerSymbol: '',
+        date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format,
+        transactionType: 'BUY', // Default transaction type
+        ticker: '',
         quantity: '',
         price: '',
-        totalAmount: '',
         commission: '',
     });
     // Function to fetch holdings data
@@ -85,7 +83,7 @@ function HoldingsDetail() {
     if (!holdings) return <p>Holdings not found.</p>;
 
     const filteredHoldings = holdings.filter(holding =>
-        (holding.tickerSymbol || '').toLowerCase().includes(searchTerm || ''.toLowerCase())
+        (holding.tickerSymbol || '').toUpperCase().includes(searchTerm || ''.toLowerCase())
     );
 
 
@@ -119,18 +117,26 @@ function HoldingsDetail() {
                             variant="outlined"
                             value={newTransaction.date}
                             onChange={handleInputChange}
+                            focused
                         />
-                        <TextField
-                            autoFocus
-                            margin="dense"
-                            name="assetName"
-                            label="AssetName"
-                            type="text"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.assetName}
-                            onChange={handleInputChange}
-                        />
+                        {/* Transaction Type Dropdown */}
+                        <FormControl fullWidth margin="dense" variant="outlined">
+                            <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
+                            <Select
+                                labelId="transaction-type-label"
+                                id="transactionType"
+                                name="transactionType"
+                                value={newTransaction.transactionType}
+                                onChange={handleInputChange}
+                                label="Transaction Type"
+                                variant="outlined"
+                            >
+                                <MenuItem value="BUY">BUY</MenuItem>
+                                <MenuItem value="SELL">SELL</MenuItem>
+                                <MenuItem value="TAX">TAX</MenuItem>
+                                <MenuItem value="DIVIDEND">DIVIDEND</MenuItem>
+                            </Select>
+                        </FormControl>
                         <TextField
                             margin="dense"
                             name="ticker"
@@ -159,16 +165,6 @@ function HoldingsDetail() {
                             fullWidth
                             variant="outlined"
                             value={newTransaction.price}
-                            onChange={handleInputChange}
-                        />
-                        <TextField
-                            margin="dense"
-                            name="totalAmount"
-                            label="Total"
-                            type="double"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.totalAmount}
                             onChange={handleInputChange}
                         />
                         <TextField

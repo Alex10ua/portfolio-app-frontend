@@ -92,7 +92,7 @@ function HoldingsDetail() {
                 <Button
                     variant="contained"
                     startIcon={<ArrowBackIcon />}
-                    onClick={() => navigate('/portfolios')}
+                    onClick={() => navigate('/')}
                     sx={{
                         alignSelf: 'flex-start',
                         backgroundColor: 'primary.main',
@@ -251,11 +251,18 @@ function HoldingsDetail() {
                     }
                 }}
             >
-                <Link href="/dashboard" underline="none" sx={{ color: 'primary.main' }}>
+                <Link
+                    href={`/${portfolioId}`}
+                    underline="none"
+                    sx={{ color: 'primary.main' }}
+                >
                     Dashboard
                 </Link>
-                <Link href="/transactions" underline="none" sx={{ color: 'primary.main' }}>
+                <Link href={`${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
                     Transactions
+                </Link>
+                <Link href="/dividends" underline="none" sx={{ color: 'primary.main' }}>
+                    Dividends
                 </Link>
                 <Link href="/dividend-calendar" underline="none" sx={{ color: 'primary.main' }}>
                     Dividend Calendar

@@ -6,9 +6,11 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Paper, Typography, Button, Box, IconButton, TextField,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    FormControl, InputLabel, Select, MenuItem
+    FormControl, InputLabel, Select, MenuItem, Stack, Link
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AddIcon from '@mui/icons-material/Add';
 
 function HoldingsDetail() {
     const { portfolioId } = useParams();
@@ -17,7 +19,6 @@ function HoldingsDetail() {
     const [transaction, setTransaction] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
     const [open, setOpen] = useState(false);
     const [newTransaction, setNewTransaction] = useState({
         date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format,
@@ -82,124 +83,200 @@ function HoldingsDetail() {
     if (error) return <p>Error loading holdings: {error.message}</p>;
     if (!holdings) return <p>Holdings not found.</p>;
 
-    const filteredHoldings = holdings.filter(holding =>
-        (holding.tickerSymbol || '').toUpperCase().includes(searchTerm || ''.toLowerCase())
-    );
 
 
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Button
+                    variant="contained"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/portfolios')}
+                    sx={{
+                        alignSelf: 'flex-start',
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        padding: '8px 24px',
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontSize: '1rem',
+                        fontWeight: 500,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        '&:hover': {
+                            backgroundColor: 'primary.dark',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                        },
+                        transition: 'all 0.2s ease'
+                    }}
+                >
+                    Back to Portfolios
+                </Button>
                 <Typography variant="h4" component="h1">
                     {holdings.name}
                 </Typography>
-                <Button variant="contained" color="primary" onClick={() => navigate('/')}>
-                    Back to Portfolios
-                </Button>
-                <Button variant="contained" color="primary" onClick={handleClickOpen}>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleClickOpen}
+                    sx={{
+                        backgroundColor: 'primary.main',
+                        color: 'white',
+                        padding: '10px 24px',
+                        borderRadius: '8px',
+                        textTransform: 'none',
+                        fontSize: '1rem',
+                        fontWeight: 500,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        '&:hover': {
+                            backgroundColor: 'primary.dark',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                        },
+                        transition: 'all 0.2s ease'
+                    }}
+                >
                     Create New Transaction
                 </Button>
-
-                <Dialog open={open} onClose={handleClose}>
-                    <DialogTitle>Create New Transaction</DialogTitle>
-                    <DialogContent>
-                        <DialogContentText>
-                            Please enter transaction details.
-                        </DialogContentText>
-                        <TextField
-                            autoFocus
-                            margin="dense"
-                            name="date"
-                            label="Date"
-                            type="date"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.date}
-                            onChange={handleInputChange}
-                            focused
-                        />
-                        {/* Transaction Type Dropdown */}
-                        <FormControl fullWidth margin="dense" variant="outlined">
-                            <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
-                            <Select
-                                labelId="transaction-type-label"
-                                id="transactionType"
-                                name="transactionType"
-                                value={newTransaction.transactionType}
-                                onChange={handleInputChange}
-                                label="Transaction Type"
-                                variant="outlined"
-                            >
-                                <MenuItem value="BUY">BUY</MenuItem>
-                                <MenuItem value="SELL">SELL</MenuItem>
-                                <MenuItem value="TAX">TAX</MenuItem>
-                                <MenuItem value="DIVIDEND">DIVIDEND</MenuItem>
-                            </Select>
-                        </FormControl>
-                        <TextField
-                            margin="dense"
-                            name="ticker"
-                            label="Ticker"
-                            type="text"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.ticker}
-                            onChange={handleInputChange}
-                        />
-                        <TextField
-                            margin="dense"
-                            name="quantity"
-                            label="Quantity"
-                            type="double"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.quantity}
-                            onChange={handleInputChange}
-                        />
-                        <TextField
-                            margin="dense"
-                            name="price"
-                            label="Price"
-                            type="double"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.price}
-                            onChange={handleInputChange}
-                        />
-                        <TextField
-                            margin="dense"
-                            name="commission"
-                            label="commission"
-                            type="double"
-                            fullWidth
-                            variant="outlined"
-                            value={newTransaction.commission}
-                            onChange={handleInputChange}
-                        />
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={handleClose} color="secondary">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleCreateTransaction} color="primary">
-                            Create
-                        </Button>
-                    </DialogActions>
-                </Dialog>
             </Box>
 
-            {/* Search Bar */}
-            <TextField
-                variant="outlined"
-                label="Search Holdings"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{ marginTop: '20px', marginBottom: '20px', width: '300px' }}
-            />
+            <Dialog open={open} onClose={handleClose}>
+                <DialogTitle>Create New Transaction</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Please enter transaction details.
+                    </DialogContentText>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        name="date"
+                        label="Date"
+                        type="date"
+                        fullWidth
+                        variant="outlined"
+                        value={newTransaction.date}
+                        onChange={handleInputChange}
+                        focused
+                    />
+                    {/* Transaction Type Dropdown */}
+                    <FormControl fullWidth margin="dense" variant="outlined">
+                        <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
+                        <Select
+                            labelId="transaction-type-label"
+                            id="transactionType"
+                            name="transactionType"
+                            value={newTransaction.transactionType}
+                            onChange={handleInputChange}
+                            label="Transaction Type"
+                            variant="outlined"
+                        >
+                            <MenuItem value="BUY">BUY</MenuItem>
+                            <MenuItem value="SELL">SELL</MenuItem>
+                            <MenuItem value="TAX">TAX</MenuItem>
+                            <MenuItem value="DIVIDEND">DIVIDEND</MenuItem>
+                        </Select>
+                    </FormControl>
+                    <TextField
+                        margin="dense"
+                        name="ticker"
+                        label="Ticker"
+                        type="text"
+                        fullWidth
+                        variant="outlined"
+                        value={newTransaction.ticker}
+                        onChange={handleInputChange}
+                    />
+                    <TextField
+                        margin="dense"
+                        name="quantity"
+                        label="Quantity"
+                        type="double"
+                        fullWidth
+                        variant="outlined"
+                        value={newTransaction.quantity}
+                        onChange={handleInputChange}
+                    />
+                    <TextField
+                        margin="dense"
+                        name="price"
+                        label="Price"
+                        type="double"
+                        fullWidth
+                        variant="outlined"
+                        value={newTransaction.price}
+                        onChange={handleInputChange}
+                    />
+                    <TextField
+                        margin="dense"
+                        name="commission"
+                        label="commission"
+                        type="double"
+                        fullWidth
+                        variant="outlined"
+                        value={newTransaction.commission}
+                        onChange={handleInputChange}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleClose} color="secondary">
+                        Cancel
+                    </Button>
+                    <Button onClick={handleCreateTransaction} color="primary">
+                        Create
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
+            {/* Navigation Links */}
+            <Stack
+                direction="row"
+                spacing={4}
+                sx={{
+                    mt: 2,
+                    mb: 2,
+                    justifyContent: 'center',
+                    backgroundColor: '#f5f5f5',
+                    padding: '1rem',
+                    borderRadius: '8px',
+                    '& a': {
+                        fontSize: '1rem',
+                        fontWeight: 500,
+                        transition: 'color 0.2s ease',
+                        '&:hover': {
+                            color: 'secondary.main'
+                        }
+                    }
+                }}
+            >
+                <Link href="/dashboard" underline="none" sx={{ color: 'primary.main' }}>
+                    Dashboard
+                </Link>
+                <Link href="/transactions" underline="none" sx={{ color: 'primary.main' }}>
+                    Transactions
+                </Link>
+                <Link href="/dividend-calendar" underline="none" sx={{ color: 'primary.main' }}>
+                    Dividend Calendar
+                </Link>
+                <Link href="/diversification" underline="none" sx={{ color: 'primary.main' }}>
+                    Diversification
+                </Link>
+            </Stack>
             {/* Table */}
-            <TableContainer component={Paper}>
+            <TableContainer
+                component={Paper}
+                sx={{
+                    mt: 3,
+                    mb: 3,
+                    borderRadius: '10px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    '& .MuiTable-root': {
+                        minWidth: 650,
+                    }
+                }}
+            >
                 <Table>
                     <TableHead>
                         <TableRow>
@@ -215,8 +292,21 @@ function HoldingsDetail() {
                             <TableCell align="center">Actions</TableCell>
                         </TableRow>
                     </TableHead>
-                    <TableBody>
-                        {filteredHoldings.map((holding, index) => (
+                    <TableBody sx={{
+                        '& tr:nth-of-type(odd)': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.03)',
+                        },
+                        '& tr:hover': {
+                            backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                            transition: 'background-color 0.2s ease',
+                        },
+                        '& td': {
+                            padding: '16px',
+                            fontSize: '0.875rem',
+                            borderBottom: '1px solid rgba(224, 224, 224, 1)',
+                        }
+                    }}>
+                        {holdings.map((holding, index) => (
                             <TableRow key={index}>
                                 <TableCell>
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>

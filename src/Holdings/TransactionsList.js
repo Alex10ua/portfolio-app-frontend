@@ -40,6 +40,8 @@ const TransactionsList = () => {
         fetchTransactionList();
     }, [fetchTransactionList]);
 
+    const reverseTransactions = transactions.reverse();
+
     if (loading) return <p>Loading holdings ...</p>;
     if (error) return <p>Error loading holdings: {error.message}</p>;
     if (!transactions) return <p>Transactions not found.</p>;
@@ -124,7 +126,7 @@ const TransactionsList = () => {
                             borderBottom: '1px solid rgba(224, 224, 224, 1)',
                         }
                     }}>
-                        {transactions.map((transaction) => {
+                        {reverseTransactions.map((transaction) => {
                             const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
                                 year: 'numeric',
                                 month: '2-digit',

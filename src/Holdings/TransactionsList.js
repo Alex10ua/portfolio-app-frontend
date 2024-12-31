@@ -40,7 +40,7 @@ const TransactionsList = () => {
         fetchTransactionList();
     }, [fetchTransactionList]);
 
-    const reverseTransactions = transactions.reverse();
+    const reverseTransactions = transactions ? transactions.reverse() : [];
 
     if (loading) return <p>Loading holdings ...</p>;
     if (error) return <p>Error loading holdings: {error.message}</p>;
@@ -126,27 +126,34 @@ const TransactionsList = () => {
                             borderBottom: '1px solid rgba(224, 224, 224, 1)',
                         }
                     }}>
-                        {reverseTransactions.map((transaction) => {
-                            const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
-                                year: 'numeric',
-                                month: '2-digit',
-                                day: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: false
-                            }).replace(',', '');
-                            return (
-                                <TableRow key={transaction.transactionId}  >
-                                    <TableCell  >{transaction.ticker}</TableCell>
-                                    <TableCell align="right">{transaction.quantity}</TableCell>
-                                    <TableCell align="right">{transaction.price.toFixed(2)}</TableCell>
-                                    <TableCell align="right">{transaction.totalAmount.toFixed(2)}</TableCell>
-                                    <TableCell align="right">{transaction.commission.toFixed(2)}</TableCell>
-                                    <TableCell  >{formattedDate}</TableCell>
-                                    <TableCell  >{transaction.transactionType}</TableCell>
-                                </TableRow>
-                            );
-                        })}
+                        {reverseTransactions.length === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={7} align="center">
+                                    No transactions found.
+                                </TableCell>
+                            </TableRow>
+                        ) :
+                            reverseTransactions.map((transaction) => {
+                                const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false
+                                }).replace(',', '');
+                                return (
+                                    <TableRow key={transaction.transactionId}  >
+                                        <TableCell  >{transaction.ticker}</TableCell>
+                                        <TableCell align="right">{transaction.quantity}</TableCell>
+                                        <TableCell align="right">{transaction.price.toFixed(2)}</TableCell>
+                                        <TableCell align="right">{transaction.totalAmount.toFixed(2)}</TableCell>
+                                        <TableCell align="right">{transaction.commission.toFixed(2)}</TableCell>
+                                        <TableCell  >{formattedDate}</TableCell>
+                                        <TableCell  >{transaction.transactionType}</TableCell>
+                                    </TableRow>
+                                );
+                            })}
                     </TableBody>
                 </Table>
             </TableContainer >

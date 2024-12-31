@@ -11,14 +11,12 @@ import {
     Paper,
     Stack,
     Link,
-    Box
+    Box,
+    CircularProgress
 } from '@mui/material';
-
-
 
 const TransactionsList = () => {
     const { portfolioId } = useParams();
-    /*const navigate = useNavigate();*/
     const [transactions, setTransactions] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -42,8 +40,15 @@ const TransactionsList = () => {
 
     const reverseTransactions = transactions ? transactions.reverse() : [];
 
-    if (loading) return <p>Loading holdings ...</p>;
-    if (error) return <p>Error loading holdings: {error.message}</p>;
+    if (loading) {
+        return (
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh">
+                <CircularProgress />
+                <p>Loading transactions...</p>
+            </Box>
+        );
+    }
+    if (error) return <p>Error loading transactions: {error.message}</p>;
     if (!transactions) return <p>Transactions not found.</p>;
 
     return (
@@ -76,16 +81,16 @@ const TransactionsList = () => {
                 >
                     Dashboard
                 </Link>
-                <Link href={`${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
+                <Link href={`/${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
                     Transactions
                 </Link>
-                <Link href="/dividends" underline="none" sx={{ color: 'primary.main' }}>
+                <Link href={`/${portfolioId}/dividends`} underline="none" sx={{ color: 'primary.main' }}>
                     Dividends
                 </Link>
-                <Link href="/dividend-calendar" underline="none" sx={{ color: 'primary.main' }}>
+                <Link href={`/${portfolioId}/dividend-calendar`} underline="none" sx={{ color: 'primary.main' }}>
                     Dividend Calendar
                 </Link>
-                <Link href="/diversification" underline="none" sx={{ color: 'primary.main' }}>
+                <Link href={`/${portfolioId}/diversification`} underline="none" sx={{ color: 'primary.main' }}>
                     Diversification
                 </Link>
             </Stack>

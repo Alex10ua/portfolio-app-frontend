@@ -12,9 +12,11 @@ import {
     Paper,
     Stack,
     Link,
-    Box
+    Box, Container, Card, CardContent, Grid, Alert, CircularProgress,
+    Grid2
 } from '@mui/material';
-import CircularProgress from '@mui/material/CircularProgress';
+import NavigationLinks from '../components/NavigationLinks';
+
 
 const Dividends = () => {
     const { portfolioId } = useParams();
@@ -34,81 +36,71 @@ const Dividends = () => {
                 setLoading(false);
             });
     }, [portfolioId]);
-
+    console.log(dividends);
     useEffect(() => {
         fetchDividends();
     }, [fetchDividends]);
 
     if (loading) {
         return (
-            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh">
+            <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                 <CircularProgress />
-                <p>Loading dividends...</p>
-            </Box>
+            </Container>
         );
     }
-    if (error) return <p>Error loading dividends: {error.message}</p>;
+    if (error) {
+        return (
+            <Container sx={{ mt: 4 }}>
+                <Alert severity="error">{error}</Alert>
+            </Container>
+        );
+    };
+
+    if (!dividends) {
+        return (
+            <Container sx={{ mt: 4 }}>
+                <Alert severity="info">No dividends available.</Alert>
+            </Container>
+        )
+    }
+
+    const yearlyCombineDividendsProjection = dividends.yearlyCombineDividendsProjection;
+    const monthlyDividendsAverage = yearlyCombineDividendsProjection / 12;
+    const dailyDividendsAverage = yearlyCombineDividendsProjection / 365;
+    const hourlyDividendsAverage = dailyDividendsAverage / 24;
 
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Navigation Links */}
-            <Stack
-                direction="row"
-                spacing={4}
-                sx={{
-                    mt: 2,
-                    mb: 2,
-                    justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    '& a': {
-                        fontSize: '1rem',
-                        fontWeight: 500,
-                        transition: 'color 0.2s ease',
-                        '&:hover': {
-                            color: 'secondary.main'
-                        }
-                    }
-                }}
-            >
-                <Link
-                    href={`/${portfolioId}`}
-                    underline="none"
-                    sx={{ color: 'primary.main' }}
-                >
-                    Dashboard
-                </Link>
-                <Link href={`/${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
-                    Transactions
-                </Link>
-                <Link href={`/${portfolioId}/dividends`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividends
-                </Link>
-                <Link href={`/${portfolioId}/dividend-calendar`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividend Calendar
-                </Link>
-                <Link href={`/${portfolioId}/diversification`} underline="none" sx={{ color: 'primary.main' }}>
-                    Diversification
-                </Link>
-            </Stack>
-            <Typography variant="h4" gutterBottom>Dividends</Typography>
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Amount</TableCell>
-                            <TableCell>Ticker</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        <TableRow>
-                            <TableCell colSpan={3} align="center">No dividends found.</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </TableContainer>
+
+            <NavigationLinks />
+
+            <Typography variant="h5" gutterBottom>Dividends</Typography>
+            <Container sx={{ mt: 4 }}>
+                <Typography variant='h5' gutterBottom>
+                    Stock Dividends Projection
+                </Typography>
+                <Card>
+                    <CardContent>
+                        <Typography variant='h6' gutterBottom>
+                            Yearly Projection: ${yearlyCombineDividendsProjection.toFixed(2)}
+                        </Typography>
+                        <Grid2 container spacing={2}>
+                            <Grid2 item xs={12} sm={6}>
+                                <Typography variant="h7">Monthly Average:</Typography>
+                                <Typography>${monthlyDividendsAverage.toFixed(2)}</Typography>
+                            </Grid2>
+                            <Grid2 item xs={12} sm={4}>
+                                <Typography variant="h7">Daily Average:</Typography>
+                                <Typography>${dailyDividendsAverage.toFixed(2)}</Typography>
+                            </Grid2>
+                            <Grid2 item xs={12} sm={4}>
+                                <Typography variant="h7">Hourly Average:</Typography>
+                                <Typography>${hourlyDividendsAverage.toFixed(2)}</Typography>
+                            </Grid2>
+                        </Grid2>
+                    </CardContent>
+                </Card>
+            </Container>
         </Box>
     );
 };

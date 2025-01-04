@@ -58,6 +58,55 @@ const Dividends = () => {
     const dailyDividendsAverage = yearlyCombineDividendsProjection / 365;
     const hourlyDividendsAverage = dailyDividendsAverage / 24;
 
+    const barChartAmountByYearData = Object.entries(dividends.amountByMonth || {})
+        .map(([month, amount]) => {
+            const date = new Date(month);
+            const year = date.getFullYear();
+            return {
+                year,
+                amount: parseFloat(amount)
+            };
+        })
+        .reduce((acc, { year, amount }) => {
+            if (!acc[year]) {
+                acc[year] = 0;
+            }
+            acc[year] += amount;
+            return acc;
+        }, {});
+
+    const barChartAmountByYearArray = Object.entries(barChartAmountByYearData)
+        .map(([year, amount]) => ({
+            year,
+            amount: parseFloat(amount.toFixed(2))
+        }))
+        .sort((a, b) => a.year - b.year);
+
+    const barChartAmountByQuarterData = Object.entries(dividends.amountByMonth || {})
+        .map(([month, amount]) => {
+            const date = new Date(month);
+            const year = date.getFullYear();
+            const quarter = Math.floor(date.getMonth() / 3) + 1;
+            return {
+                yearQuarter: `${year} Q${quarter}`,
+                amount: parseFloat(amount)
+            };
+        })
+        .reduce((acc, { yearQuarter, amount }) => {
+            if (!acc[yearQuarter]) {
+                acc[yearQuarter] = 0;
+            }
+            acc[yearQuarter] += amount;
+            return acc;
+        }, {});
+
+    const barChartAmountByQuarterArray = Object.entries(barChartAmountByQuarterData)
+        .map(([yearQuarter, amount]) => ({
+            yearQuarter,
+            amount: parseFloat(amount.toFixed(2))
+        }))
+        .sort((a, b) => a.yearQuarter.localeCompare(b.yearQuarter));
+
     const barChartAmountByMonthdata = Object.entries(dividends.amountByMonth || {}).map(([month, amount]) => ({
         month,
         amount: parseFloat(amount.toFixed(2))
@@ -108,44 +157,82 @@ const Dividends = () => {
                     </CardContent>
                 </Card>
             </Container>
-            <Container>
-                <Card sx={{ mt: 4 }}>
-                    <CardContent>
-                        <Typography variant='h6' gutterBottom>
-                            Dividends By Month
-                        </Typography>
-                        <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={barChartAmountByMonthdata}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" />
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="amount" fill="#8884d8" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-            </Container>
-            <Container>
-                <Card sx={{ mt: 4 }}>
-                    <CardContent>
-                        <Typography variant='h6' gutterBottom>
-                            All Time Dividends By Stock
-                        </Typography>
-                        <ResponsiveContainer width="100%" height={400}>
-                            <BarChart data={barChartAllDivByStockdata}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="ticker" />
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Bar dataKey="amount" fill="#8884d8" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </CardContent>
-                </Card>
-            </Container>
+            <Box sx={{ mt: 4 }} >
+                <Container><Typography variant='h6' gutterBottom>Dividends received</Typography></Container>
+
+                <Container>
+                    <Card sx={{ mt: 4 }}>
+                        <CardContent>
+                            <Typography variant='h6' gutterBottom>Dividends By Year</Typography>
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart data={barChartAmountByYearArray}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="year" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="amount" fill="#8884d8" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Container>
+                <Container>
+                    <Card sx={{ mt: 4 }}>
+                        <CardContent>
+                            <Typography variant='h6' gutterBottom>Dividends By Quarter</Typography>
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart data={barChartAmountByQuarterArray}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="yearQuarter" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="amount" fill="#8884d8" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Container>
+                <Container>
+                    <Card sx={{ mt: 4 }}>
+                        <CardContent>
+                            <Typography variant='h6' gutterBottom>
+                                Dividends By Month
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart data={barChartAmountByMonthdata}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="month" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="amount" fill="#8884d8" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Container>
+                <Container>
+                    <Card sx={{ mt: 4 }}>
+                        <CardContent>
+                            <Typography variant='h6' gutterBottom>
+                                All Time Dividends By Stock
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={400}>
+                                <BarChart data={barChartAllDivByStockdata}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="ticker" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="amount" fill="#8884d8" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Container>
+            </Box>
         </Box>
     );
 };

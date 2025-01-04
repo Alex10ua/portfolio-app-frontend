@@ -2,21 +2,10 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Typography,
-    Paper,
-    Stack,
-    Link,
-    Box, Container, Card, CardContent, Grid, Alert, CircularProgress,
-    Grid2
+    Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
-
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const Dividends = () => {
     const { portfolioId } = useParams();
@@ -69,14 +58,32 @@ const Dividends = () => {
     const dailyDividendsAverage = yearlyCombineDividendsProjection / 365;
     const hourlyDividendsAverage = dailyDividendsAverage / 24;
 
+    const barChartAmountByMonthdata = Object.entries(dividends.amountByMonth || {}).map(([month, amount]) => ({
+        month,
+        amount: parseFloat(amount.toFixed(2))
+    }))
+        .sort((a, b) => new Date(a.month) - new Date(b.month));
+
+    const tickerAmountArray = dividends.tickerAmount || [];
+    const tickerAmountObject = tickerAmountArray.reduce((acc, obj) => ({ ...acc, ...obj }), {});
+    const barChartAllDivByStockdata = Object.entries(tickerAmountObject)
+        .map(([ticker, amount]) => ({
+            ticker,
+            amount: parseFloat(amount).toFixed(2)
+        }))
+        .sort((a, b) => a.ticker.localeCompare(b.ticker));
+
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-
-            <NavigationLinks />
-
-            <Typography variant="h5" gutterBottom>Dividends</Typography>
             <Container sx={{ mt: 4 }}>
-                <Typography variant='h5' gutterBottom>
+                <NavigationLinks />
+            </Container>
+            <Container sx={{ mt: 4 }}>
+                <Typography variant="h5" gutterBottom>Dividends</Typography>
+            </Container>
+
+            <Container sx={{ mt: 4 }}>
+                <Typography variant='h6' gutterBottom>
                     Stock Dividends Projection
                 </Typography>
                 <Card>
@@ -84,20 +91,58 @@ const Dividends = () => {
                         <Typography variant='h6' gutterBottom>
                             Yearly Projection: ${yearlyCombineDividendsProjection.toFixed(2)}
                         </Typography>
-                        <Grid2 container spacing={2}>
-                            <Grid2 item xs={12} sm={6}>
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} sm={6}>
                                 <Typography variant="h7">Monthly Average:</Typography>
                                 <Typography>${monthlyDividendsAverage.toFixed(2)}</Typography>
-                            </Grid2>
-                            <Grid2 item xs={12} sm={4}>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
                                 <Typography variant="h7">Daily Average:</Typography>
                                 <Typography>${dailyDividendsAverage.toFixed(2)}</Typography>
-                            </Grid2>
-                            <Grid2 item xs={12} sm={4}>
+                            </Grid>
+                            <Grid item xs={12} sm={4}>
                                 <Typography variant="h7">Hourly Average:</Typography>
                                 <Typography>${hourlyDividendsAverage.toFixed(2)}</Typography>
-                            </Grid2>
-                        </Grid2>
+                            </Grid>
+                        </Grid>
+                    </CardContent>
+                </Card>
+            </Container>
+            <Container>
+                <Card sx={{ mt: 4 }}>
+                    <CardContent>
+                        <Typography variant='h6' gutterBottom>
+                            Dividends By Month
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={barChartAmountByMonthdata}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="month" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Bar dataKey="amount" fill="#8884d8" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            </Container>
+            <Container>
+                <Card sx={{ mt: 4 }}>
+                    <CardContent>
+                        <Typography variant='h6' gutterBottom>
+                            All Time Dividends By Stock
+                        </Typography>
+                        <ResponsiveContainer width="100%" height={400}>
+                            <BarChart data={barChartAllDivByStockdata}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="ticker" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Bar dataKey="amount" fill="#8884d8" />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </CardContent>
                 </Card>
             </Container>

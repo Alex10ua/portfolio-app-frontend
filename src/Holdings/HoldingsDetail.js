@@ -6,11 +6,12 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Paper, Typography, Button, Box, IconButton, TextField,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    FormControl, InputLabel, Select, MenuItem, Stack, Link, CircularProgress
+    FormControl, InputLabel, Select, MenuItem, CircularProgress
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
+import NavigationLinks from '../components/NavigationLinks';
 
 function HoldingsDetail() {
     const { portfolioId } = useParams();
@@ -236,46 +237,7 @@ function HoldingsDetail() {
             </Dialog>
 
             {/* Navigation Links */}
-            <Stack
-                direction="row"
-                spacing={4}
-                sx={{
-                    mt: 2,
-                    mb: 2,
-                    justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    '& a': {
-                        fontSize: '1rem',
-                        fontWeight: 500,
-                        transition: 'color 0.2s ease',
-                        '&:hover': {
-                            color: 'secondary.main'
-                        }
-                    }
-                }}
-            >
-                <Link
-                    href={`/${portfolioId}`}
-                    underline="none"
-                    sx={{ color: 'primary.main' }}
-                >
-                    Dashboard
-                </Link>
-                <Link href={`/${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
-                    Transactions
-                </Link>
-                <Link href={`/${portfolioId}/dividends`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividends
-                </Link>
-                <Link href={`/${portfolioId}/dividend-calendar`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividend Calendar
-                </Link>
-                <Link href={`/${portfolioId}/diversification`} underline="none" sx={{ color: 'primary.main' }}>
-                    Diversification
-                </Link>
-            </Stack>
+            <NavigationLinks />
             {/* Table */}
             <TableContainer
                 component={Paper}

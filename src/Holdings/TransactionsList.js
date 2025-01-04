@@ -2,18 +2,17 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
-    Table,
+    Table, Typography,
     TableBody,
     TableCell,
     TableContainer,
     TableHead,
     TableRow,
     Paper,
-    Stack,
-    Link,
     Box,
     CircularProgress
 } from '@mui/material';
+import NavigationLinks from '../components/NavigationLinks';
 
 const TransactionsList = () => {
     const { portfolioId } = useParams();
@@ -54,46 +53,7 @@ const TransactionsList = () => {
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
             {/* Navigation Links */}
-            <Stack
-                direction="row"
-                spacing={4}
-                sx={{
-                    mt: 2,
-                    mb: 2,
-                    justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    '& a': {
-                        fontSize: '1rem',
-                        fontWeight: 500,
-                        transition: 'color 0.2s ease',
-                        '&:hover': {
-                            color: 'secondary.main'
-                        }
-                    }
-                }}
-            >
-                <Link
-                    href={`/${portfolioId}`}
-                    underline="none"
-                    sx={{ color: 'primary.main' }}
-                >
-                    Dashboard
-                </Link>
-                <Link href={`/${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
-                    Transactions
-                </Link>
-                <Link href={`/${portfolioId}/dividends`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividends
-                </Link>
-                <Link href={`/${portfolioId}/dividend-calendar`} underline="none" sx={{ color: 'primary.main' }}>
-                    Dividend Calendar
-                </Link>
-                <Link href={`/${portfolioId}/diversification`} underline="none" sx={{ color: 'primary.main' }}>
-                    Diversification
-                </Link>
-            </Stack>
+            <NavigationLinks />
 
             <TableContainer component={Paper}
                 sx={{
@@ -149,7 +109,14 @@ const TransactionsList = () => {
                                 }).replace(',', '');
                                 return (
                                     <TableRow key={transaction.transactionId}  >
-                                        <TableCell  >{transaction.ticker}</TableCell>
+                                        <TableCell  ><Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <img
+                                                src={`/images/${transaction.ticker}_icon.png`}
+                                                alt={transaction.ticker}
+                                                style={{ width: 24, height: 24, marginRight: 10 }}
+                                            />
+                                            <Typography>{transaction.ticker}</Typography>
+                                        </Box></TableCell>
                                         <TableCell align="right">{transaction.quantity}</TableCell>
                                         <TableCell align="right">{transaction.price.toFixed(2)}</TableCell>
                                         <TableCell align="right">{transaction.totalAmount.toFixed(2)}</TableCell>

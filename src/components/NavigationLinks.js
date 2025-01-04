@@ -7,7 +7,7 @@ const NavigationLinks = () => {
 
     return (
 
-        <Stack Stack
+        <Stack
             direction="row"
             spacing={4}
             sx={{

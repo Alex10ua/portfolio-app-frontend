@@ -6,11 +6,12 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Paper, Typography, Button, Box, IconButton, TextField,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    FormControl, InputLabel, Select, MenuItem, Stack, Link
+    FormControl, InputLabel, Select, MenuItem, CircularProgress
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
+import NavigationLinks from '../components/NavigationLinks';
 
 function HoldingsDetail() {
     const { portfolioId } = useParams();
@@ -79,11 +80,16 @@ function HoldingsDetail() {
             });
     };
 
-    if (loading) return <p>Loading holdings ...</p>;
+    if (loading) {
+        return (
+            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh">
+                <CircularProgress />
+                <p>Loading holdings...</p>
+            </Box>
+        );
+    }
     if (error) return <p>Error loading holdings: {error.message}</p>;
     if (!holdings) return <p>Holdings not found.</p>;
-
-
 
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -231,46 +237,7 @@ function HoldingsDetail() {
             </Dialog>
 
             {/* Navigation Links */}
-            <Stack
-                direction="row"
-                spacing={4}
-                sx={{
-                    mt: 2,
-                    mb: 2,
-                    justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
-                    padding: '1rem',
-                    borderRadius: '8px',
-                    '& a': {
-                        fontSize: '1rem',
-                        fontWeight: 500,
-                        transition: 'color 0.2s ease',
-                        '&:hover': {
-                            color: 'secondary.main'
-                        }
-                    }
-                }}
-            >
-                <Link
-                    href={`/${portfolioId}`}
-                    underline="none"
-                    sx={{ color: 'primary.main' }}
-                >
-                    Dashboard
-                </Link>
-                <Link href={`${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
-                    Transactions
-                </Link>
-                <Link href="/dividends" underline="none" sx={{ color: 'primary.main' }}>
-                    Dividends
-                </Link>
-                <Link href="/dividend-calendar" underline="none" sx={{ color: 'primary.main' }}>
-                    Dividend Calendar
-                </Link>
-                <Link href="/diversification" underline="none" sx={{ color: 'primary.main' }}>
-                    Diversification
-                </Link>
-            </Stack>
+            <NavigationLinks />
             {/* Table */}
             <TableContainer
                 component={Paper}

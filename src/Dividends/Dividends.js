@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { StockTooltip, DividendsByMonthTooltip, DividendsByQuarterTooltip, DividendsByYearTooltip } from '../components/Tooltips';
 
 const Dividends = () => {
     const { portfolioId } = useParams();
@@ -25,7 +26,7 @@ const Dividends = () => {
                 setLoading(false);
             });
     }, [portfolioId]);
-    console.log(dividends);
+
     useEffect(() => {
         fetchDividends();
     }, [fetchDividends]);
@@ -127,9 +128,6 @@ const Dividends = () => {
             <Container sx={{ mt: 4 }}>
                 <NavigationLinks />
             </Container>
-            <Container sx={{ mt: 4 }}>
-                <Typography variant="h5" gutterBottom>Dividends</Typography>
-            </Container>
 
             <Container sx={{ mt: 4 }}>
                 <Typography variant='h6' gutterBottom>
@@ -169,7 +167,7 @@ const Dividends = () => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="year" />
                                     <YAxis />
-                                    <Tooltip />
+                                    <Tooltip content={<DividendsByYearTooltip />} />
                                     <Legend />
                                     <Bar dataKey="amount" fill="#8884d8" />
                                 </BarChart>
@@ -186,7 +184,7 @@ const Dividends = () => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="yearQuarter" />
                                     <YAxis />
-                                    <Tooltip />
+                                    <Tooltip content={<DividendsByQuarterTooltip />} />
                                     <Legend />
                                     <Bar dataKey="amount" fill="#8884d8" />
                                 </BarChart>
@@ -205,7 +203,7 @@ const Dividends = () => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="month" />
                                     <YAxis />
-                                    <Tooltip />
+                                    <Tooltip content={<DividendsByMonthTooltip />} />
                                     <Legend />
                                     <Bar dataKey="amount" fill="#8884d8" />
                                 </BarChart>
@@ -224,7 +222,7 @@ const Dividends = () => {
                                     <CartesianGrid strokeDasharray="3 3" />
                                     <XAxis dataKey="ticker" />
                                     <YAxis />
-                                    <Tooltip />
+                                    <Tooltip content={<StockTooltip />} />
                                     <Legend />
                                     <Bar dataKey="amount" fill="#8884d8" />
                                 </BarChart>

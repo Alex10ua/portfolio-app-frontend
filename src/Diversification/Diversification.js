@@ -104,8 +104,6 @@ const Diversification = () => {
         )
     }
 
-    console.log(diversification);
-
     const pieChartAmountByCountryData = Object.entries(diversification.amountByCountry || {}).map(([country, amount]) => ({
         name: country,
         amount: parseFloat(amount.toFixed(2))
@@ -163,8 +161,8 @@ const Diversification = () => {
                                             data={pieChartAmountByCountryData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
+                                            innerRadius={80}
+                                            outerRadius={120}
                                             fill="#8884d8"
                                             dataKey="amount"
                                             onMouseEnter={onPieByCountryEnter}
@@ -186,8 +184,8 @@ const Diversification = () => {
                                             data={pieChartAmountBySectorData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
+                                            innerRadius={80}
+                                            outerRadius={120}
                                             fill="#8884d8"
                                             dataKey="amount"
                                             onMouseEnter={onPieBySectorEnter}
@@ -209,8 +207,8 @@ const Diversification = () => {
                                             data={pieChartAmountByIndustryData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
+                                            innerRadius={80}
+                                            outerRadius={120}
                                             fill="#8884d8"
                                             dataKey="amount"
                                             onMouseEnter={onPieByIndustryEnter}
@@ -233,8 +231,8 @@ const Diversification = () => {
                                             data={pieChartAmountByStockData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
+                                            innerRadius={80}
+                                            outerRadius={120}
                                             fill="#8884d8"
                                             dataKey="amount"
                                             onMouseEnter={onPieByStockEnter}

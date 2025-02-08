@@ -28,6 +28,7 @@ function HoldingsDetail() {
         quantity: '',
         price: '',
         commission: '',
+        currency: 'USD', // Default currency
     });
     // Function to fetch holdings data
     // Use useCallback to memoize fetchHoldings
@@ -68,16 +69,23 @@ function HoldingsDetail() {
     };
 
     // Function to handle transaction creation
-    const handleCreateTransaction = () => {
-        axios.post(`http://localhost:8080/api/v1/${portfolioId}/createTransaction`, newTransaction)
-            .then(response => {
-                setTransaction([...transaction, response.data]); // Add new transaction to the list
-                fetchHoldingsList(); // Refresh holdings data
-                handleClose(); // Close the dialog
-            })
-            .catch(error => {
-                console.error('Error creating transaction:', error);
-            });
+    const handleCreateTransaction = async () => {
+        setLoading(true);
+        try {
+            await axios.post(`http://localhost:8080/api/v1/${portfolioId}/createTransaction`, newTransaction)
+                .then(response => {
+                    setTransaction([...transaction, response.data]); // Add new transaction to the list
+                    fetchHoldingsList(); // Refresh holdings data
+                    handleClose(); // Close the dialog
+                })
+                .catch(error => {
+                    console.error('Error creating transaction:', error);
+                });
+        } catch (error) {
+            console.error('Transaction failed', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading) {
@@ -225,6 +233,22 @@ function HoldingsDetail() {
                         value={newTransaction.commission}
                         onChange={handleInputChange}
                     />
+                    {/* Currency Dropdown */}
+                    <FormControl fullWidth margin="dense" variant="outlined">
+                        <InputLabel id="transaction-type-label">Currency</InputLabel>
+                        <Select
+                            labelId="transaction-type-label"
+                            id="currency"
+                            name="currency"
+                            value={newTransaction.currency}
+                            onChange={handleInputChange}
+                            label="Currency"
+                            variant="outlined"
+                        >
+                            <MenuItem value="USD">USD</MenuItem>
+                            <MenuItem value="EUR">EUR</MenuItem>
+                        </Select>
+                    </FormControl>
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleClose} color="secondary">

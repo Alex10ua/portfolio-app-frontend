@@ -119,7 +119,7 @@ const Dividends = () => {
     const barChartAllDivByStockdata = Object.entries(tickerAmountObject)
         .map(([ticker, amount]) => ({
             ticker,
-            amount: parseFloat(amount).toFixed(2)
+            amount: parseFloat(amount.toFixed(2))
         }))
         .sort((a, b) => a.ticker.localeCompare(b.ticker));
 

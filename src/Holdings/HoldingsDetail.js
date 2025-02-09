@@ -6,7 +6,7 @@ import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
     Paper, Typography, Button, Box, IconButton, TextField,
     Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    FormControl, InputLabel, Select, MenuItem, CircularProgress
+    FormControl, InputLabel, Select, MenuItem, CircularProgress, TableSortLabel
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -30,12 +30,23 @@ function HoldingsDetail() {
         commission: '',
         currency: 'USD', // Default currency
     });
+    const [orderBy, setOrderBy] = useState('ticker'); // Default sorting by ticker
+    const [order, setOrder] = useState('asc'); // Default order ascending
+
     // Function to fetch holdings data
     // Use useCallback to memoize fetchHoldings
     const fetchHoldingsList = useCallback(() => {
         axios.get(`http://localhost:8080/api/v1/${portfolioId}`)
             .then(response => {
-                setHoldings(response.data);
+                // Sort the data here
+                const sortedData = [...response.data].sort((a, b) => {
+                    if (order === 'asc') {
+                        return a[orderBy] > b[orderBy] ? 1 : -1;
+                    } else {
+                        return a[orderBy] < b[orderBy] ? 1 : -1;
+                    }
+                });
+                setHoldings(sortedData);
                 setLoading(false);
             })
             .catch(error => {
@@ -43,7 +54,13 @@ function HoldingsDetail() {
                 setError(error);
                 setLoading(false);
             });
-    }, [portfolioId]);
+    }, [portfolioId, orderBy, order]);
+
+    const handleSortRequest = (property) => (event) => {
+        const isAsc = orderBy === property && order === 'asc';
+        setOrder(isAsc ? 'desc' : 'asc');
+        setOrderBy(property);
+    };
 
     useEffect(() => {
         fetchHoldingsList();
@@ -278,15 +295,114 @@ function HoldingsDetail() {
                 <Table>
                     <TableHead>
                         <TableRow>
-                            <TableCell>Holding</TableCell>
-                            <TableCell>Shares</TableCell>
-                            <TableCell>Cost per Share</TableCell>
-                            <TableCell>Current Value</TableCell>
-                            <TableCell>Dividends</TableCell>
-                            <TableCell>Dividend Yield</TableCell>
-                            <TableCell>Dividend Yield On Cost</TableCell>
-                            <TableCell>Total Profit</TableCell>
-                            <TableCell>Daily Change</TableCell>
+                            <TableCell
+                                key="ticker"
+                                sortDirection={orderBy === 'ticker' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'ticker'}
+                                    direction={orderBy === 'ticker' ? order : 'asc'}
+                                    onClick={handleSortRequest('ticker')}
+                                >
+                                    Holding
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="shareAmount"
+                                sortDirection={orderBy === 'shareAmount' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'shareAmount'}
+                                    direction={orderBy === 'shareAmount' ? order : 'asc'}
+                                    onClick={handleSortRequest('shareAmount')}
+                                >
+                                    Shares
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="costPerShare"
+                                sortDirection={orderBy === 'costPerShare' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'costPerShare'}
+                                    direction={orderBy === 'costPerShare' ? order : 'asc'}
+                                    onClick={handleSortRequest('costPerShare')}
+                                >
+                                    Cost per Share
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="currentShareValue"
+                                sortDirection={orderBy === 'currentShareValue' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'currentShareValue'}
+                                    direction={orderBy === 'currentShareValue' ? order : 'asc'}
+                                    onClick={handleSortRequest('currentShareValue')}
+                                >
+                                    Current Value
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="dividend"
+                                sortDirection={orderBy === 'dividend' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'dividend'}
+                                    direction={orderBy === 'dividend' ? order : 'asc'}
+                                    onClick={handleSortRequest('dividend')}
+                                >
+                                    Dividends
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="dividendYield"
+                                sortDirection={orderBy === 'dividendYield' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'dividendYield'}
+                                    direction={orderBy === 'dividendYield' ? order : 'asc'}
+                                    onClick={handleSortRequest('dividendYield')}
+                                >
+                                    Dividend Yield
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="dividendYieldOnCost"
+                                sortDirection={orderBy === 'dividendYieldOnCost' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'dividendYieldOnCost'}
+                                    direction={orderBy === 'dividendYieldOnCost' ? order : 'asc'}
+                                    onClick={handleSortRequest('dividendYieldOnCost')}
+                                >
+                                    Dividend Yield On Cost
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="totalProfit"
+                                sortDirection={orderBy === 'totalProfit' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'totalProfit'}
+                                    direction={orderBy === 'totalProfit' ? order : 'asc'}
+                                    onClick={handleSortRequest('totalProfit')}
+                                >
+                                    Total Profit
+                                </TableSortLabel>
+                            </TableCell>
+                            <TableCell
+                                key="dailyChange"
+                                sortDirection={orderBy === 'dailyChange' ? order : false}
+                            >
+                                <TableSortLabel
+                                    active={orderBy === 'dailyChange'}
+                                    direction={orderBy === 'dailyChange' ? order : 'asc'}
+                                    onClick={handleSortRequest('dailyChange')}
+                                >
+                                    Daily Change
+                                </TableSortLabel>
+                            </TableCell>
                             <TableCell align="center">Actions</TableCell>
                         </TableRow>
                     </TableHead>

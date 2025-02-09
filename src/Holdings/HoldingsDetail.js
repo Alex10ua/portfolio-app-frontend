@@ -4,14 +4,13 @@ import '../Holdings/HoldingDetalis.css';
 import axios from 'axios';
 import {
     Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Paper, Typography, Button, Box, IconButton, TextField,
-    Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    FormControl, InputLabel, Select, MenuItem, CircularProgress, TableSortLabel
+    Paper, Typography, Button, Box, IconButton, CircularProgress, TableSortLabel
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import NavigationLinks from '../components/NavigationLinks';
+import CreateTransactionDialog from '../components/CreateTransactionDialog'; // Import the new component
 //https://recharts.org/en-US/examples/StackedAreaChart
 function HoldingsDetail() {
     const { portfolioId } = useParams();
@@ -21,15 +20,6 @@ function HoldingsDetail() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [open, setOpen] = useState(false);
-    const [newTransaction, setNewTransaction] = useState({
-        date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format,
-        transactionType: 'BUY', // Default transaction type
-        ticker: '',
-        quantity: '',
-        price: '',
-        commission: '',
-        currency: 'USD', // Default currency
-    });
     const [orderBy, setOrderBy] = useState('ticker'); // Default sorting by ticker
     const [order, setOrder] = useState('asc'); // Default order ascending
 
@@ -76,17 +66,7 @@ function HoldingsDetail() {
         setOpen(false);
     };
 
-    // Function to handle input change
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setNewTransaction({
-            ...newTransaction,
-            [name]: value,
-        });
-    };
-
-    // Function to handle transaction creation
-    const handleCreateTransaction = async () => {
+    const handleCreateTransaction = async (newTransaction) => {
         setLoading(true);
         try {
             await axios.post(`http://localhost:8080/api/v1/${portfolioId}/createTransaction`, newTransaction)
@@ -174,108 +154,11 @@ function HoldingsDetail() {
                 </Button>
             </Box>
 
-            <Dialog open={open} onClose={handleClose}>
-                <DialogTitle>Create New Transaction</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Please enter transaction details.
-                    </DialogContentText>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        name="date"
-                        label="Date"
-                        type="date"
-                        fullWidth
-                        variant="outlined"
-                        value={newTransaction.date}
-                        onChange={handleInputChange}
-                        focused
-                    />
-                    {/* Transaction Type Dropdown */}
-                    <FormControl fullWidth margin="dense" variant="outlined">
-                        <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
-                        <Select
-                            labelId="transaction-type-label"
-                            id="transactionType"
-                            name="transactionType"
-                            value={newTransaction.transactionType}
-                            onChange={handleInputChange}
-                            label="Transaction Type"
-                            variant="outlined"
-                        >
-                            <MenuItem value="BUY">BUY</MenuItem>
-                            <MenuItem value="SELL">SELL</MenuItem>
-                            <MenuItem value="TAX">TAX</MenuItem>
-                            <MenuItem value="DIVIDEND">DIVIDEND</MenuItem>
-                        </Select>
-                    </FormControl>
-                    <TextField
-                        margin="dense"
-                        name="ticker"
-                        label="Ticker"
-                        type="text"
-                        fullWidth
-                        variant="outlined"
-                        value={newTransaction.ticker}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        margin="dense"
-                        name="quantity"
-                        label="Quantity"
-                        type="double"
-                        fullWidth
-                        variant="outlined"
-                        value={newTransaction.quantity}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        margin="dense"
-                        name="price"
-                        label="Price"
-                        type="double"
-                        fullWidth
-                        variant="outlined"
-                        value={newTransaction.price}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        margin="dense"
-                        name="commission"
-                        label="commission"
-                        type="double"
-                        fullWidth
-                        variant="outlined"
-                        value={newTransaction.commission}
-                        onChange={handleInputChange}
-                    />
-                    {/* Currency Dropdown */}
-                    <FormControl fullWidth margin="dense" variant="outlined">
-                        <InputLabel id="transaction-type-label">Currency</InputLabel>
-                        <Select
-                            labelId="transaction-type-label"
-                            id="currency"
-                            name="currency"
-                            value={newTransaction.currency}
-                            onChange={handleInputChange}
-                            label="Currency"
-                            variant="outlined"
-                        >
-                            <MenuItem value="USD">USD</MenuItem>
-                            <MenuItem value="EUR">EUR</MenuItem>
-                        </Select>
-                    </FormControl>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleClose} color="secondary">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleCreateTransaction} color="primary">
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <CreateTransactionDialog
+                open={open}
+                onClose={handleClose}
+                onCreateTransaction={handleCreateTransaction}
+            />
 
             {/* Navigation Links */}
             <NavigationLinks />

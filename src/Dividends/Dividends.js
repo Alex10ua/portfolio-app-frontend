@@ -121,7 +121,7 @@ const Dividends = () => {
             ticker,
             amount: parseFloat(amount.toFixed(2))
         }))
-        .sort((a, b) => a.ticker.localeCompare(b.ticker));
+        .sort((a, b) => b.amount - a.amount );
 
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>

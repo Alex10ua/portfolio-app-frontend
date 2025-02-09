@@ -3,8 +3,19 @@ import { useParams, useNavigate } from 'react-router-dom';
 import '../Holdings/HoldingDetalis.css';
 import axios from 'axios';
 import {
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-    Paper, Typography, Button, Box, IconButton, CircularProgress, TableSortLabel
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  Typography,
+  Button,
+  Box,
+  IconButton,
+  CircularProgress,
+  TableSortLabel,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -25,54 +36,51 @@ function HoldingsDetail() {
   const [order, setOrder] = useState('asc'); // Default order ascending
   const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']; // Colors for StackedAreaChart
 
-  
-    // Sample data for StackedAreaChart
-        const data = [
-          {
-            month: '2025.Jan',
-            'Deposit(usd)': 4000,
-            valueMarket: 2400,
-            CashAvaible: 2400,
-            dividend: 200,
-          },
-          {
-            month: '2025.Feb',
-            'Deposit(usd)': 3000,
-            valueMarket: 1398,
-            CashAvaible: 2210,
-            dividend: 200,
-          },
-          {
-            month: '2025.Mar',
-            'Deposit(usd)': 1200,
-            valueMarket: 9800,
-            CashAvaible: 2290,
-            dividend: 200,
-          },
-          {
-            month: '2025.Apr',
-            'Deposit(usd)': 1000,
-            valueMarket: 9900,
-            CashAvaible: 2190,
-            dividend: 200,
-          },
-          {
-            month: '2025.May',
-            'Deposit(usd)': 1500,
-            valueMarket: 9900,
-            CashAvaible: 2190,
-            dividend: 200,
-          },
-        ];
-    //Example of areas for StackedAreaChart
-    const areas = [
-      { dataKey: 'Deposit(usd)', name: 'Deposit (USD)' },
-      { dataKey: 'valueMarket', name: 'Market Value' },
-      { dataKey: 'CashAvaible', name: 'Available Cash' },
-      { dataKey: 'dividend', name: 'Recieved Dividends' },
-    ];
-    
-    
+  // Sample data for StackedAreaChart
+  const data = [
+    {
+      month: '2025.Jan',
+      'Deposit(usd)': 4000,
+      valueMarket: 2400,
+      CashAvaible: 2400,
+      dividend: 200,
+    },
+    {
+      month: '2025.Feb',
+      'Deposit(usd)': 3000,
+      valueMarket: 1398,
+      CashAvaible: 2210,
+      dividend: 200,
+    },
+    {
+      month: '2025.Mar',
+      'Deposit(usd)': 1200,
+      valueMarket: 9800,
+      CashAvaible: 2290,
+      dividend: 200,
+    },
+    {
+      month: '2025.Apr',
+      'Deposit(usd)': 1000,
+      valueMarket: 9900,
+      CashAvaible: 2190,
+      dividend: 200,
+    },
+    {
+      month: '2025.May',
+      'Deposit(usd)': 1500,
+      valueMarket: 9900,
+      CashAvaible: 2190,
+      dividend: 200,
+    },
+  ];
+  //Example of areas for StackedAreaChart
+  const areas = [
+    { dataKey: 'Deposit(usd)', name: 'Deposit (USD)' },
+    { dataKey: 'valueMarket', name: 'Market Value' },
+    { dataKey: 'CashAvaible', name: 'Available Cash' },
+    { dataKey: 'dividend', name: 'Recieved Dividends' },
+  ];
 
   // Function to fetch holdings data
   // Use useCallback to memoize fetchHoldings
@@ -224,12 +232,12 @@ function HoldingsDetail() {
 
       {/* Navigation Links */}
       <NavigationLinks />
-       <StackedAreaChart
-                data={data}
-                xAxisKey='month'
-                areas={areas}
-                colors={chartColors}
-            />
+      <StackedAreaChart
+        data={data}
+        xAxisKey='month'
+        areas={areas}
+        colors={chartColors}
+      />
       {/* Table */}
       <TableContainer
         component={Paper}
@@ -291,7 +299,7 @@ function HoldingsDetail() {
                   direction={orderBy === 'currentShareValue' ? order : 'asc'}
                   onClick={handleSortRequest('currentShareValue')}
                 >
-                  Current Value
+                  Current Total Value
                 </TableSortLabel>
               </TableCell>
               <TableCell
@@ -389,8 +397,13 @@ function HoldingsDetail() {
                 </TableCell>
                 <TableCell>{holding.shareAmount}</TableCell>
                 <TableCell>${holding.costPerShare}</TableCell>
-                <TableCell>${holding.currentShareValue}</TableCell>
-                <TableCell>${holding.dividend}</TableCell>
+                <TableCell title={`Share price: $${holding.currentShareValue}`}>
+                  $
+                  {(holding.currentShareValue * holding.shareAmount).toFixed(2)}
+                </TableCell>
+                <TableCell title={`$${holding.dividend} per share`}>
+                  ${(holding.dividend * holding.shareAmount).toFixed(2)}
+                </TableCell>
                 <TableCell>{holding.dividendYield}%</TableCell>
                 <TableCell>{holding.dividendYieldOnCost}%</TableCell>
                 <TableCell

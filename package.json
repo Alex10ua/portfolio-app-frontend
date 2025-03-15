@@ -9,7 +9,7 @@
     "@mui/material": "^6.1.4",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.7.7",
-    "portfolio-app-frontend": "file:../portfolio-app-frontend",
+    "portfolio-app-frontend": "file:../portfolio-frontend",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",

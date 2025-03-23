@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
+import apiClient from '../api/api';
 
 
 const DividendsCalendar = () => {
@@ -14,7 +14,7 @@ const DividendsCalendar = () => {
     const [dividendsCalendar, setDividendsCalendar] = useState([]);
 
     const fetchdDivCalendar = useCallback(() => {
-        axios.get(`http://localhost:8080/api/v1/${portfolioId}/dividends-calendar`)
+        apiClient.get(`${portfolioId}/dividends-calendar`)
             .then(response => {
                 setDividendsCalendar(response.data);
                 setLoading(false);

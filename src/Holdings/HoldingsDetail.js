@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import '../Holdings/HoldingDetalis.css';
-import axios from 'axios';
 import {
   Table,
   TableBody,
@@ -23,6 +22,8 @@ import AddIcon from '@mui/icons-material/Add';
 import NavigationLinks from '../components/NavigationLinks';
 import CreateTransactionDialog from '../components/CreateTransactionDialog'; // Import the new component
 import StackedAreaChart from '../components/StackedAreaChart'; //Import StackedAreaChart
+import apiClient from '../api/api';
+
 //https://recharts.org/en-US/examples/StackedAreaChart
 function HoldingsDetail() {
   const { portfolioId } = useParams();
@@ -85,8 +86,8 @@ function HoldingsDetail() {
   // Function to fetch holdings data
   // Use useCallback to memoize fetchHoldings
   const fetchHoldingsList = useCallback(() => {
-    axios
-      .get(`http://localhost:8080/api/v1/${portfolioId}`)
+    apiClient
+      .get(`${portfolioId}`)
       .then((response) => {
         // Sort the data
         const sortedData = [...response.data].sort((a, b) => {
@@ -129,9 +130,9 @@ function HoldingsDetail() {
   const handleCreateTransaction = async (newTransaction) => {
     setLoading(true);
     try {
-      await axios
+      await apiClient
         .post(
-          `http://localhost:8080/api/v1/${portfolioId}/createTransaction`,
+          `${portfolioId}/createTransaction`,
           newTransaction
         )
         .then((response) => {

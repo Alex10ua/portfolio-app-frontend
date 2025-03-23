@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { StockTooltip, DividendsByMonthTooltip, DividendsByQuarterTooltip, DividendsByYearTooltip } from '../components/Tooltips';
+import apiClient from '../api/api';
 
 const Dividends = () => {
     const { portfolioId } = useParams();
@@ -15,7 +15,7 @@ const Dividends = () => {
     const [error, setError] = useState(null);
 
     const fetchDividends = useCallback(() => {
-        axios.get(`http://localhost:8080/api/v1/${portfolioId}/dividends`)
+        apiClient.get(`${portfolioId}/dividends`)
             .then(response => {
                 setDividends(response.data);
                 setLoading(false);
@@ -121,7 +121,7 @@ const Dividends = () => {
             ticker,
             amount: parseFloat(amount.toFixed(2))
         }))
-        .sort((a, b) => b.amount - a.amount );
+        .sort((a, b) => b.amount - a.amount);
 
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>

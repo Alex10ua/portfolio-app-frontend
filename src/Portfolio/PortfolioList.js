@@ -1,6 +1,5 @@
 //import logo from './logo.svg';
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -14,6 +13,7 @@ import {
     Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
     TextField, Typography, Box
 } from '@mui/material';
+import apiClient from '../api/api';
 
 
 
@@ -28,7 +28,7 @@ function PortfolioList() {
     });
 
     useEffect(() => {
-        axios.get('http://localhost:8080/api/v1/portfolios')
+        apiClient.get('portfolios')
             .then(response => {
                 setPortfolios(response.data);
                 setLoading(false);
@@ -61,7 +61,7 @@ function PortfolioList() {
 
     // Function to handle portfolio creation
     const handleCreatePortfolio = () => {
-        axios.post('http://localhost:8080/api/v1/createPortfolio', newPortfolio)
+        apiClient.post('createPortfolio', newPortfolio)
             .then(response => {
                 setPortfolios([...portfolios, response.data]); // Add new portfolio to the list
                 handleClose(); // Close the dialog

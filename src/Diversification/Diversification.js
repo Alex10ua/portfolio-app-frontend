@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import NavigationLinks from '../components/NavigationLinks';
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress,
     Grid
 } from '@mui/material';
 import { PieChart, Pie, Sector, ResponsiveContainer } from 'recharts';
+import apiClient from '../api/api';
 
 const renderActiveShape = (props) => {
     const RADIAN = Math.PI / 180;
@@ -65,7 +65,7 @@ const Diversification = () => {
     const [activeIndexByStock, setActiveIndexByStock] = useState(-1);
 
     const fetchdDiversification = useCallback(() => {
-        axios.get(`http://localhost:8080/api/v1/${portfolioId}/diversification`)
+        apiClient.get(`${portfolioId}/diversification`)
             .then(response => {
                 setDiversification(response.data);
                 setLoading(false);

@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import axios from 'axios';
 import {
     Table, Typography,
     TableBody,
@@ -13,6 +12,7 @@ import {
     CircularProgress
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
+import apiClient from '../api/api';
 
 const TransactionsList = () => {
     const { portfolioId } = useParams();
@@ -21,7 +21,7 @@ const TransactionsList = () => {
     const [error, setError] = useState(null);
 
     const fetchTransactionList = useCallback(() => {
-        axios.get(`http://localhost:8080/api/v1/${portfolioId}/transactions`)
+        apiClient.get(`${portfolioId}/transactions`)
             .then(response => {
                 setTransactions(response.data);
                 setLoading(false);

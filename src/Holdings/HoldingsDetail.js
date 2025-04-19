@@ -107,6 +107,19 @@ function HoldingsDetail() {
       });
   }, [portfolioId, orderBy, order]);
 
+  const fetchFirstTradeYear = () => {
+    apiClient.get(`${portfolioId}/firstTradeYear`)
+      .then(response => {
+        const firstTradeYear = response.data.firstTradeYear;
+        if (firstTradeYear) {
+          localStorage.setItem('firstTradeYear', firstTradeYear);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching first trade year:', error);
+      });
+  };
+
   const handleSortRequest = (property) => (event) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
@@ -126,6 +139,9 @@ function HoldingsDetail() {
   const handleClose = () => {
     setOpen(false);
   };
+  useEffect(() => {
+    fetchFirstTradeYear();
+  }, [fetchFirstTradeYear]);
 
   const handleCreateTransaction = async (newTransaction) => {
     setLoading(true);

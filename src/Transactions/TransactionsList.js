@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Table, Typography,
@@ -33,8 +33,16 @@ const TransactionsList = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // In-memory cache
+    const transactionCache = useRef({});
+
     const fetchTransactionList = useCallback(() => {
         setLoading(true);
+        if (transactionCache.current[selectedYear]) {
+            setTransactions(transactionCache.current[selectedYear]);
+            setLoading(false);
+            return;
+        }
         apiClient.get(`${portfolioId}/transactions/${selectedYear}`)
             .then(response => {
                 setTransactions(response.data);
@@ -51,7 +59,7 @@ const TransactionsList = () => {
         fetchTransactionList();
     }, [fetchTransactionList]);
 
-    const reverseTransactions = transactions ? transactions.reverse() : [];
+    const reverseTransactions = transactions ? [...transactions].reverse() : [];
 
     if (loading) {
         return (

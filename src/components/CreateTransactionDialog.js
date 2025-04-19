@@ -17,7 +17,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
   const [newTransaction, setNewTransaction] = useState({
     date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
     transactionType: 'BUY', // Default transaction type
-    assetType: 'STOCK', // New field to select STOCK or FIGURE
+    assetType: 'STOCK', // New field to select STOCK, FIGURiNE, COIN, FUND
     ticker: '',
     quantity: '',
     price: '',
@@ -62,7 +62,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
             variant='outlined'
           >
             <MenuItem value='STOCK'>STOCK</MenuItem>
-            <MenuItem value='FIGURE'>FIGURE</MenuItem>
+            <MenuItem value='FIGURINE'>FIGURINE</MenuItem>
             <MenuItem value='COIN'>COIN</MenuItem>
             <MenuItem value='FUND'>FUND</MenuItem>
           </Select>
@@ -160,7 +160,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
                   </FormControl>
                 </>
               );
-            case 'FIGURE':
+            case 'FIGURINE':
               return (
                 <>
                   <FormControl
@@ -186,7 +186,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
                   <TextField
                     margin='dense'
                     name='name'
-                    label='Figure Name'
+                    label='Figurine Name'
                     type='text'
                     fullWidth
                     variant='outlined'

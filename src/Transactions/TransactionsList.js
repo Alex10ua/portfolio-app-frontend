@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
     Table, Typography,
@@ -9,35 +9,57 @@ import {
     TableRow,
     Paper,
     Box,
-    CircularProgress
+    CircularProgress,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
 import apiClient from '../api/api';
 
 const TransactionsList = () => {
     const { portfolioId } = useParams();
+
+    const defaultCurrentYear = new Date().getFullYear();
+    // Get firstTradeYear from localStorage. If not found, use current year.
+    const cachedFirstTradeYear = localStorage.getItem('firstTradeYear')
+        ? parseInt(localStorage.getItem('firstTradeYear'))
+        : defaultCurrentYear;
+
+    // Use current year as default selected year.
+    const [selectedYear, setSelectedYear] = useState(defaultCurrentYear);
     const [transactions, setTransactions] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // In-memory cache
+    const transactionCache = useRef({});
+
     const fetchTransactionList = useCallback(() => {
-        apiClient.get(`${portfolioId}/transactions`)
+        setLoading(true);
+        if (transactionCache.current[selectedYear]) {
+            setTransactions(transactionCache.current[selectedYear]);
+            setLoading(false);
+            return;
+        }
+        apiClient.get(`${portfolioId}/transactions/${selectedYear}`)
             .then(response => {
                 setTransactions(response.data);
                 setLoading(false);
             })
             .catch(error => {
-                console.error('Error fetching holdings details:', error);
+                console.error('Error fetching transactions:', error);
                 setError(error);
                 setLoading(false);
             });
-    }, [portfolioId]);
+    }, [portfolioId, selectedYear]);
 
     useEffect(() => {
         fetchTransactionList();
     }, [fetchTransactionList]);
 
-    const reverseTransactions = transactions ? transactions.reverse() : [];
+    const reverseTransactions = transactions ? [...transactions].reverse() : [];
 
     if (loading) {
         return (
@@ -55,6 +77,34 @@ const TransactionsList = () => {
             {/* Navigation Links */}
             <NavigationLinks />
 
+            {/* Year Dropdown */}
+            <FormControl variant="outlined" sx={{ minWidth: 120, mb: 2 }}>
+                <InputLabel id="year-select-label">Year</InputLabel>
+                <Select
+                    labelId="year-select-label"
+                    id="year-select"
+                    value={selectedYear}
+                    label="Year"
+                    onChange={(e) => {
+                        const newYear = parseInt(e.target.value);
+                        setTransactions(null);
+                        setSelectedYear(newYear);
+                    }}
+                >
+                    {Array.from(
+                        { length: defaultCurrentYear - cachedFirstTradeYear + 1 },
+                        (_, index) => {
+                            const year = cachedFirstTradeYear + index;
+                            return (
+                                <MenuItem key={year} value={year}>
+                                    {year}
+                                </MenuItem>
+                            );
+                        }
+                    )}
+                </Select>
+            </FormControl>
+
             <TableContainer component={Paper}
                 sx={{
                     mt: 3,
@@ -65,16 +115,16 @@ const TransactionsList = () => {
                         minWidth: 650,
                     }
                 }}>
-                <Table  >
+                <Table>
                     <TableHead>
-                        <TableRow  >
-                            <TableCell  >Ticker</TableCell>
+                        <TableRow>
+                            <TableCell>Ticker</TableCell>
                             <TableCell align="right">Quantity</TableCell>
                             <TableCell align="right">Price ($)</TableCell>
                             <TableCell align="right">Total Amount ($)</TableCell>
                             <TableCell align="right">Commission ($)</TableCell>
-                            <TableCell  >Date</TableCell>
-                            <TableCell  >Type</TableCell>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Type</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody sx={{
@@ -108,29 +158,31 @@ const TransactionsList = () => {
                                     hour12: false
                                 }).replace(',', '');
                                 return (
-                                    <TableRow key={transaction.transactionId}  >
-                                        <TableCell  ><Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                            <img
-                                                src={`/images/${transaction.ticker}_icon.png`}
-                                                alt={transaction.ticker}
-                                                style={{ width: 24, height: 24, marginRight: 10 }}
-                                            />
-                                            <Typography>{transaction.ticker}</Typography>
-                                        </Box></TableCell>
+                                    <TableRow key={transaction.transactionId}>
+                                        <TableCell>
+                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <img
+                                                    src={`/images/${transaction.ticker}_icon.png`}
+                                                    alt={transaction.ticker}
+                                                    style={{ width: 24, height: 24, marginRight: 10 }}
+                                                />
+                                                <Typography>{transaction.ticker}</Typography>
+                                            </Box>
+                                        </TableCell>
                                         <TableCell align="right">{transaction.quantity}</TableCell>
                                         <TableCell align="right">{transaction.price.toFixed(2)}</TableCell>
                                         <TableCell align="right">{transaction.totalAmount.toFixed(2)}</TableCell>
                                         <TableCell align="right">{transaction.commission.toFixed(2)}</TableCell>
-                                        <TableCell  >{formattedDate}</TableCell>
-                                        <TableCell  >{transaction.transactionType}</TableCell>
+                                        <TableCell>{formattedDate}</TableCell>
+                                        <TableCell>{transaction.transactionType}</TableCell>
                                     </TableRow>
                                 );
                             })}
                     </TableBody>
                 </Table>
-            </TableContainer >
-
-        </Box >);
+            </TableContainer>
+        </Box>
+    );
 };
 
 export default TransactionsList;

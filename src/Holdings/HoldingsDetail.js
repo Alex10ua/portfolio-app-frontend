@@ -207,15 +207,15 @@ function HoldingsDetail() {
   };
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem('tableConfig');
+    const savedConfig = localStorage.getItem(`tableConfig-${portfolioId}`);
     if (savedConfig) {
       setTableConfig(JSON.parse(savedConfig));
     }
-  }, []);
+  }, [portfolioId]);
 
   useEffect(() => {
-    localStorage.setItem('tableConfig', JSON.stringify(tableConfig));
-  }, [tableConfig]);
+    localStorage.setItem(`tableConfig-${portfolioId}`, JSON.stringify(tableConfig));
+  }, [portfolioId, tableConfig]);
 
   if (loading) {
     return (

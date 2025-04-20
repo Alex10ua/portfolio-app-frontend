@@ -12,7 +12,6 @@ import {
   Typography,
   Button,
   Box,
-  IconButton,
   CircularProgress,
   TableSortLabel,
   Dialog,
@@ -22,7 +21,6 @@ import {
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
 import NavigationLinks from '../components/NavigationLinks';
@@ -39,8 +37,6 @@ function HoldingsDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
-  const [orderBy, setOrderBy] = useState('ticker'); // Default sorting by ticker
-  const [order, setOrder] = useState('asc'); // Default order ascending
   const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']; // Colors for StackedAreaChart
   const [tableConfigDialogOpen, setTableConfigDialogOpen] = useState(false);
   const [tableConfig, setTableConfig] = useState({
@@ -54,6 +50,7 @@ function HoldingsDetail() {
       { key: 'dividendYieldOnCost', label: 'Dividend Yield On Cost', visible: true },
       { key: 'totalProfit', label: 'Total Profit', visible: true },
       { key: 'dailyChange', label: 'Daily Change', visible: true },
+      { key: 'actions', label: 'Actions', visible: true },
     ],
     orderBy: 'ticker', // Default sorting column
     order: 'asc', // Default sorting order
@@ -113,10 +110,17 @@ function HoldingsDetail() {
       .then((response) => {
         // Sort the data
         const sortedData = [...response.data].sort((a, b) => {
-          if (order === 'asc') {
-            return a[orderBy] > b[orderBy] ? 1 : -1;
+          const valA = a[tableConfig.orderBy]; // Use tableConfig.orderBy
+          const valB = b[tableConfig.orderBy]; // Use tableConfig.orderBy
+          // Handle potential null/undefined values and different data types
+          if (valA == null && valB == null) return 0;
+          if (valA == null) return tableConfig.order === 'asc' ? -1 : 1; // Nulls first in asc, last in desc
+          if (valB == null) return tableConfig.order === 'asc' ? 1 : -1; // Nulls first in asc, last in desc
+
+          if (tableConfig.order === 'asc') {
+            return valA > valB ? 1 : valA < valB ? -1 : 0;
           } else {
-            return a[orderBy] < b[orderBy] ? 1 : -1;
+            return valA < valB ? 1 : valA > valB ? -1 : 0;
           }
         });
         setHoldings(sortedData);
@@ -127,7 +131,7 @@ function HoldingsDetail() {
         setError(error);
         setLoading(false);
       });
-  }, [portfolioId, orderBy, order]);
+  }, [portfolioId, tableConfig.orderBy, tableConfig.order]);
 
   const fetchFirstTradeYear = useCallback(() => {
     apiClient.get(`${portfolioId}/firstTradeYear`)
@@ -331,23 +335,31 @@ function HoldingsDetail() {
         <Table>
           <TableHead>
             <TableRow>
+              {/* Table Head remains the same - filters based on visible */}
               {tableConfig.columns
                 .filter((column) => column.visible)
                 .map((column) => (
                   <TableCell
                     key={column.key}
                     sortDirection={tableConfig.orderBy === column.key ? tableConfig.order : false}
+                    // Apply align center specifically for actions header if needed
+                    align={column.key === 'actions' ? 'center' : 'left'}
                   >
-                    <TableSortLabel
-                      active={tableConfig.orderBy === column.key}
-                      direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
-                      onClick={() => handleSortRequest(column.key)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
+                    {/* Don't allow sorting on Actions column */}
+                    {column.key === 'actions' ? (
+                      column.label
+                    ) : (
+                      <TableSortLabel
+                        active={tableConfig.orderBy === column.key}
+                        direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
+                        onClick={() => handleSortRequest(column.key)}
+                      >
+                        {column.label}
+                      </TableSortLabel>
+                    )}
                   </TableCell>
                 ))}
-              <TableCell align='center'>Actions</TableCell>
+              {/* Remove the separate Actions TableCell from header */}
             </TableRow>
           </TableHead>
           <TableBody
@@ -366,52 +378,98 @@ function HoldingsDetail() {
               },
             }}
           >
+            {/* Iterate through holdings data */}
             {holdings.map((holding, index) => (
-              <TableRow key={index}>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <img
-                      src={`/images/${holding.ticker}_icon.png`}
-                      alt={holding.ticker}
-                      style={{ width: 24, height: 24, marginRight: 10 }}
-                    />
-                    <Typography>{holding.ticker}</Typography>
-                  </Box>
-                </TableCell>
-                <TableCell>{holding.shareAmount}</TableCell>
-                <TableCell>${holding.costPerShare}</TableCell>
-                <TableCell title={`Share price: $${holding.currentShareValue}`}>
-                  $
-                  {(holding.currentShareValue * holding.shareAmount).toFixed(2)}
-                </TableCell>
-                <TableCell title={`$${holding.dividend} per share`}>
-                  ${(holding.dividend * holding.shareAmount).toFixed(2)}
-                </TableCell>
-                <TableCell>{holding.dividendYield}%</TableCell>
-                <TableCell>{holding.dividendYieldOnCost}%</TableCell>
-                <TableCell
-                  sx={{ color: holding.totalProfit > 0 ? 'green' : 'red' }}
-                >
-                  ${holding.totalProfit} ({holding.totalProfitPercentage}%)
-                </TableCell>
-                <TableCell
-                  sx={{ color: holding.dailyChange > 0 ? 'green' : 'red' }}
-                >
-                  ${holding.dailyChange}
-                </TableCell>
-                <TableCell align='center'>
-                  <IconButton>
-                    <MoreVertIcon />
-                  </IconButton>
-                </TableCell>
+              // Use a more stable key if holding has an ID, otherwise fallback to index
+              <TableRow key={holding.id || holding.ticker || index}>
+                {/* Iterate through the columns defined in config */}
+                {tableConfig.columns.map((column) => {
+                  // Only render the TableCell if the column is marked as visible
+                  if (!column.visible) {
+                    return null; // Skip rendering this cell
+                  }
+
+                  // Use a switch statement to render content based on column key
+                  // This preserves specific formatting and logic for each cell type
+                  let cellContent = null;
+                  const cellProps = {}; // To hold specific props like sx, title, align
+
+                  // Helper for safe number formatting
+                  const formatCurrency = (value) => value?.toFixed(2) ?? 'N/A';
+                  const formatPercent = (value) => value?.toFixed(2) ?? 'N/A';
+
+                  switch (column.key) {
+                    case 'ticker':
+                      cellContent = (
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <img
+                            src={`/images/${holding.ticker}_icon.png`}
+                            alt={holding.ticker}
+                            style={{ width: 24, height: 24, marginRight: 10 }}
+                            // Optional: Add error handling for missing images
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <Typography>{holding.ticker}</Typography>
+                        </Box>
+                      );
+                      break;
+                    case 'shareAmount':
+                      cellContent = holding.shareAmount;
+                      break;
+                    case 'costPerShare':
+                      cellContent = `$${formatCurrency(holding.costPerShare)}`;
+                      break;
+                    case 'currentShareValue': // Represents 'Current Total Value' column
+                      const totalValue = holding.currentShareValue * holding.shareAmount;
+                      cellContent = `$${formatCurrency(totalValue)}`;
+                      // Add the title attribute back
+                      cellProps.title = `Share price: $${formatCurrency(holding.currentShareValue)}`;
+                      break;
+                    case 'dividend': // Represents 'Dividends' column (total)
+                      const totalDividend = holding.dividend * holding.shareAmount;
+                      cellContent = `$${formatCurrency(totalDividend)}`;
+                      // Add the title attribute back
+                      cellProps.title = `$${formatCurrency(holding.dividend)} per share`;
+                      break;
+                    case 'dividendYield':
+                      cellContent = `${formatPercent(holding.dividendYield)}%`;
+                      break;
+                    case 'dividendYieldOnCost':
+                      cellContent = `${formatPercent(holding.dividendYieldOnCost)}%`;
+                      break;
+                    case 'totalProfit':
+                      const profit = holding.totalProfit;
+                      const profitPercentage = holding.totalProfitPercentage;
+                      cellContent = `$${formatCurrency(profit)} (${formatPercent(profitPercentage)}%)`;
+                      // Apply conditional styling
+                      cellProps.sx = { color: profit > 0 ? 'green' : 'red' };
+                      break;
+                    case 'dailyChange':
+                      const change = holding.dailyChange;
+                      cellContent = `$${formatCurrency(change)}`;
+                      // Apply conditional styling
+                      cellProps.sx = { color: change > 0 ? 'green' : 'red' };
+                      break;
+                    default:
+                      // Fallback for any unexpected column keys
+                      cellContent = holding[column.key]?.toString() ?? 'N/A';
+                  }
+
+                  // Render the TableCell with its determined content and props
+                  return (
+                    <TableCell key={column.key} {...cellProps}>
+                      {cellContent}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </TableContainer>
+      </TableContainer >
 
       {/* Table Config Dialog */}
-      <Dialog open={tableConfigDialogOpen} onClose={handleCloseConfigDialog}>
+      <Dialog Dialog open={tableConfigDialogOpen} onClose={handleCloseConfigDialog} >
         <DialogTitle>Modify Table Configuration</DialogTitle>
         <DialogContent>
           {tableConfig.columns.map((column) => (
@@ -430,8 +488,8 @@ function HoldingsDetail() {
         <DialogActions>
           <Button onClick={handleCloseConfigDialog}>Close</Button>
         </DialogActions>
-      </Dialog>
-    </Box>
+      </Dialog >
+    </Box >
   );
 }
 

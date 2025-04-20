@@ -15,6 +15,12 @@ import {
   IconButton,
   CircularProgress,
   TableSortLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -36,6 +42,22 @@ function HoldingsDetail() {
   const [orderBy, setOrderBy] = useState('ticker'); // Default sorting by ticker
   const [order, setOrder] = useState('asc'); // Default order ascending
   const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']; // Colors for StackedAreaChart
+  const [tableConfigDialogOpen, setTableConfigDialogOpen] = useState(false);
+  const [tableConfig, setTableConfig] = useState({
+    columns: [
+      { key: 'ticker', label: 'Holding', visible: true },
+      { key: 'shareAmount', label: 'Shares', visible: true },
+      { key: 'costPerShare', label: 'Cost per Share', visible: true },
+      { key: 'currentShareValue', label: 'Current Total Value', visible: true },
+      { key: 'dividend', label: 'Dividends', visible: true },
+      { key: 'dividendYield', label: 'Dividend Yield', visible: true },
+      { key: 'dividendYieldOnCost', label: 'Dividend Yield On Cost', visible: true },
+      { key: 'totalProfit', label: 'Total Profit', visible: true },
+      { key: 'dailyChange', label: 'Daily Change', visible: true },
+    ],
+    orderBy: 'ticker', // Default sorting column
+    order: 'asc', // Default sorting order
+  });
 
   // Sample data for StackedAreaChart
   const data = [
@@ -124,11 +146,28 @@ function HoldingsDetail() {
     fetchFirstTradeYear();
   }, [fetchFirstTradeYear]);
 
-  const handleSortRequest = (property) => (event) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
+  const handleSortRequest = (property) => {
+    const isAsc = tableConfig.orderBy === property && tableConfig.order === 'asc';
+    setTableConfig((prevConfig) => ({
+      ...prevConfig,
+      orderBy: property,
+      order: isAsc ? 'desc' : 'asc',
+    }));
   };
+
+  // Toggle column visibility in the config
+  const handleToggleColumn = (columnKey) => {
+    setTableConfig((prevConfig) => ({
+      ...prevConfig,
+      columns: prevConfig.columns.map((col) =>
+        col.key === columnKey ? { ...col, visible: !col.visible } : col
+      ),
+    }));
+  };
+
+  // Open and close the config dialog
+  const handleOpenConfigDialog = () => setTableConfigDialogOpen(true);
+  const handleCloseConfigDialog = () => setTableConfigDialogOpen(false);
 
   useEffect(() => {
     fetchHoldingsList();
@@ -166,6 +205,17 @@ function HoldingsDetail() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const savedConfig = localStorage.getItem('tableConfig');
+    if (savedConfig) {
+      setTableConfig(JSON.parse(savedConfig));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('tableConfig', JSON.stringify(tableConfig));
+  }, [tableConfig]);
 
   if (loading) {
     return (
@@ -217,6 +267,15 @@ function HoldingsDetail() {
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <Button
+          variant='outlined'
+          onClick={handleOpenConfigDialog}
+          sx={{
+            marginRight: '1rem',
+          }}
+        >
+          Modify Table Config
+        </Button>
         <Button
           variant='contained'
           startIcon={<AddIcon />}
@@ -272,116 +331,22 @@ function HoldingsDetail() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell
-                key='ticker'
-                sortDirection={orderBy === 'ticker' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'ticker'}
-                  direction={orderBy === 'ticker' ? order : 'asc'}
-                  onClick={handleSortRequest('ticker')}
-                >
-                  Holding
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='shareAmount'
-                sortDirection={orderBy === 'shareAmount' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'shareAmount'}
-                  direction={orderBy === 'shareAmount' ? order : 'asc'}
-                  onClick={handleSortRequest('shareAmount')}
-                >
-                  Shares
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='costPerShare'
-                sortDirection={orderBy === 'costPerShare' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'costPerShare'}
-                  direction={orderBy === 'costPerShare' ? order : 'asc'}
-                  onClick={handleSortRequest('costPerShare')}
-                >
-                  Cost per Share
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='currentShareValue'
-                sortDirection={orderBy === 'currentShareValue' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'currentShareValue'}
-                  direction={orderBy === 'currentShareValue' ? order : 'asc'}
-                  onClick={handleSortRequest('currentShareValue')}
-                >
-                  Current Total Value
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='dividend'
-                sortDirection={orderBy === 'dividend' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'dividend'}
-                  direction={orderBy === 'dividend' ? order : 'asc'}
-                  onClick={handleSortRequest('dividend')}
-                >
-                  Dividends
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='dividendYield'
-                sortDirection={orderBy === 'dividendYield' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'dividendYield'}
-                  direction={orderBy === 'dividendYield' ? order : 'asc'}
-                  onClick={handleSortRequest('dividendYield')}
-                >
-                  Dividend Yield
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='dividendYieldOnCost'
-                sortDirection={
-                  orderBy === 'dividendYieldOnCost' ? order : false
-                }
-              >
-                <TableSortLabel
-                  active={orderBy === 'dividendYieldOnCost'}
-                  direction={orderBy === 'dividendYieldOnCost' ? order : 'asc'}
-                  onClick={handleSortRequest('dividendYieldOnCost')}
-                >
-                  Dividend Yield On Cost
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='totalProfit'
-                sortDirection={orderBy === 'totalProfit' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'totalProfit'}
-                  direction={orderBy === 'totalProfit' ? order : 'asc'}
-                  onClick={handleSortRequest('totalProfit')}
-                >
-                  Total Profit
-                </TableSortLabel>
-              </TableCell>
-              <TableCell
-                key='dailyChange'
-                sortDirection={orderBy === 'dailyChange' ? order : false}
-              >
-                <TableSortLabel
-                  active={orderBy === 'dailyChange'}
-                  direction={orderBy === 'dailyChange' ? order : 'asc'}
-                  onClick={handleSortRequest('dailyChange')}
-                >
-                  Daily Change
-                </TableSortLabel>
-              </TableCell>
+              {tableConfig.columns
+                .filter((column) => column.visible)
+                .map((column) => (
+                  <TableCell
+                    key={column.key}
+                    sortDirection={tableConfig.orderBy === column.key ? tableConfig.order : false}
+                  >
+                    <TableSortLabel
+                      active={tableConfig.orderBy === column.key}
+                      direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
+                      onClick={() => handleSortRequest(column.key)}
+                    >
+                      {column.label}
+                    </TableSortLabel>
+                  </TableCell>
+                ))}
               <TableCell align='center'>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -444,6 +409,28 @@ function HoldingsDetail() {
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Table Config Dialog */}
+      <Dialog open={tableConfigDialogOpen} onClose={handleCloseConfigDialog}>
+        <DialogTitle>Modify Table Configuration</DialogTitle>
+        <DialogContent>
+          {tableConfig.columns.map((column) => (
+            <FormControlLabel
+              key={column.key}
+              control={
+                <Checkbox
+                  checked={column.visible}
+                  onChange={() => handleToggleColumn(column.key)}
+                />
+              }
+              label={column.label}
+            />
+          ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseConfigDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

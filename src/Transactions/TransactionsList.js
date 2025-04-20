@@ -165,6 +165,8 @@ const TransactionsList = () => {
                                                     src={`/images/${transaction.ticker}_icon.png`}
                                                     alt={transaction.ticker}
                                                     style={{ width: 24, height: 24, marginRight: 10 }}
+                                                    // Optional: Add error handling for missing images
+                                                    onError={(e) => { e.target.style.display = 'none'; }}
                                                 />
                                                 <Typography>{transaction.ticker}</Typography>
                                             </Box>

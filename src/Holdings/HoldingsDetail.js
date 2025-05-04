@@ -50,7 +50,6 @@ function HoldingsDetail() {
       { key: 'dividendYieldOnCost', label: 'Dividend Yield On Cost', visible: true },
       { key: 'totalProfit', label: 'Total Profit', visible: true },
       { key: 'dailyChange', label: 'Daily Change', visible: true },
-      { key: 'actions', label: 'Actions', visible: true },
     ],
     orderBy: 'ticker', // Default sorting column
     order: 'asc', // Default sorting order
@@ -342,24 +341,16 @@ function HoldingsDetail() {
                   <TableCell
                     key={column.key}
                     sortDirection={tableConfig.orderBy === column.key ? tableConfig.order : false}
-                    // Apply align center specifically for actions header if needed
-                    align={column.key === 'actions' ? 'center' : 'left'}
                   >
-                    {/* Don't allow sorting on Actions column */}
-                    {column.key === 'actions' ? (
-                      column.label
-                    ) : (
-                      <TableSortLabel
-                        active={tableConfig.orderBy === column.key}
-                        direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
-                        onClick={() => handleSortRequest(column.key)}
-                      >
-                        {column.label}
-                      </TableSortLabel>
-                    )}
+                    <TableSortLabel
+                      active={tableConfig.orderBy === column.key}
+                      direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
+                      onClick={() => handleSortRequest(column.key)}
+                    >
+                      {column.label}
+                    </TableSortLabel>
                   </TableCell>
                 ))}
-              {/* Remove the separate Actions TableCell from header */}
             </TableRow>
           </TableHead>
           <TableBody

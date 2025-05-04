@@ -22,6 +22,7 @@ const DividendsCalendar = () => {
             .catch(error => {
                 console.error('Error fetching dividend calendar:', error);
                 setError(error);
+                setDividendsCalendar(null);
                 setLoading(false);
             });
     }, [portfolioId]);
@@ -30,34 +31,34 @@ const DividendsCalendar = () => {
         fetchdDivCalendar();
     }, [fetchdDivCalendar]);
 
-    if (loading) {
-        return (
-            <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-                <CircularProgress />
-            </Container>
-        );
-    }
-    if (error) {
-        return (
-            <Container sx={{ mt: 4 }}>
-                <Alert severity="error">{error.message}</Alert>
-            </Container>
-        );
-    };
+    const renderContent = () => {
+        if (loading) {
+            return (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+                    <CircularProgress />
+                </Box>
+            );
+        }
 
-    if (!dividendsCalendar) {
-        return (
-            <Container sx={{ mt: 4 }}>
-                <Alert severity="info">No dividend data available.</Alert>
-            </Container>
-        )
-    }
+        if (error) {
+            return (
+                <Container sx={{ mt: 4 }}>
+                    <Alert severity="error">
+                        Error fetching dividend data: {error.message || 'An unknown error occurred.'}
+                    </Alert>
+                </Container>
+            );
+        }
 
-    return (
-        <Box sx={{ padding: '20px', maxWidth: '1600px', margin: '0 auto' }}>
-            <Container sx={{ mt: 4 }}>
-                <NavigationLinks />
-            </Container>
+        if (!dividendsCalendar || Object.keys(dividendsCalendar).length === 0) {
+            return (
+                <Container sx={{ mt: 4 }}>
+                    <Alert severity="info">Dividend calendar is not available.</Alert>
+                </Container>
+            );
+        }
+
+        return (
             <Grid container spacing={3} sx={{ mt: 2 }}>
                 {Object.keys(dividendsCalendar).map((month) => (
                     <Grid
@@ -85,16 +86,20 @@ const DividendsCalendar = () => {
                                     Total Dividends: $
                                     {Array.isArray(dividendsCalendar[month]) &&
                                         dividendsCalendar[month].reduce((total, dividend) => {
-                                            return total + (dividend.dividendAmount * dividend.stockQuantity);
+                                            const amount = typeof dividend.dividendAmount === 'number' ? dividend.dividendAmount : 0;
+                                            const quantity = typeof dividend.stockQuantity === 'number' ? dividend.stockQuantity : 0;
+                                            return total + (amount * quantity);
                                         }, 0).toFixed(2)}
                                 </Typography>
                                 {/* Grid for dividends within the month */}
                                 <Grid container spacing={2}>
                                     {Array.isArray(dividendsCalendar[month]) &&
                                         dividendsCalendar[month].map((dividend, index) => {
-                                            const { ticker, dividendAmount, stockQuantity } = dividend;
+                                            const { ticker = 'N/A', dividendAmount = 0, stockQuantity = 0 } = dividend;
+                                            const totalDividend = (dividendAmount * stockQuantity).toFixed(2);
+
                                             return (
-                                                <Grid item xs={12} key={index}>
+                                                <Grid item xs={12} key={`${ticker}-${index}`}>
                                                     {/* Inner card for each dividend */}
                                                     <Card sx={{ backgroundColor: '#f5f5f5' }}>
                                                         <CardContent>
@@ -113,6 +118,7 @@ const DividendsCalendar = () => {
                                                                         justifyContent: 'center'
                                                                     }}>
                                                                         <img
+                                                                            onError={(e) => { e.target.style.display = 'none'; e.target.onerror = null; }}
                                                                             src={`/images/${ticker}_icon.png`}
                                                                             alt={ticker}
                                                                             style={{ width: 30, height: 30, marginRight: 15 }}
@@ -123,10 +129,10 @@ const DividendsCalendar = () => {
                                                                 {/* dividends on right */}
                                                                 <Box sx={{ textAlign: 'right' }}>
                                                                     <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                                                                        ${(dividendAmount * stockQuantity).toFixed(2)}
+                                                                        ${totalDividend}
                                                                     </Typography>
                                                                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                                                        {stockQuantity}×${dividendAmount}
+                                                                        {stockQuantity} × ${dividendAmount.toFixed(2)}
                                                                     </Typography>
                                                                 </Box>
                                                             </Box>
@@ -141,6 +147,19 @@ const DividendsCalendar = () => {
                     </Grid>
                 ))}
             </Grid>
+        );
+    };
+
+
+    return (
+        <Box sx={{ padding: '20px', maxWidth: '1600px', margin: '0 auto' }}>
+            {/* NavigationLinks are always rendered */}
+            <Container sx={{ mt: 4 }}>
+                <NavigationLinks />
+            </Container>
+            <Container sx={{ mt: 4 }}>
+                {renderContent()}
+            </Container>
         </Box>
     );
 }

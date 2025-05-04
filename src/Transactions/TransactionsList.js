@@ -13,7 +13,8 @@ import {
     FormControl,
     InputLabel,
     Select,
-    MenuItem
+    MenuItem,
+    Alert
 } from '@mui/material';
 import NavigationLinks from '../components/NavigationLinks';
 import apiClient from '../api/api';
@@ -22,12 +23,8 @@ const TransactionsList = () => {
     const { portfolioId } = useParams();
 
     const defaultCurrentYear = new Date().getFullYear();
-    // Get firstTradeYear from localStorage. If not found, use current year.
-    const cachedFirstTradeYear = localStorage.getItem('firstTradeYear')
-        ? parseInt(localStorage.getItem('firstTradeYear'))
-        : defaultCurrentYear;
+    const cachedFirstTradeYear = parseInt(localStorage.getItem('firstTradeYear') || defaultCurrentYear.toString(), 10);
 
-    // Use current year as default selected year.
     const [selectedYear, setSelectedYear] = useState(defaultCurrentYear);
     const [transactions, setTransactions] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -36,85 +33,93 @@ const TransactionsList = () => {
     // In-memory cache
     const transactionCache = useRef({});
 
-    const fetchTransactionList = useCallback(() => {
+    const fetchTransactionList = useCallback((yearToFetch) => {
         setLoading(true);
-        if (transactionCache.current[selectedYear]) {
-            setTransactions(transactionCache.current[selectedYear]);
+        setError(null);
+
+        if (transactionCache.current[yearToFetch]) {
+            setTransactions(transactionCache.current[yearToFetch]);
             setLoading(false);
             return;
         }
-        apiClient.get(`${portfolioId}/transactions/${selectedYear}`)
+
+        apiClient.get(`${portfolioId}/transactions/${yearToFetch}`)
             .then(response => {
-                setTransactions(response.data);
+                const data = response.data || [];
+                transactionCache.current[yearToFetch] = data;
                 setLoading(false);
             })
             .catch(error => {
-                console.error('Error fetching transactions:', error);
+                console.error(`Error fetching transactions for year ${yearToFetch}:`, error);
                 setError(error);
+                setTransactions(null);
                 setLoading(false);
             });
-    }, [portfolioId, selectedYear]);
+    }, [portfolioId]);
 
     useEffect(() => {
-        fetchTransactionList();
-    }, [fetchTransactionList]);
+        fetchTransactionList(selectedYear);
+    }, [selectedYear, fetchTransactionList]);
 
-    const reverseTransactions = transactions ? [...transactions].reverse() : [];
+    const handleYearChange = (event) => {
+        const newYear = parseInt(event.target.value, 10);
+        setSelectedYear(newYear);
+    };
 
-    if (loading) {
+    const yearOptions = Array.from(
+        { length: defaultCurrentYear - cachedFirstTradeYear + 1 },
+        (_, index) => cachedFirstTradeYear + index
+    );
+
+    const renderContent = () => {
+        if (loading) {
+            return (
+                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" sx={{ mt: 4, height: '40vh' }}>
+                    <CircularProgress />
+                    <Typography sx={{ mt: 2 }}>Loading transactions...</Typography>
+                </Box>
+            );
+        }
+
+        if (error) {
+            return (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                    Error loading transactions: {error.message || 'An unknown error occurred.'}
+                </Alert>
+            );
+        }
+
+        if (!transactions || transactions.length === 0) {
+            return (
+                <TableContainer component={Paper} sx={tableContainerStyles}>
+                    <Table>
+                        <TableHead>
+                            {/* Render headers even when empty for consistency */}
+                            <TableRow>
+                                <TableCell>Ticker</TableCell>
+                                <TableCell align="right">Quantity</TableCell>
+                                <TableCell align="right">Price ($)</TableCell>
+                                <TableCell align="right">Total Amount ($)</TableCell>
+                                <TableCell align="right">Commission ($)</TableCell>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Type</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            <TableRow>
+                                <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                                    <Typography>No transactions found for the year {selectedYear}.</Typography>
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            );
+        }
+
+        const reverseTransactions = [...transactions].reverse();
         return (
-            <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh">
-                <CircularProgress />
-                <p>Loading transactions...</p>
-            </Box>
-        );
-    }
-    if (error) return <p>Error loading transactions: {error.message}</p>;
-    if (!transactions) return <p>Transactions not found.</p>;
-
-    return (
-        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Navigation Links */}
-            <NavigationLinks />
-
-            {/* Year Dropdown */}
-            <FormControl variant="outlined" sx={{ minWidth: 120, mb: 2 }}>
-                <InputLabel id="year-select-label">Year</InputLabel>
-                <Select
-                    labelId="year-select-label"
-                    id="year-select"
-                    value={selectedYear}
-                    label="Year"
-                    onChange={(e) => {
-                        const newYear = parseInt(e.target.value);
-                        setTransactions(null);
-                        setSelectedYear(newYear);
-                    }}
-                >
-                    {Array.from(
-                        { length: defaultCurrentYear - cachedFirstTradeYear + 1 },
-                        (_, index) => {
-                            const year = cachedFirstTradeYear + index;
-                            return (
-                                <MenuItem key={year} value={year}>
-                                    {year}
-                                </MenuItem>
-                            );
-                        }
-                    )}
-                </Select>
-            </FormControl>
-
-            <TableContainer component={Paper}
-                sx={{
-                    mt: 3,
-                    mb: 3,
-                    borderRadius: '10px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                    '& .MuiTable-root': {
-                        minWidth: 650,
-                    }
-                }}>
+            <TableContainer component={Paper} sx={tableContainerStyles}>
                 <Table>
                     <TableHead>
                         <TableRow>
@@ -127,62 +132,84 @@ const TransactionsList = () => {
                             <TableCell>Type</TableCell>
                         </TableRow>
                     </TableHead>
-                    <TableBody sx={{
-                        '& tr:nth-of-type(odd)': {
-                            backgroundColor: 'rgba(0, 0, 0, 0.03)',
-                        },
-                        '& tr:hover': {
-                            backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                            transition: 'background-color 0.2s ease',
-                        },
-                        '& td': {
-                            padding: '16px',
-                            fontSize: '0.875rem',
-                            borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                        }
-                    }}>
-                        {reverseTransactions.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} align="center">
-                                    No transactions found.
-                                </TableCell>
-                            </TableRow>
-                        ) :
-                            reverseTransactions.map((transaction) => {
-                                const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                    hour12: false
-                                }).replace(',', '');
-                                return (
-                                    <TableRow key={transaction.transactionId}>
-                                        <TableCell>
-                                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                <img
-                                                    src={`/images/${transaction.ticker}_icon.png`}
-                                                    alt={transaction.ticker}
-                                                    style={{ width: 24, height: 24, marginRight: 10 }}
-                                                    // Optional: Add error handling for missing images
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                />
-                                                <Typography>{transaction.ticker}</Typography>
-                                            </Box>
-                                        </TableCell>
-                                        <TableCell align="right">{transaction.quantity}</TableCell>
-                                        <TableCell align="right">{transaction.price.toFixed(2)}</TableCell>
-                                        <TableCell align="right">{transaction.totalAmount.toFixed(2)}</TableCell>
-                                        <TableCell align="right">{transaction.commission.toFixed(2)}</TableCell>
-                                        <TableCell>{formattedDate}</TableCell>
-                                        <TableCell>{transaction.transactionType}</TableCell>
-                                    </TableRow>
-                                );
-                            })}
+                    <TableBody sx={tableBodyStyles}>
+                        {reverseTransactions.map((transaction) => {
+                            const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit', hour12: false
+                            }).replace(',', '');
+                            return (
+                                <TableRow key={transaction.transactionId}>
+                                    <TableCell>
+                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <img
+                                                src={`/images/${transaction.ticker}_icon.png`}
+                                                alt={transaction.ticker}
+                                                style={{ width: 24, height: 24, marginRight: 10 }}
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                            />
+                                            <Typography>{transaction.ticker}</Typography>
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell align="right">{transaction.quantity}</TableCell>
+                                    <TableCell align="right">{transaction.price?.toFixed(2) ?? 'N/A'}</TableCell>
+                                    <TableCell align="right">{transaction.totalAmount?.toFixed(2) ?? 'N/A'}</TableCell>
+                                    <TableCell align="right">{transaction.commission?.toFixed(2) ?? 'N/A'}</TableCell>
+                                    <TableCell>{formattedDate}</TableCell>
+                                    <TableCell>{transaction.transactionType}</TableCell>
+                                </TableRow>
+                            );
+                        })}
                     </TableBody>
                 </Table>
             </TableContainer>
+        );
+    };
+
+    const tableContainerStyles = {
+        mt: 3,
+        mb: 3,
+        borderRadius: '10px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        '& .MuiTable-root': {
+            minWidth: 650,
+        }
+    };
+
+    const tableBodyStyles = {
+        '& tr:nth-of-type(odd)': { backgroundColor: 'rgba(0, 0, 0, 0.03)' },
+        '& tr:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)', transition: 'background-color 0.2s ease' },
+        '& td': { padding: '16px', fontSize: '0.875rem', borderBottom: '1px solid rgba(224, 224, 224, 1)' }
+    };
+
+
+    // --- Main Return Structure ---
+    return (
+        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+            {/* Navigation Links - Always Visible */}
+            <NavigationLinks />
+
+            {/* Year Dropdown - Always Visible */}
+            <FormControl variant="outlined" sx={{ minWidth: 120, mt: 2, mb: 2 }}> {/* Added mt */}
+                <InputLabel id="year-select-label">Year</InputLabel>
+                <Select
+                    labelId="year-select-label"
+                    id="year-select"
+                    value={selectedYear}
+                    label="Year"
+                    onChange={handleYearChange}
+                    disabled={loading}
+                >
+                    {yearOptions.map((year) => (
+                        <MenuItem key={year} value={year}>
+                            {year}
+                        </MenuItem>
+                    ))}
+                </Select>
+            </FormControl>
+
+            {renderContent()}
+
         </Box>
     );
 };

@@ -27,6 +27,13 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
     priceNow: ''
   });
 
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [touched, setTouched] = useState({
+    ticker: false,
+    quantity: false,
+    price: false,
+  });
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewTransaction({
@@ -35,9 +42,21 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
     });
   };
 
+  const handleBlur = (e) => {
+    setTouched({
+      ...touched,
+      [e.target.name]: true,
+    });
+  };
+
   const handleCreate = () => {
+    setSubmitAttempted(true);
+    if (!newTransaction.ticker || !newTransaction.price || !newTransaction.quantity) {
+      return; // Don't submit if required fields are empty
+    }
     onCreateTransaction(newTransaction); // Pass the new transaction to the parent
     onClose();
+    setSubmitAttempted(false); // Reset after successful submit
   };
 
   return (
@@ -89,6 +108,10 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
           variant='outlined'
           value={newTransaction.ticker}
           onChange={handleInputChange}
+          onBlur={handleBlur}
+          required
+          error={(submitAttempted || touched.ticker) && !newTransaction.ticker}
+          helperText={(submitAttempted || touched.ticker) && !newTransaction.ticker ? 'Ticker is required' : ''}
         />
         <TextField
           margin='dense'
@@ -99,6 +122,10 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
           variant='outlined'
           value={newTransaction.quantity}
           onChange={handleInputChange}
+          onBlur={handleBlur}
+          required
+          error={(submitAttempted || touched.quantity) && !newTransaction.quantity}
+          helperText={(submitAttempted || touched.quantity) && !newTransaction.quantity ? 'Quantity is required' : ''}
         />
         <TextField
           margin='dense'
@@ -109,6 +136,10 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
           variant='outlined'
           value={newTransaction.price}
           onChange={handleInputChange}
+          onBlur={handleBlur}
+          required
+          error={(submitAttempted || touched.price) && !newTransaction.price}
+          helperText={(submitAttempted || touched.price) && !newTransaction.price ? 'Price is required' : ''}
         />
         <TextField
           margin='dense'
@@ -305,7 +336,15 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
         <Button onClick={onClose} color='secondary'>
           Cancel
         </Button>
-        <Button onClick={handleCreate} color='primary'>
+        <Button
+          onClick={handleCreate}
+          color='primary'
+          disabled={
+            !newTransaction.ticker ||
+            !newTransaction.price ||
+            !newTransaction.quantity
+          }
+        >
           Create
         </Button>
       </DialogActions>

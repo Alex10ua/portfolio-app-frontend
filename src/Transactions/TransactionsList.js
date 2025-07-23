@@ -40,6 +40,8 @@ const TransactionsList = () => {
         if (transactionCache.current[yearToFetch]) {
             setTransactions(transactionCache.current[yearToFetch]);
             setLoading(false);
+            setError(null);
+            console.log(`Using cached transactions for year ${yearToFetch}:`);
             return;
         }
 
@@ -47,7 +49,9 @@ const TransactionsList = () => {
             .then(response => {
                 const data = response.data || [];
                 transactionCache.current[yearToFetch] = data;
+                setTransactions(data);
                 setLoading(false);
+                console.log(`Fetched transactions for year ${yearToFetch}:`);
             })
             .catch(error => {
                 console.error(`Error fetching transactions for year ${yearToFetch}:`, error);

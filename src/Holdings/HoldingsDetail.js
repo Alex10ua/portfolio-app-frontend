@@ -107,19 +107,48 @@ function HoldingsDetail() {
     apiClient
       .get(`${portfolioId}`)
       .then((response) => {
+        // Make a mutable copy of the data to sort
+        const dataToSort = [...response.data];
+
         // Sort the data
-        const sortedData = [...response.data].sort((a, b) => {
-          const valA = a[tableConfig.orderBy]; // Use tableConfig.orderBy
-          const valB = b[tableConfig.orderBy]; // Use tableConfig.orderBy
-          // Handle potential null/undefined values and different data types
+        const sortedData = dataToSort.sort((a, b) => {
+          let valA, valB;
+
+          // Special handling for 'currentShareValue' to sort by calculated total value
+          if (tableConfig.orderBy === 'currentShareValue') {
+            // Ensure 'currentShareValue' and 'shareAmount' are numbers, default to 0 if not or if null
+            const aCurrentShareValue = typeof a.currentShareValue === 'number' && a.currentShareValue !== null ? a.currentShareValue : 0;
+            const aShareAmount = typeof a.shareAmount === 'number' && a.shareAmount !== null ? a.shareAmount : 0;
+            const bCurrentShareValue = typeof b.currentShareValue === 'number' && b.currentShareValue !== null ? b.currentShareValue : 0;
+            const bShareAmount = typeof b.shareAmount === 'number' && b.shareAmount !== null ? b.shareAmount : 0;
+
+            valA = aCurrentShareValue * aShareAmount;
+            valB = bCurrentShareValue * bShareAmount;
+          } else {
+            // Generic way to get values for other columns
+            valA = a[tableConfig.orderBy];
+            valB = b[tableConfig.orderBy];
+          }
+
+          // Handle potential null/undefined values after potentially calculating them or fetching them
           if (valA == null && valB == null) return 0;
           if (valA == null) return tableConfig.order === 'asc' ? -1 : 1; // Nulls first in asc, last in desc
           if (valB == null) return tableConfig.order === 'asc' ? 1 : -1; // Nulls first in asc, last in desc
 
-          if (tableConfig.order === 'asc') {
-            return valA > valB ? 1 : valA < valB ? -1 : 0;
+          // Type-specific comparison
+          if (typeof valA === 'number' && typeof valB === 'number') {
+            return tableConfig.order === 'asc' ? valA - valB : valB - valA;
+          } else if (typeof valA === 'string' && typeof valB === 'string') {
+            const comparison = valA.localeCompare(valB);
+            return tableConfig.order === 'asc' ? comparison : -comparison;
           } else {
-            return valA < valB ? 1 : valA > valB ? -1 : 0;
+            // Fallback for mixed types or other types (original logic)
+            // This might need adjustment if you have other specific types to sort
+            if (tableConfig.order === 'asc') {
+              return valA > valB ? 1 : valA < valB ? -1 : 0;
+            } else {
+              return valA < valB ? 1 : valA > valB ? -1 : 0;
+            }
           }
         });
         setHoldings(sortedData);

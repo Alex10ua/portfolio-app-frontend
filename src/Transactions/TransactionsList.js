@@ -16,7 +16,7 @@ import {
     MenuItem,
     Alert
 } from '@mui/material';
-import NavigationLinks from '../components/NavigationLinks';
+
 import apiClient from '../api/api';
 
 const TransactionsList = () => {
@@ -190,8 +190,7 @@ const TransactionsList = () => {
     // --- Main Return Structure ---
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Navigation Links - Always Visible */}
-            <NavigationLinks />
+            
 
             {/* Year Dropdown - Always Visible */}
             <FormControl variant="outlined" sx={{ minWidth: 120, mt: 2, mb: 2 }}> {/* Added mt */}

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
 } from '@mui/material';
-import NavigationLinks from '../components/NavigationLinks';
+
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { StockTooltip, DividendsByMonthTooltip, DividendsByQuarterTooltip, DividendsByYearTooltip } from '../components/Tooltips';
 import apiClient from '../api/api';
@@ -255,9 +255,7 @@ const Dividends = () => {
     // --- Main Render Logic ---
     return (
         <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            <Container sx={{ mt: 4 }}>
-                <NavigationLinks />
-            </Container>
+            
             {dividends === null ? (
                 <Container sx={{ mt: 4 }}>
                     <Alert severity="info">Dividend data is not available for this portfolio.</Alert>

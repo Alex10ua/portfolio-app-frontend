@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
 } from '@mui/material';
-import NavigationLinks from '../components/NavigationLinks';
+
 import apiClient from '../api/api';
 
 
@@ -154,9 +154,7 @@ const DividendsCalendar = () => {
     return (
         <Box sx={{ padding: '20px', maxWidth: '1600px', margin: '0 auto' }}>
             {/* NavigationLinks are always rendered */}
-            <Container sx={{ mt: 4 }}>
-                <NavigationLinks />
-            </Container>
+            
             <Container sx={{ mt: 4 }}>
                 {renderContent()}
             </Container>

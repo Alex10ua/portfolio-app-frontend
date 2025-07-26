@@ -1,49 +1,46 @@
-import React from "react";
-import { Stack, Link } from "@mui/material";
-import { useParams } from "react-router-dom";
+import React from 'react';
+import { Stack, Link as MuiLink } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 
-const NavigationLinks = () => {
-    const { portfolioId } = useParams();
+const NavigationLinks = ({ portfolioId }) => {
+  const commonLinkStyles = {
+    color: 'inherit',
+    textDecoration: 'none',
+    fontSize: '1rem',
+    fontWeight: 500,
+    transition: 'color 0.2s ease',
+    '&:hover': {
+      color: 'secondary.main',
+    },
+  };
 
-    return (
-
-        <Stack
-            direction="row"
-            spacing={4}
-            sx={{
-                mt: 2,
-                mb: 2,
-                justifyContent: 'center',
-                backgroundColor: '#f5f5f5',
-                padding: '1rem',
-                borderRadius: '8px',
-                '& a': {
-                    fontSize: '1rem',
-                    fontWeight: 500,
-                    transition: 'color 0.2s ease',
-                    '&:hover': {
-                        color: 'secondary.main'
-                    }
-                }
-            }}
-        >
-            <Link href={`/${portfolioId}`} underline="none" sx={{ color: 'primary.main' }}>
-                Dashboard
-            </Link>
-            <Link href={`/${portfolioId}/transactions`} underline="none" sx={{ color: 'primary.main' }}>
-                Transactions
-            </Link>
-            <Link href={`/${portfolioId}/dividends`} underline="none" sx={{ color: 'primary.main' }}>
-                Dividends
-            </Link>
-            <Link href={`/${portfolioId}/dividend-calendar`} underline="none" sx={{ color: 'primary.main' }}>
-                Dividend Calendar
-            </Link>
-            <Link href={`/${portfolioId}/diversification`} underline="none" sx={{ color: 'primary.main' }}>
-                Diversification
-            </Link>
-        </Stack >
-    );
+  return (
+    <Stack
+      direction="row"
+      spacing={4}
+      sx={{
+        justifyContent: 'center',
+        padding: '1rem',
+        borderRadius: '8px',
+      }}
+    >
+      <MuiLink component={RouterLink} to={`/${portfolioId}`} sx={commonLinkStyles}>
+        Dashboard
+      </MuiLink>
+      <MuiLink component={RouterLink} to={`/${portfolioId}/transactions`} sx={commonLinkStyles}>
+        Transactions
+      </MuiLink>
+      <MuiLink component={RouterLink} to={`/${portfolioId}/dividends`} sx={commonLinkStyles}>
+        Dividends
+      </MuiLink>
+      <MuiLink component={RouterLink} to={`/${portfolioId}/dividend-calendar`} sx={commonLinkStyles}>
+        Dividend Calendar
+      </MuiLink>
+      <MuiLink component={RouterLink} to={`/${portfolioId}/diversification`} sx={commonLinkStyles}>
+        Diversification
+      </MuiLink>
+    </Stack>
+  );
 };
 
 export default NavigationLinks;

@@ -23,7 +23,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
-import NavigationLinks from '../components/NavigationLinks';
+
 import CreateTransactionDialog from '../components/CreateTransactionDialog'; // Import the new component
 import StackedAreaChart from '../components/StackedAreaChart'; //Import StackedAreaChart
 import apiClient from '../api/api';
@@ -339,8 +339,7 @@ function HoldingsDetail() {
         onCreateTransaction={handleCreateTransaction}
       />
 
-      {/* Navigation Links */}
-      <NavigationLinks />
+      
       <StackedAreaChart
         data={data}
         xAxisKey='month'

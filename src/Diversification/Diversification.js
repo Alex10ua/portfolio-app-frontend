@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import NavigationLinks from '../components/NavigationLinks';
+
 import {
     Typography, Box, Container, Card, CardContent, Alert, CircularProgress,
     Grid
@@ -209,9 +209,7 @@ const Diversification = () => {
     return (
         <Box sx={{ padding: '20px', maxWidth: '1600px', margin: '0 auto' }}>
             {/* Navigation Links - Always Visible */}
-            <Container sx={{ mt: 4 }}>
-                <NavigationLinks />
-            </Container>
+            
             <Container sx={{ mt: 2 }}>
                 {renderContent()}
             </Container>

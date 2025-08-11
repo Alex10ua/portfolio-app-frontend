@@ -7,11 +7,11 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link as RouterLink } from 'react-router-dom';
 import HoldingsDetail from '../Holdings/HoldingsDetail';
 import {
     Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
-    TextField, Typography, Box
+    TextField, Typography, Box, Container, Link
 } from '@mui/material';
 import apiClient from '../api/api';
 
@@ -74,75 +74,78 @@ function PortfolioList() {
     if (loading) return <p>Loading portfolios...</p>;
     if (error) return <p>Error loading portfolios: {error.message}</p>;
 
-    return (<div>
-        <h1>Portfolios</h1>
-
-        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Header */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h4" component="h1">
-                    Portfolio List
-                </Typography>
-                <Button variant="contained" color="primary" onClick={handleClickOpen}>
-                    Create New Portfolio
-                </Button>
-            </Box>
-            {/* Dialog for Creating a New Portfolio */}
-            <Dialog open={open} onClose={handleClose}>
-                <DialogTitle>Create New Portfolio</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Please enter the portfolio name and description to create a new portfolio.
-                    </DialogContentText>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        name="portfolioName"
-                        label="Portfolio Name"
-                        type="text"
-                        fullWidth
-                        variant="outlined"
-                        value={newPortfolio.portfolioName}
-                        onChange={handleInputChange}
-                    />
-                    <TextField
-                        margin="dense"
-                        name="description"
-                        label="Description"
-                        type="text"
-                        fullWidth
-                        variant="outlined"
-                        value={newPortfolio.description}
-                        onChange={handleInputChange}
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleClose} color="secondary">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleCreatePortfolio} color="primary">
-                        Create
-                    </Button>
-                </DialogActions>
-            </Dialog>
+    return (<Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+            <Typography variant="h4" component="h1">
+                My Portfolios
+            </Typography>
+            <Button variant="contained" color="primary" onClick={handleClickOpen}>
+                Create New Portfolio
+            </Button>
         </Box>
 
-        <TableContainer component={Paper}>
-            <Table>
-                <TableHead>
+        {/* Dialog for Creating a New Portfolio */}
+        <Dialog open={open} onClose={handleClose}>
+            <DialogTitle>Create New Portfolio</DialogTitle>
+            <DialogContent>
+                <DialogContentText>
+                    Please enter the portfolio name and description to create a new portfolio.
+                </DialogContentText>
+                <TextField
+                    autoFocus
+                    margin="dense"
+                    name="portfolioName"
+                    label="Portfolio Name"
+                    type="text"
+                    fullWidth
+                    variant="outlined"
+                    value={newPortfolio.portfolioName}
+                    onChange={handleInputChange}
+                />
+                <TextField
+                    margin="dense"
+                    name="description"
+                    label="Description"
+                    type="text"
+                    fullWidth
+                    variant="outlined"
+                    value={newPortfolio.description}
+                    onChange={handleInputChange}
+                />
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={handleClose} color="secondary">
+                    Cancel
+                </Button>
+                <Button onClick={handleCreatePortfolio} color="primary">
+                    Create
+                </Button>
+            </DialogActions>
+        </Dialog>
+
+        <TableContainer component={Paper} elevation={3}>
+            <Table sx={{ minWidth: 650 }} aria-label="portfolios table">
+                <TableHead sx={{ backgroundColor: 'grey.200' }}>
                     <TableRow>
-                        <TableCell>Portfolio ID</TableCell>
-                        <TableCell>Portfolio Name</TableCell>
-                        <TableCell>Description</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Portfolio ID</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Portfolio Name</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Description</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>
                     {portfolios.map((portfolio) => (
-                        <TableRow key={portfolio.portfolioId}>
+                        <TableRow
+                            key={portfolio.portfolioId}
+                            hover
+                            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                        >
                             <TableCell>{portfolio.portfolioId}</TableCell>
-                            <TableCell><Link to={`/${portfolio.portfolioId}`}>
-                                {portfolio.portfolioName}
-                            </Link></TableCell>
+                            <TableCell>
+                                <Link component={RouterLink} to={`/${portfolio.portfolioId}`} underline="hover">
+                                    {portfolio.portfolioName}
+                                </Link>
+                            </TableCell>
                             <TableCell>{portfolio.description}</TableCell>
                         </TableRow>
                     ))}
@@ -152,7 +155,7 @@ function PortfolioList() {
         <Routes>
             <Route path=":portfolioId" element={<HoldingsDetail />} />
         </Routes>
-    </div>
+    </Container>
     );
 }
 

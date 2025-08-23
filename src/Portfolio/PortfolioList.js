@@ -152,9 +152,6 @@ function PortfolioList() {
                 </TableBody>
             </Table>
         </TableContainer>
-        <Routes>
-            <Route path=":portfolioId" element={<HoldingsDetail />} />
-        </Routes>
     </Container>
     );
 }

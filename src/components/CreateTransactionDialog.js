@@ -84,6 +84,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
             <MenuItem value='FIGURINE'>FIGURINE</MenuItem>
             <MenuItem value='COIN'>COIN</MenuItem>
             <MenuItem value='FUND'>FUND</MenuItem>
+            <MenuItem value="CRYPTO">CRYPTO</MenuItem>
           </Select>
         </FormControl>
         {/* Common Date Field */}
@@ -165,6 +166,7 @@ const CreateTransactionDialog = ({ open, onClose, onCreateTransaction }) => {
           >
             <MenuItem value='USD'>USD</MenuItem>
             <MenuItem value='EUR'>EUR</MenuItem>
+            <MenuItem value="GBP">GBP</MenuItem>
           </Select>
         </FormControl>
         {/* Conditional fields based on assetType */}

@@ -92,10 +92,14 @@ const TransactionsList = () => {
     const handleEditClick = (transaction) => {
         setSelectedTransaction(transaction);
         setEditFormData({
+            ticker: transaction.ticker,
+            transactionType: transaction.transactionType,
             quantity: transaction.quantity,
             price: transaction.price,
             commission: transaction.commission,
-            date: new Date(transaction.date).toISOString().slice(0, 16) // Format for datetime-local input
+            date: new Date(transaction.date).toISOString().slice(0, 16), // Format for datetime-local input
+            assetType: transaction.assetType,
+            currency: transaction.currency
         });
         setEditDialogOpen(true);
     };
@@ -113,7 +117,6 @@ const TransactionsList = () => {
 
     const handleUpdateTransaction = () => {
         if (!selectedTransaction || !editFormData) return;
-
         // Construct payload with correct data types
         const payload = {
             ...editFormData,
@@ -129,9 +132,8 @@ const TransactionsList = () => {
                 const updatedTransactions = transactions.map(t =>
                     t.transactionId === selectedTransaction.transactionId ? updatedTransaction : t
                 );
-                updatedTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
                 setTransactions(updatedTransactions);
-                transactionCache.current[selectedYear] = updatedTransactions; // Update cache
+                transactionCache.current[selectedYear] = updatedTransactions.reverse(); // Update cache
                 handleEditClose();
             })
             .catch(err => {
@@ -333,6 +335,61 @@ const TransactionsList = () => {
                         <Stack spacing={2} sx={{ mt: 2 }}>
                             <TextField
                                 autoFocus
+                                margin="dense"
+                                name="ticker"
+                                label="Ticker"
+                                type="text"
+                                fullWidth
+                                variant="outlined"
+                                value={editFormData.ticker}
+                                onChange={handleEditFormChange}
+                            />
+                            <FormControl fullWidth margin="dense">
+                                <InputLabel id="asset-type-label">Asset Type</InputLabel>
+                                <Select
+                                    labelId="asset-type-label"
+                                    name="assetType"
+                                    value={editFormData.assetType}
+                                    label="Asset Type"
+                                    onChange={handleEditFormChange}
+                                >
+                                    <MenuItem value='STOCK'>STOCK</MenuItem>
+                                    <MenuItem value='FIGURINE'>FIGURINE</MenuItem>
+                                    <MenuItem value='COIN'>COIN</MenuItem>
+                                    <MenuItem value='FUND'>FUND</MenuItem>
+                                    <MenuItem value="CRYPTO">CRYPTO</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl fullWidth margin="dense">
+                                <InputLabel id="currency-label">Currency</InputLabel>
+                                <Select
+                                    labelId="currency-label"
+                                    name="currency"
+                                    value={editFormData.currency}
+                                    label="Currency"
+                                    onChange={handleEditFormChange}
+                                >
+                                    <MenuItem value="USD">USD</MenuItem>
+                                    <MenuItem value="EUR">EUR</MenuItem>
+                                    <MenuItem value="GBP">GBP</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <FormControl fullWidth margin="dense">
+                                <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
+                                <Select
+                                    labelId="transaction-type-label"
+                                    name="transactionType"
+                                    value={editFormData.transactionType}
+                                    label="Transaction Type"
+                                    onChange={handleEditFormChange}
+                                >
+                                    <MenuItem value='BUY'>BUY</MenuItem>
+                                    <MenuItem value='SELL'>SELL</MenuItem>
+                                    <MenuItem value='TAX'>TAX</MenuItem>
+                                    <MenuItem value='DIVIDEND'>DIVIDEND</MenuItem>
+                                </Select>
+                            </FormControl>
+                            <TextField
                                 margin="dense"
                                 name="quantity"
                                 label="Quantity"

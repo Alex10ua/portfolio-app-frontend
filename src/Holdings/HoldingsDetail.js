@@ -23,6 +23,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddIcon from '@mui/icons-material/Add';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 import CreateTransactionDialog from '../components/CreateTransactionDialog'; // Import the new component
 import StackedAreaChart from '../components/StackedAreaChart'; //Import StackedAreaChart
@@ -298,7 +299,7 @@ function HoldingsDetail() {
           {holdings.name}
         </Typography>
       </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 1 }}>
         <Button
           variant='outlined'
           onClick={handleOpenConfigDialog}
@@ -307,6 +308,16 @@ function HoldingsDetail() {
           }}
         >
           Modify Table Config
+        </Button>
+        <Button
+          variant='outlined'
+          startIcon={<CloudUploadIcon />}
+          onClick={() => navigate(`/${portfolioId}/import`)}
+          sx={{
+            marginRight: '1rem',
+          }}
+        >
+          Import Transactions
         </Button>
         <Button
           variant='contained'
@@ -339,7 +350,7 @@ function HoldingsDetail() {
         onCreateTransaction={handleCreateTransaction}
       />
 
-      
+
       <StackedAreaChart
         data={data}
         xAxisKey='month'

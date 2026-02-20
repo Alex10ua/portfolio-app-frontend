@@ -1,11 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-    Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
-} from '@mui/material';
-
 import apiClient from '../api/api';
-
+import { CalendarMonth as CalendarIcon } from '@mui/icons-material';
 
 const DividendsCalendar = () => {
     const { portfolioId } = useParams();
@@ -34,131 +30,108 @@ const DividendsCalendar = () => {
     const renderContent = () => {
         if (loading) {
             return (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-                    <CircularProgress />
-                </Box>
+                <div className="flex h-64 items-center justify-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                </div>
             );
         }
 
         if (error) {
             return (
-                <Container sx={{ mt: 4 }}>
-                    <Alert severity="error">
-                        Error fetching dividend data: {error.message || 'An unknown error occurred.'}
-                    </Alert>
-                </Container>
+                <div className="rounded-md bg-red-50 p-4 mt-4">
+                    <div className="flex">
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-red-800">Error fetching dividend data</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p>{error.message || 'An unknown error occurred.'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
         if (!dividendsCalendar || Object.keys(dividendsCalendar).length === 0) {
             return (
-                <Container sx={{ mt: 4 }}>
-                    <Alert severity="info">Dividend calendar is not available.</Alert>
-                </Container>
+                <div className="mt-6 text-center rounded-lg border-2 border-dashed border-slate-300 p-12">
+                    <CalendarIcon className="mx-auto h-12 w-12 text-slate-400" />
+                    <h3 className="mt-2 text-sm font-semibold text-slate-900">No dividend calendar</h3>
+                    <p className="mt-1 text-sm text-slate-500">Dividend calendar data is not available.</p>
+                </div>
             );
         }
 
         return (
-            <Grid container spacing={3} sx={{ mt: 2 }}>
-                {Object.keys(dividendsCalendar).map((month) => (
-                    <Grid
-                        item
-                        xs={12}
-                        key={month}
-                        display="flex"
-                        justifyContent="center"
-                    >
-                        {/* Outer card for the month */}
-                        <Card
-                            sx={{
-                                mb: 3,
-                                boxShadow: 3,
-                                maxWidth: 1000,
-                                width: '100%'
-                            }}
-                        >
-                            <CardContent>
-                                <Typography variant="h5" component="div" sx={{ mb: 2 }}>
+            <div className="mt-6 space-y-8">
+                {Object.keys(dividendsCalendar).map((month) => {
+                    const monthDividends = dividendsCalendar[month];
+                    const totalMonthDividends = Array.isArray(monthDividends)
+                        ? monthDividends.reduce((total, dividend) => {
+                            const amount = typeof dividend.dividendAmount === 'number' ? dividend.dividendAmount : 0;
+                            const quantity = typeof dividend.stockQuantity === 'number' ? dividend.stockQuantity : 0;
+                            return total + (amount * quantity);
+                        }, 0).toFixed(2)
+                        : '0.00';
+
+                    return (
+                        <div key={month} className="bg-white overflow-hidden shadow rounded-lg">
+                            <div className="border-b border-gray-200 px-4 py-5 sm:px-6 flex justify-between items-center bg-gray-50">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900">
                                     {month}
-                                </Typography>
-                                {/* Calculate total dividends for the month */}
-                                <Typography variant="h6" component="div" sx={{ mb: 2 }}>
-                                    Total Dividends: $
-                                    {Array.isArray(dividendsCalendar[month]) &&
-                                        dividendsCalendar[month].reduce((total, dividend) => {
-                                            const amount = typeof dividend.dividendAmount === 'number' ? dividend.dividendAmount : 0;
-                                            const quantity = typeof dividend.stockQuantity === 'number' ? dividend.stockQuantity : 0;
-                                            return total + (amount * quantity);
-                                        }, 0).toFixed(2)}
-                                </Typography>
-                                {/* Grid for dividends within the month */}
-                                <Grid container spacing={2}>
-                                    {Array.isArray(dividendsCalendar[month]) &&
-                                        dividendsCalendar[month].map((dividend, index) => {
+                                </h3>
+                                <span className="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                    Total: ${totalMonthDividends}
+                                </span>
+                            </div>
+                            <div className="px-4 py-5 sm:p-6">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {Array.isArray(monthDividends) &&
+                                        monthDividends.map((dividend, index) => {
                                             const { ticker = 'N/A', dividendAmount = 0, stockQuantity = 0 } = dividend;
                                             const totalDividend = (dividendAmount * stockQuantity).toFixed(2);
 
                                             return (
-                                                <Grid item xs={12} key={`${ticker}-${index}`}>
-                                                    {/* Inner card for each dividend */}
-                                                    <Card sx={{ backgroundColor: '#f5f5f5' }}>
-                                                        <CardContent>
-                                                            <Box
-                                                                sx={{
-                                                                    display: 'flex',
-                                                                    justifyContent: 'space-between',
-                                                                    alignItems: 'flex-start'
-                                                                }}
-                                                            >
-                                                                {/* Left: Ticker */}
-                                                                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                                                                    <Box sx={{
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center'
-                                                                    }}>
-                                                                        <img
-                                                                            onError={(e) => { e.target.style.display = 'none'; e.target.onerror = null; }}
-                                                                            src={`/images/${ticker}_icon.png`}
-                                                                            alt={ticker}
-                                                                            style={{ width: 30, height: 30, marginRight: 15 }}
-                                                                        />
-                                                                        {ticker}
-                                                                    </Box>
-                                                                </Typography>
-                                                                {/* dividends on right */}
-                                                                <Box sx={{ textAlign: 'right' }}>
-                                                                    <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                                                                        ${totalDividend}
-                                                                    </Typography>
-                                                                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                                                        {stockQuantity} × ${dividendAmount.toFixed(2)}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </Box>
-                                                        </CardContent>
-                                                    </Card>
-                                                </Grid>
+                                                <div key={`${ticker}-${index}`} className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-indigo-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                                    <div className="flex-shrink-0">
+                                                        <img
+                                                            className="h-10 w-10 rounded-full"
+                                                            onError={(e) => { e.target.style.display = 'none'; e.target.onerror = null; }}
+                                                            src={`/images/${ticker}_icon.png`}
+                                                            alt={ticker}
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="focus:outline-none">
+                                                            <span className="absolute inset-0" aria-hidden="true" />
+                                                            <p className="text-sm font-medium text-gray-900">{ticker}</p>
+                                                            <p className="text-sm text-gray-500 truncate">
+                                                                {stockQuantity} shares @ ${dividendAmount.toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-shrink-0 text-right">
+                                                        <p className="text-sm font-medium text-green-600">${totalDividend}</p>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
-                                </Grid>
-                            </CardContent>
-                        </Card>
-                    </Grid>
-                ))}
-            </Grid>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         );
     };
 
 
     return (
-        <Box sx={{ padding: '20px', maxWidth: '1600px', margin: '0 auto' }}>
-            {/* NavigationLinks are always rendered */}
-            
-            <Container sx={{ mt: 4 }}>
-                {renderContent()}
-            </Container>
-        </Box>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate mb-6">
+                Dividend Calendar
+            </h1>
+            {renderContent()}
+        </div>
     );
 }
 

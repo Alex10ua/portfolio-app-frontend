@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import {
-    Typography, Box, Container, Card, CardContent, Alert, CircularProgress, Grid
-} from '@mui/material';
-
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { StockTooltip, DividendsByMonthTooltip, DividendsByQuarterTooltip, DividendsByYearTooltip } from '../components/Tooltips';
 import apiClient from '../api/api';
+import { Assessment as AssessmentIcon, TrendingUp as TrendingUpIcon, CalendarToday as CalendarIcon, AccessTime as TimeIcon } from '@mui/icons-material';
+
 
 const Dividends = () => {
     const { portfolioId } = useParams();
@@ -36,29 +34,38 @@ const Dividends = () => {
 
         if (loading) {
             return (
-                <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-                    <CircularProgress />
-                </Container>
+                <div className="flex h-64 items-center justify-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                </div>
             );
         }
 
         if (error) {
             return (
-                <Container sx={{ mt: 4 }}>
-                    <Alert severity="error">{error}</Alert>
-                </Container>
+                <div className="rounded-md bg-red-50 p-4 mt-4">
+                    <div className="flex">
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-red-800">Error loading dividends</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p>{error.message || 'An unknown error occurred.'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
         if (!dividends || typeof dividends !== 'object' || Object.keys(dividends).length === 0) {
             return (
-                <Container sx={{ mt: 4 }}>
-                    <Alert severity="info">Dividend data is not available or is in an unexpected format.</Alert>
-                </Container>
+                <div className="mt-6 text-center rounded-lg border-2 border-dashed border-slate-300 p-12">
+                    <AssessmentIcon className="mx-auto h-12 w-12 text-slate-400" />
+                    <h3 className="mt-2 text-sm font-semibold text-slate-900">No dividend data</h3>
+                    <p className="mt-1 text-sm text-slate-500">Dividend data is not available or is in an unexpected format.</p>
+                </div>
             );
         }
 
-        const yearlyCombineDividendsProjection = dividends.yearlyCombineDividendsProjection || 0; // Use || 0 as fallback
+        const yearlyCombineDividendsProjection = dividends.yearlyCombineDividendsProjection || 0;
         const monthlyDividendsAverage = yearlyCombineDividendsProjection / 12;
         const dailyDividendsAverage = yearlyCombineDividendsProjection / 365;
         const hourlyDividendsAverage = dailyDividendsAverage / 24;
@@ -129,141 +136,149 @@ const Dividends = () => {
 
 
         return (
-            <>
-                <Container sx={{ mt: 4 }}>
-                    <Typography variant='h6' gutterBottom>
-                        Stock Dividends Projection
-                    </Typography>
-                    <Card>
-                        <CardContent>
-                            <Typography variant='h6' gutterBottom>
-                                Yearly Projection: ${yearlyCombineDividendsProjection.toFixed(2)}
-                            </Typography>
-                            <Grid container spacing={2}>
-                                <Grid item xs={12} sm={4}>
-                                    <Typography variant="subtitle1">Monthly Average:</Typography>
-                                    <Typography>${monthlyDividendsAverage.toFixed(2)}</Typography>
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <Typography variant="subtitle1">Daily Average:</Typography>
-                                    <Typography>${dailyDividendsAverage.toFixed(2)}</Typography>
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <Typography variant="subtitle1">Hourly Average:</Typography>
-                                    <Typography>${hourlyDividendsAverage.toFixed(2)}</Typography>
-                                </Grid>
-                            </Grid>
-                        </CardContent>
-                    </Card>
-                </Container>
+            <div className="space-y-6">
+                {/* Projections Section */}
+                <div>
+                    <h2 className="text-lg font-medium leading-6 text-slate-900 mb-4">Stock Dividends Projection</h2>
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6 sm:py-6">
+                            <dt>
+                                <div className="absolute rounded-md bg-indigo-500 p-3">
+                                    <TrendingUpIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                                </div>
+                                <p className="ml-16 truncate text-sm font-medium text-slate-500">Yearly Projection</p>
+                            </dt>
+                            <dd className="ml-16 flex items-baseline pb-1 sm:pb-2">
+                                <p className="text-2xl font-semibold text-slate-900">${yearlyCombineDividendsProjection.toFixed(2)}</p>
+                            </dd>
+                        </div>
+                        <div className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6 sm:py-6">
+                            <dt>
+                                <div className="absolute rounded-md bg-indigo-500 p-3">
+                                    <CalendarIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                                </div>
+                                <p className="ml-16 truncate text-sm font-medium text-slate-500">Monthly Average</p>
+                            </dt>
+                            <dd className="ml-16 flex items-baseline pb-1 sm:pb-2">
+                                <p className="text-2xl font-semibold text-slate-900">${monthlyDividendsAverage.toFixed(2)}</p>
+                            </dd>
+                        </div>
+                        <div className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6 sm:py-6">
+                            <dt>
+                                <div className="absolute rounded-md bg-indigo-500 p-3">
+                                    <CalendarIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                                </div>
+                                <p className="ml-16 truncate text-sm font-medium text-slate-500">Daily Average</p>
+                            </dt>
+                            <dd className="ml-16 flex items-baseline pb-1 sm:pb-2">
+                                <p className="text-2xl font-semibold text-slate-900">${dailyDividendsAverage.toFixed(2)}</p>
+                            </dd>
+                        </div>
+                        <div className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6 sm:py-6">
+                            <dt>
+                                <div className="absolute rounded-md bg-indigo-500 p-3">
+                                    <TimeIcon className="h-6 w-6 text-white" aria-hidden="true" />
+                                </div>
+                                <p className="ml-16 truncate text-sm font-medium text-slate-500">Hourly Average</p>
+                            </dt>
+                            <dd className="ml-16 flex items-baseline pb-1 sm:pb-2">
+                                <p className="text-2xl font-semibold text-slate-900">${hourlyDividendsAverage.toFixed(2)}</p>
+                            </dd>
+                        </div>
+                    </div>
+                </div>
 
-                <Box sx={{ mt: 4 }} >
-                    <Container><Typography variant='h6' gutterBottom>Dividends received</Typography></Container>
+                <div className="border-t border-slate-200 pt-6"></div>
 
-                    {/* Chart: Dividends By Year */}
-                    {barChartAmountByYearArray.length > 0 ? (
-                        <Container>
-                            <Card sx={{ mt: 4 }}>
-                                <CardContent>
-                                    <Typography variant='h6' gutterBottom>Dividends By Year</Typography>
-                                    <ResponsiveContainer width="100%" height={400}>
+                {/* Charts Section */}
+                <div>
+                    <h2 className="text-lg font-medium leading-6 text-slate-900 mb-4">Dividends Analysis</h2>
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        {/* Chart: Dividends By Year */}
+                        {barChartAmountByYearArray.length > 0 && (
+                            <div className="bg-white rounded-lg shadow p-6">
+                                <h3 className="text-base font-semibold text-slate-900 mb-4">Dividends By Year</h3>
+                                <div className="h-80 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={barChartAmountByYearArray}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="year" />
-                                            <YAxis />
-                                            <Tooltip content={<DividendsByYearTooltip />} />
-                                            <Legend />
-                                            <Bar dataKey="amount" fill="#8884d8" />
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="year" axisLine={false} tickLine={false} />
+                                            <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                                            <Tooltip content={<DividendsByYearTooltip />} cursor={{ fill: 'transparent' }} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="amount" fill="#6366f1" radius={[4, 4, 0, 0]} name="Amount ($)" />
                                         </BarChart>
                                     </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        </Container>
-                    ) : null} {/* Optionally hide chart if no data */}
+                                </div>
+                            </div>
+                        )}
 
-
-                    {/* Chart: Dividends By Quarter */}
-                    {barChartAmountByQuarterArray.length > 0 ? (
-                        <Container>
-                            <Card sx={{ mt: 4 }}>
-                                <CardContent>
-                                    <Typography variant='h6' gutterBottom>Dividends By Quarter</Typography>
-                                    <ResponsiveContainer width="100%" height={400}>
+                        {/* Chart: Dividends By Quarter */}
+                        {barChartAmountByQuarterArray.length > 0 && (
+                            <div className="bg-white rounded-lg shadow p-6">
+                                <h3 className="text-base font-semibold text-slate-900 mb-4">Dividends By Quarter</h3>
+                                <div className="h-80 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={barChartAmountByQuarterArray}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="yearQuarter" />
-                                            <YAxis />
-                                            <Tooltip content={<DividendsByQuarterTooltip />} />
-                                            <Legend />
-                                            <Bar dataKey="amount" fill="#82ca9d" />
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="yearQuarter" axisLine={false} tickLine={false} />
+                                            <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                                            <Tooltip content={<DividendsByQuarterTooltip />} cursor={{ fill: 'transparent' }} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="amount" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="Amount ($)" />
                                         </BarChart>
                                     </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        </Container>
-                    ) : null}
+                                </div>
+                            </div>
+                        )}
 
-
-                    {/* Chart: Dividends By Month */}
-                    {barChartAmountByMonthdata.length > 0 ? (
-                        <Container>
-                            <Card sx={{ mt: 4 }}>
-                                <CardContent>
-                                    <Typography variant='h6' gutterBottom>Dividends By Month</Typography>
-                                    <ResponsiveContainer width="100%" height={400}>
+                        {/* Chart: Dividends By Month */}
+                        {barChartAmountByMonthdata.length > 0 && (
+                            <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
+                                <h3 className="text-base font-semibold text-slate-900 mb-4">Dividends By Month</h3>
+                                <div className="h-80 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={barChartAmountByMonthdata}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="month" />
-                                            <YAxis />
-                                            <Tooltip content={<DividendsByMonthTooltip />} />
-                                            <Legend />
-                                            <Bar dataKey="amount" fill="#ffc658" />
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} />
+                                            <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                                            <Tooltip content={<DividendsByMonthTooltip />} cursor={{ fill: 'transparent' }} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="amount" fill="#ec4899" radius={[4, 4, 0, 0]} name="Amount ($)" />
                                         </BarChart>
                                     </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        </Container>
-                    ) : null}
+                                </div>
+                            </div>
+                        )}
 
-                    {/* Chart: All Time Dividends By Stock */}
-                    {barChartAllDivByStockdata.length > 0 ? (
-                        <Container>
-                            <Card sx={{ mt: 4 }}>
-                                <CardContent>
-                                    <Typography variant='h6' gutterBottom>
-                                        All Time Dividends By Stock
-                                    </Typography>
-                                    <ResponsiveContainer width="100%" height={400}>
+                        {/* Chart: All Time Dividends By Stock */}
+                        {barChartAllDivByStockdata.length > 0 && (
+                            <div className="bg-white rounded-lg shadow p-6 lg:col-span-2">
+                                <h3 className="text-base font-semibold text-slate-900 mb-4">All Time Dividends By Stock</h3>
+                                <div className="h-96 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
                                         <BarChart data={barChartAllDivByStockdata}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="ticker" />
-                                            <YAxis />
-                                            <Tooltip content={<StockTooltip />} />
-                                            <Legend />
-                                            <Bar dataKey="amount" fill="#8dd1e1" />
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                            <XAxis dataKey="ticker" axisLine={false} tickLine={false} />
+                                            <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `$${value}`} />
+                                            <Tooltip content={<StockTooltip />} cursor={{ fill: 'transparent' }} />
+                                            <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                            <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Amount ($)" />
                                         </BarChart>
                                     </ResponsiveContainer>
-                                </CardContent>
-                            </Card>
-                        </Container>
-                    ) : null}
-                </Box>
-            </>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
         );
     };
 
-    // --- Main Render Logic ---
     return (
-        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-            
-            {dividends === null ? (
-                <Container sx={{ mt: 4 }}>
-                    <Alert severity="info">Dividend data is not available for this portfolio.</Alert>
-                </Container>
-            ) : (
-                renderDividendContent()
-            )}
-        </Box>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {renderDividendContent()}
+        </div>
     );
 };
 

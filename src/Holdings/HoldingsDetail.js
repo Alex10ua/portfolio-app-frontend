@@ -1,35 +1,27 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import '../Holdings/HoldingDetalis.css';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Typography,
-  Button,
-  Box,
-  CircularProgress,
-  TableSortLabel,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   FormControlLabel,
   Checkbox,
+  Button
 } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AddIcon from '@mui/icons-material/Add';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import {
+  ArrowBack as ArrowBackIcon,
+  Add as AddIcon,
+  CloudUpload as CloudUploadIcon,
+  Settings as SettingsIcon,
+  ArrowUpward as ArrowUpIcon,
+  ArrowDownward as ArrowDownIcon
+} from '@mui/icons-material';
 
-import CreateTransactionDialog from '../components/CreateTransactionDialog'; // Import the new component
-import StackedAreaChart from '../components/StackedAreaChart'; //Import StackedAreaChart
+import CreateTransactionDialog from '../components/CreateTransactionDialog';
+import StackedAreaChart from '../components/StackedAreaChart';
 import apiClient from '../api/api';
 
-//https://recharts.org/en-US/examples/StackedAreaChart
 function HoldingsDetail() {
   const { portfolioId } = useParams();
   const navigate = useNavigate();
@@ -38,113 +30,69 @@ function HoldingsDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
-  const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']; // Colors for StackedAreaChart
+  const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   const [tableConfigDialogOpen, setTableConfigDialogOpen] = useState(false);
   const [tableConfig, setTableConfig] = useState({
     columns: [
       { key: 'ticker', label: 'Holding', visible: true },
       { key: 'shareAmount', label: 'Shares', visible: true },
-      { key: 'costPerShare', label: 'Cost per Share', visible: true },
-      { key: 'currentShareValue', label: 'Current Total Value', visible: true },
+      { key: 'costPerShare', label: 'Cost/Share', visible: true },
+      { key: 'currentShareValue', label: 'Total Value', visible: true },
       { key: 'dividend', label: 'Dividends', visible: true },
-      { key: 'dividendYield', label: 'Dividend Yield', visible: true },
-      { key: 'dividendYieldOnCost', label: 'Dividend Yield On Cost', visible: true },
+      { key: 'dividendYield', label: 'Yield', visible: true },
+      { key: 'dividendYieldOnCost', label: 'Yield on Cost', visible: true },
       { key: 'totalProfit', label: 'Total Profit', visible: true },
       { key: 'dailyChange', label: 'Daily Change', visible: true },
     ],
-    orderBy: 'ticker', // Default sorting column
-    order: 'asc', // Default sorting order
+    orderBy: 'ticker',
+    order: 'asc',
   });
 
-  // Sample data for StackedAreaChart
   const data = [
-    {
-      month: '2025.Jan',
-      'Deposit(usd)': 4000,
-      valueMarket: 2400,
-      CashAvaible: 2400,
-      dividend: 200,
-    },
-    {
-      month: '2025.Feb',
-      'Deposit(usd)': 3000,
-      valueMarket: 1398,
-      CashAvaible: 2210,
-      dividend: 200,
-    },
-    {
-      month: '2025.Mar',
-      'Deposit(usd)': 1200,
-      valueMarket: 9800,
-      CashAvaible: 2290,
-      dividend: 200,
-    },
-    {
-      month: '2025.Apr',
-      'Deposit(usd)': 1000,
-      valueMarket: 9900,
-      CashAvaible: 2190,
-      dividend: 200,
-    },
-    {
-      month: '2025.May',
-      'Deposit(usd)': 1500,
-      valueMarket: 9900,
-      CashAvaible: 2190,
-      dividend: 200,
-    },
+    { month: '2025.Jan', 'Deposit(usd)': 4000, valueMarket: 2400, CashAvaible: 2400, dividend: 200 },
+    { month: '2025.Feb', 'Deposit(usd)': 3000, valueMarket: 1398, CashAvaible: 2210, dividend: 200 },
+    { month: '2025.Mar', 'Deposit(usd)': 1200, valueMarket: 9800, CashAvaible: 2290, dividend: 200 },
+    { month: '2025.Apr', 'Deposit(usd)': 1000, valueMarket: 9900, CashAvaible: 2190, dividend: 200 },
+    { month: '2025.May', 'Deposit(usd)': 1500, valueMarket: 9900, CashAvaible: 2190, dividend: 200 },
   ];
-  //Example of areas for StackedAreaChart
+
   const areas = [
     { dataKey: 'Deposit(usd)', name: 'Deposit (USD)' },
     { dataKey: 'valueMarket', name: 'Market Value' },
     { dataKey: 'CashAvaible', name: 'Available Cash' },
-    { dataKey: 'dividend', name: 'Recieved Dividends' },
+    { dataKey: 'dividend', name: 'Received Dividends' },
   ];
 
-  // Function to fetch holdings data
-  // Use useCallback to memoize fetchHoldings
   const fetchHoldingsList = useCallback(() => {
     apiClient
       .get(`${portfolioId}`)
       .then((response) => {
-        // Make a mutable copy of the data to sort
         const dataToSort = [...response.data];
-
-        // Sort the data
         const sortedData = dataToSort.sort((a, b) => {
           let valA, valB;
 
-          // Special handling for 'currentShareValue' to sort by calculated total value
           if (tableConfig.orderBy === 'currentShareValue') {
-            // Ensure 'currentShareValue' and 'shareAmount' are numbers, default to 0 if not or if null
             const aCurrentShareValue = typeof a.currentShareValue === 'number' && a.currentShareValue !== null ? a.currentShareValue : 0;
             const aShareAmount = typeof a.shareAmount === 'number' && a.shareAmount !== null ? a.shareAmount : 0;
             const bCurrentShareValue = typeof b.currentShareValue === 'number' && b.currentShareValue !== null ? b.currentShareValue : 0;
             const bShareAmount = typeof b.shareAmount === 'number' && b.shareAmount !== null ? b.shareAmount : 0;
-
             valA = aCurrentShareValue * aShareAmount;
             valB = bCurrentShareValue * bShareAmount;
           } else {
-            // Generic way to get values for other columns
             valA = a[tableConfig.orderBy];
             valB = b[tableConfig.orderBy];
           }
 
-          // Handle potential null/undefined values after potentially calculating them or fetching them
           if (valA == null && valB == null) return 0;
-          if (valA == null) return tableConfig.order === 'asc' ? -1 : 1; // Nulls first in asc, last in desc
-          if (valB == null) return tableConfig.order === 'asc' ? 1 : -1; // Nulls first in asc, last in desc
+          if (valA == null) return tableConfig.order === 'asc' ? -1 : 1;
+          if (valB == null) return tableConfig.order === 'asc' ? 1 : -1;
 
-          // Type-specific comparison
           if (typeof valA === 'number' && typeof valB === 'number') {
             return tableConfig.order === 'asc' ? valA - valB : valB - valA;
           } else if (typeof valA === 'string' && typeof valB === 'string') {
             const comparison = valA.localeCompare(valB);
             return tableConfig.order === 'asc' ? comparison : -comparison;
           } else {
-            // Fallback for mixed types or other types (original logic)
-            // This might need adjustment if you have other specific types to sort
             if (tableConfig.order === 'asc') {
               return valA > valB ? 1 : valA < valB ? -1 : 0;
             } else {
@@ -177,7 +125,8 @@ function HoldingsDetail() {
 
   useEffect(() => {
     fetchFirstTradeYear();
-  }, [fetchFirstTradeYear]);
+    fetchHoldingsList();
+  }, [fetchFirstTradeYear, fetchHoldingsList]);
 
   const handleSortRequest = (property) => {
     const isAsc = tableConfig.orderBy === property && tableConfig.order === 'asc';
@@ -188,7 +137,6 @@ function HoldingsDetail() {
     }));
   };
 
-  // Toggle column visibility in the config
   const handleToggleColumn = (columnKey) => {
     setTableConfig((prevConfig) => ({
       ...prevConfig,
@@ -198,39 +146,19 @@ function HoldingsDetail() {
     }));
   };
 
-  // Open and close the config dialog
   const handleOpenConfigDialog = () => setTableConfigDialogOpen(true);
   const handleCloseConfigDialog = () => setTableConfigDialogOpen(false);
-
-  useEffect(() => {
-    fetchHoldingsList();
-  }, [fetchHoldingsList]);
-
-  // Function to handle dialog open
-  const handleClickOpen = () => {
-    setOpen(true);
-  };
-
-  // Function to handle dialog close
-  const handleClose = () => {
-    setOpen(false);
-  };
+  const handleClickOpen = () => setOpen(true);
+  const handleClose = () => setOpen(false);
 
   const handleCreateTransaction = async (newTransaction) => {
     setLoading(true);
     try {
-      await apiClient
-        .post(
-          `${portfolioId}/createTransaction`,
-          newTransaction
-        )
+      await apiClient.post(`${portfolioId}/createTransaction`, newTransaction)
         .then((response) => {
-          setTransaction([...transaction, response.data]); // Add new transaction to the list
-          fetchHoldingsList(); // Refresh holdings data
-          handleClose(); // Close the dialog
-        })
-        .catch((error) => {
-          console.error('Error creating transaction:', error);
+          setTransaction([...transaction, response.data]);
+          fetchHoldingsList();
+          handleClose();
         });
     } catch (error) {
       console.error('Transaction failed', error);
@@ -250,99 +178,53 @@ function HoldingsDetail() {
     localStorage.setItem(`tableConfig-${portfolioId}`, JSON.stringify(tableConfig));
   }, [portfolioId, tableConfig]);
 
-  if (loading) {
-    return (
-      <Box
-        display='flex'
-        flexDirection='column'
-        alignItems='center'
-        justifyContent='center'
-        height='100vh'
-      >
-        <CircularProgress />
-        <p>Loading holdings...</p>
-      </Box>
-    );
-  }
-  if (error) return <p>Error loading holdings: {error.message}</p>;
-  if (!holdings) return <p>Holdings not found.</p>;
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
+  );
+  if (error) return <div className="text-red-500 p-4">Error loading holdings: {error.message}</div>;
+  if (!holdings) return <div className="p-4">Holdings not found.</div>;
 
   return (
-    <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Button
-          variant='contained'
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/')}
-          sx={{
-            alignSelf: 'flex-start',
-            backgroundColor: 'primary.main',
-            color: 'white',
-            padding: '8px 24px',
-            borderRadius: '8px',
-            textTransform: 'none',
-            fontSize: '1rem',
-            fontWeight: 500,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            '&:hover': {
-              backgroundColor: 'primary.dark',
-              transform: 'translateY(-1px)',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-            },
-            transition: 'all 0.2s ease',
-          }}
-        >
-          Back to Portfolios
-        </Button>
-        <Typography variant='h4' component='h1'>
-          {holdings.name}
-        </Typography>
-      </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 1 }}>
-        <Button
-          variant='outlined'
-          onClick={handleOpenConfigDialog}
-          sx={{
-            marginRight: '1rem',
-          }}
-        >
-          Modify Table Config
-        </Button>
-        <Button
-          variant='outlined'
-          startIcon={<CloudUploadIcon />}
-          onClick={() => navigate(`/${portfolioId}/import`)}
-          sx={{
-            marginRight: '1rem',
-          }}
-        >
-          Import Transactions
-        </Button>
-        <Button
-          variant='contained'
-          startIcon={<AddIcon />}
-          onClick={handleClickOpen}
-          sx={{
-            backgroundColor: 'primary.main',
-            color: 'white',
-            padding: '10px 24px',
-            borderRadius: '8px',
-            textTransform: 'none',
-            fontSize: '1rem',
-            fontWeight: 500,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            '&:hover': {
-              backgroundColor: 'primary.dark',
-              transform: 'translateY(-1px)',
-              boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-            },
-            transition: 'all 0.2s ease',
-          }}
-        >
-          Create New Transaction
-        </Button>
-      </Box>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+      {/* Header & Actions */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center text-sm text-slate-500 hover:text-indigo-600 mb-2 transition-colors"
+          >
+            <ArrowBackIcon className="h-4 w-4 mr-1" />
+            Back to Portfolios
+          </button>
+          <h1 className="text-3xl font-bold text-slate-900">{holdings.name || 'Portfolio Holdings'}</h1>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleOpenConfigDialog}
+            className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+          >
+            <SettingsIcon className="-ml-0.5 mr-1.5 h-5 w-5 text-slate-400" />
+            Columns
+          </button>
+          <button
+            onClick={() => navigate(`/${portfolioId}/import`)}
+            className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+          >
+            <CloudUploadIcon className="-ml-0.5 mr-1.5 h-5 w-5 text-slate-400" />
+            Import
+          </button>
+          <button
+            onClick={handleClickOpen}
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <AddIcon className="-ml-0.5 mr-1.5 h-5 w-5" />
+            New Transaction
+          </button>
+        </div>
+      </div>
 
       <CreateTransactionDialog
         open={open}
@@ -350,176 +232,147 @@ function HoldingsDetail() {
         onCreateTransaction={handleCreateTransaction}
       />
 
+      {/* Chart Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Portfolio Performance</h2>
+        <div className="h-[300px] w-full">
+          <StackedAreaChart
+            data={data}
+            xAxisKey='month'
+            areas={areas}
+            colors={chartColors}
+          />
+        </div>
+      </div>
 
-      <StackedAreaChart
-        data={data}
-        xAxisKey='month'
-        areas={areas}
-        colors={chartColors}
-      />
-      {/* Table */}
-      <TableContainer
-        component={Paper}
-        sx={{
-          mt: 3,
-          mb: 3,
-          borderRadius: '10px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          '& .MuiTable-root': {
-            minWidth: 650,
-          },
-        }}
-      >
-        <Table>
-          <TableHead>
-            <TableRow>
-              {/* Table Head remains the same - filters based on visible */}
-              {tableConfig.columns
-                .filter((column) => column.visible)
-                .map((column) => (
-                  <TableCell
+      {/* Table Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200">
+            <thead className="bg-slate-50">
+              <tr>
+                {tableConfig.columns.filter((col) => col.visible).map((column) => (
+                  <th
                     key={column.key}
-                    sortDirection={tableConfig.orderBy === column.key ? tableConfig.order : false}
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group"
+                    onClick={() => handleSortRequest(column.key)}
                   >
-                    <TableSortLabel
-                      active={tableConfig.orderBy === column.key}
-                      direction={tableConfig.orderBy === column.key ? tableConfig.order : 'asc'}
-                      onClick={() => handleSortRequest(column.key)}
-                    >
+                    <div className="flex items-center gap-1">
                       {column.label}
-                    </TableSortLabel>
-                  </TableCell>
+                      {tableConfig.orderBy === column.key && (
+                        <span className="text-indigo-600">
+                          {tableConfig.order === 'asc' ? <ArrowUpIcon className="h-3 w-3" /> : <ArrowDownIcon className="h-3 w-3" />}
+                        </span>
+                      )}
+                    </div>
+                  </th>
                 ))}
-            </TableRow>
-          </TableHead>
-          <TableBody
-            sx={{
-              '& tr:nth-of-type(odd)': {
-                backgroundColor: 'rgba(0, 0, 0, 0.03)',
-              },
-              '& tr:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                transition: 'background-color 0.2s ease',
-              },
-              '& td': {
-                padding: '16px',
-                fontSize: '0.875rem',
-                borderBottom: '1px solid rgba(224, 224, 224, 1)',
-              },
-            }}
-          >
-            {/* Iterate through holdings data */}
-            {holdings.map((holding, index) => (
-              // Use a more stable key if holding has an ID, otherwise fallback to index
-              <TableRow key={holding.id || holding.ticker || index}>
-                {/* Iterate through the columns defined in config */}
-                {tableConfig.columns.map((column) => {
-                  // Only render the TableCell if the column is marked as visible
-                  if (!column.visible) {
-                    return null; // Skip rendering this cell
-                  }
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-slate-200">
+              {holdings.map((holding, index) => (
+                <tr key={holding.id || holding.ticker || index} className="hover:bg-slate-50 transition-colors">
+                  {tableConfig.columns.filter((col) => col.visible).map((column) => {
+                    let cellContent = null;
+                    let cellClass = "px-6 py-4 whitespace-nowrap text-sm text-slate-700";
 
-                  // Use a switch statement to render content based on column key
-                  // This preserves specific formatting and logic for each cell type
-                  let cellContent = null;
-                  const cellProps = {}; // To hold specific props like sx, title, align
+                    const formatCurrency = (value) => value?.toFixed(2) ?? 'N/A';
+                    const formatPercent = (value) => value?.toFixed(2) ?? 'N/A';
 
-                  // Helper for safe number formatting
-                  const formatCurrency = (value) => value?.toFixed(2) ?? 'N/A';
-                  const formatPercent = (value) => value?.toFixed(2) ?? 'N/A';
+                    switch (column.key) {
+                      case 'ticker':
+                        cellContent = (
+                          <div className="flex items-center">
+                            <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-100 flex items-center justify-center mr-3">
+                              {/* Placeholder for logo if image fails */}
+                              <span className="text-xs font-bold text-slate-500">{holding.ticker.substring(0, 2)}</span>
+                            </div>
+                            <div className="font-medium text-slate-900">{holding.ticker}</div>
+                          </div>
+                        );
+                        break;
+                      case 'costPerShare':
+                        cellContent = `$${formatCurrency(holding.costPerShare)}`;
+                        break;
+                      case 'currentShareValue':
+                        const totalValue = holding.currentShareValue * holding.shareAmount;
+                        cellContent = (
+                          <div>
+                            <div className="font-medium text-slate-900">${formatCurrency(totalValue)}</div>
+                            <div className="text-xs text-slate-500">Price: ${formatCurrency(holding.currentShareValue)}</div>
+                          </div>
+                        );
+                        break;
+                      case 'dividend':
+                        const totalDividend = holding.dividend * holding.shareAmount;
+                        cellContent = `$${formatCurrency(totalDividend)}`;
+                        break;
+                      case 'dividendYield':
+                        cellContent = <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">{formatPercent(holding.dividendYield)}%</span>;
+                        break;
+                      case 'dividendYieldOnCost':
+                        cellContent = `${formatPercent(holding.dividendYieldOnCost)}%`;
+                        break;
+                      case 'totalProfit':
+                        const profit = holding.totalProfit;
+                        const profitPercentage = holding.totalProfitPercentage;
+                        const isProfitable = profit >= 0;
+                        cellClass += isProfitable ? " text-green-600" : " text-red-600";
+                        cellContent = (
+                          <div>
+                            <span className="font-medium">${formatCurrency(profit)}</span>
+                            <span className="ml-1 text-xs">({formatPercent(profitPercentage)}%)</span>
+                          </div>
+                        );
+                        break;
+                      case 'dailyChange':
+                        const change = holding.dailyChange;
+                        const isPositive = change >= 0;
+                        cellClass += isPositive ? " text-green-600" : " text-red-600";
+                        cellContent = `$${formatCurrency(change)}`;
+                        break;
+                      default:
+                        cellContent = holding[column.key]?.toString() ?? 'N/A';
+                    }
 
-                  switch (column.key) {
-                    case 'ticker':
-                      cellContent = (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <img
-                            src={`/images/${holding.ticker}_icon.png`}
-                            alt={holding.ticker}
-                            style={{ width: 24, height: 24, marginRight: 10 }}
-                            // Optional: Add error handling for missing images
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                          <Typography>{holding.ticker}</Typography>
-                        </Box>
-                      );
-                      break;
-                    case 'shareAmount':
-                      cellContent = holding.shareAmount;
-                      break;
-                    case 'costPerShare':
-                      cellContent = `$${formatCurrency(holding.costPerShare)}`;
-                      break;
-                    case 'currentShareValue': // Represents 'Current Total Value' column
-                      const totalValue = holding.currentShareValue * holding.shareAmount;
-                      cellContent = `$${formatCurrency(totalValue)}`;
-                      // Add the title attribute back
-                      cellProps.title = `Share price: $${formatCurrency(holding.currentShareValue)}`;
-                      break;
-                    case 'dividend': // Represents 'Dividends' column (total)
-                      const totalDividend = holding.dividend * holding.shareAmount;
-                      cellContent = `$${formatCurrency(totalDividend)}`;
-                      // Add the title attribute back
-                      cellProps.title = `$${formatCurrency(holding.dividend)} per share`;
-                      break;
-                    case 'dividendYield':
-                      cellContent = `${formatPercent(holding.dividendYield)}%`;
-                      break;
-                    case 'dividendYieldOnCost':
-                      cellContent = `${formatPercent(holding.dividendYieldOnCost)}%`;
-                      break;
-                    case 'totalProfit':
-                      const profit = holding.totalProfit;
-                      const profitPercentage = holding.totalProfitPercentage;
-                      cellContent = `$${formatCurrency(profit)} (${formatPercent(profitPercentage)}%)`;
-                      // Apply conditional styling
-                      cellProps.sx = { color: profit > 0 ? 'green' : 'red' };
-                      break;
-                    case 'dailyChange':
-                      const change = holding.dailyChange;
-                      cellContent = `$${formatCurrency(change)}`;
-                      // Apply conditional styling
-                      cellProps.sx = { color: change > 0 ? 'green' : 'red' };
-                      break;
-                    default:
-                      // Fallback for any unexpected column keys
-                      cellContent = holding[column.key]?.toString() ?? 'N/A';
-                  }
+                    return (
+                      <td key={column.key} className={cellClass}>
+                        {cellContent}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-                  // Render the TableCell with its determined content and props
-                  return (
-                    <TableCell key={column.key} {...cellProps}>
-                      {cellContent}
-                    </TableCell>
-                  );
-                })}
-              </TableRow>
+      <Dialog open={tableConfigDialogOpen} onClose={handleCloseConfigDialog}>
+        <DialogTitle className="font-bold">Column Configuration</DialogTitle>
+        <DialogContent dividers>
+          <div className="flex flex-col gap-2">
+            {tableConfig.columns.map((column) => (
+              <FormControlLabel
+                key={column.key}
+                control={
+                  <Checkbox
+                    checked={column.visible}
+                    onChange={() => handleToggleColumn(column.key)}
+                    color="primary"
+                  />
+                }
+                label={<span className="text-sm text-slate-700">{column.label}</span>}
+              />
             ))}
-          </TableBody>
-        </Table>
-      </TableContainer >
-
-      {/* Table Config Dialog */}
-      <Dialog Dialog open={tableConfigDialogOpen} onClose={handleCloseConfigDialog} >
-        <DialogTitle>Modify Table Configuration</DialogTitle>
-        <DialogContent>
-          {tableConfig.columns.map((column) => (
-            <FormControlLabel
-              key={column.key}
-              control={
-                <Checkbox
-                  checked={column.visible}
-                  onChange={() => handleToggleColumn(column.key)}
-                />
-              }
-              label={column.label}
-            />
-          ))}
+          </div>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseConfigDialog}>Close</Button>
+          <Button onClick={handleCloseConfigDialog} color="primary">Close</Button>
         </DialogActions>
-      </Dialog >
-    </Box >
+      </Dialog>
+    </div>
   );
 }
 

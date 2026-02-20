@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8080/api/v1'; // Adjust if backend runs on different port
+const API_URL = '/api/v1';
 
 const api = axios.create({
     baseURL: API_URL,
@@ -10,13 +10,18 @@ const api = axios.create({
     },
 });
 
+// Separate instance for Spring Security endpoints (no /api/v1 prefix)
+const authAxios = axios.create({
+    withCredentials: true,
+});
+
 export const login = async (username, password) => {
     const params = new URLSearchParams();
     params.append('username', username);
     params.append('password', password);
 
     try {
-        await api.post('/login', params, {
+        await authAxios.post('/login', params, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
@@ -37,7 +42,7 @@ export const register = async (userData) => {
 };
 
 export const logout = async () => {
-    await api.post('/logout');
+    await authAxios.post('/logout');
 };
 
 export const getCurrentUser = async () => {

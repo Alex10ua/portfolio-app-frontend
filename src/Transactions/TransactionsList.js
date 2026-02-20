@@ -1,21 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
-    Table, Typography,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Paper,
-    Box,
-    CircularProgress,
-    FormControl,
-    InputLabel,
-    Select,
-    MenuItem,
-    Alert,
-    IconButton,
     Dialog,
     DialogActions,
     DialogContent,
@@ -23,10 +8,17 @@ import {
     DialogTitle,
     Button,
     TextField,
-    Stack
+    Stack,
+    MenuItem,
+    Select,
+    FormControl,
+    InputLabel
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import {
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    FilterList as FilterListIcon
+} from '@mui/icons-material';
 
 import apiClient from '../api/api';
 
@@ -47,7 +39,6 @@ const TransactionsList = () => {
     const [selectedTransaction, setSelectedTransaction] = useState(null);
     const [editFormData, setEditFormData] = useState(null);
 
-
     // In-memory cache
     const transactionCache = useRef({});
 
@@ -59,7 +50,6 @@ const TransactionsList = () => {
             setTransactions(transactionCache.current[yearToFetch]);
             setLoading(false);
             setError(null);
-            console.log(`Using cached transactions for year ${yearToFetch}:`);
             return;
         }
 
@@ -69,7 +59,6 @@ const TransactionsList = () => {
                 transactionCache.current[yearToFetch] = data;
                 setTransactions(data);
                 setLoading(false);
-                console.log(`Fetched transactions for year ${yearToFetch}:`);
             })
             .catch(error => {
                 console.error(`Error fetching transactions for year ${yearToFetch}:`, error);
@@ -97,7 +86,7 @@ const TransactionsList = () => {
             quantity: transaction.quantity,
             price: transaction.price,
             commission: transaction.commission,
-            date: new Date(transaction.date).toISOString().slice(0, 16), // Format for datetime-local input
+            date: new Date(transaction.date).toISOString().slice(0, 16),
             assetType: transaction.assetType,
             currency: transaction.currency
         });
@@ -117,7 +106,7 @@ const TransactionsList = () => {
 
     const handleUpdateTransaction = () => {
         if (!selectedTransaction || !editFormData) return;
-        // Construct payload with correct data types
+
         const payload = {
             ...editFormData,
             price: parseFloat(editFormData.price),
@@ -126,14 +115,14 @@ const TransactionsList = () => {
             date: new Date(editFormData.date).toISOString()
         };
 
-        apiClient.put(`${portfolioId}/transactions/${selectedTransaction.transactionId}/update`, payload) // TODO update a updating process to match back end
+        apiClient.put(`${portfolioId}/transactions/${selectedTransaction.transactionId}/update`, payload)
             .then(response => {
                 const updatedTransaction = response.data;
                 const updatedTransactions = transactions.map(t =>
                     t.transactionId === selectedTransaction.transactionId ? updatedTransaction : t
                 );
                 setTransactions(updatedTransactions);
-                transactionCache.current[selectedYear] = updatedTransactions.reverse(); // Update cache
+                transactionCache.current[selectedYear] = updatedTransactions.reverse();
                 handleEditClose();
             })
             .catch(err => {
@@ -160,7 +149,7 @@ const TransactionsList = () => {
             .then(() => {
                 const updatedTransactions = transactions.filter(t => t.transactionId !== selectedTransaction.transactionId);
                 setTransactions(updatedTransactions);
-                transactionCache.current[selectedYear] = updatedTransactions; // Update cache
+                transactionCache.current[selectedYear] = updatedTransactions;
                 handleDeleteClose();
             })
             .catch(err => {
@@ -179,271 +168,254 @@ const TransactionsList = () => {
     const renderContent = () => {
         if (loading) {
             return (
-                <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" sx={{ mt: 4, height: '40vh' }}>
-                    <CircularProgress />
-                    <Typography sx={{ mt: 2 }}>Loading transactions...</Typography>
-                </Box>
+                <div className="flex h-64 items-center justify-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                </div>
             );
         }
 
         if (error) {
             return (
-                <Alert severity="error" sx={{ mt: 2 }}>
-                    Error loading transactions: {error.message || 'An unknown error occurred.'}
-                </Alert>
+                <div className="rounded-md bg-red-50 p-4 mt-4">
+                    <div className="flex">
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-red-800">Error loading transactions</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p>{error.message || 'An unknown error occurred.'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
         if (!transactions || transactions.length === 0) {
             return (
-                <TableContainer component={Paper} sx={tableContainerStyles}>
-                    <Table>
-                        <TableHead>
-                            {/* Render headers even when empty for consistency */}
-                            <TableRow>
-                                <TableCell>Ticker</TableCell>
-                                <TableCell align="right">Quantity</TableCell>
-                                <TableCell align="right">Price ($)</TableCell>
-                                <TableCell align="right">Total Amount ($)</TableCell>
-                                <TableCell align="right">Commission ($)</TableCell>
-                                <TableCell>Date</TableCell>
-                                <TableCell>Type</TableCell>
-                                <TableCell align="right">Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            <TableRow>
-                                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                                    <Typography>No transactions found for the year {selectedYear}.</Typography>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                <div className="mt-6 text-center rounded-lg border-2 border-dashed border-slate-300 p-12">
+                    <FilterListIcon className="mx-auto h-12 w-12 text-slate-400" />
+                    <h3 className="mt-2 text-sm font-semibold text-slate-900">No transactions</h3>
+                    <p className="mt-1 text-sm text-slate-500">No transactions found for the year {selectedYear}.</p>
+                </div>
             );
         }
 
         const reverseTransactions = [...transactions].reverse();
+
         return (
-            <TableContainer component={Paper} sx={tableContainerStyles}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Ticker</TableCell>
-                            <TableCell align="right">Quantity</TableCell>
-                            <TableCell align="right">Price ($)</TableCell>
-                            <TableCell align="right">Total Amount ($)</TableCell>
-                            <TableCell align="right">Commission ($)</TableCell>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Type</TableCell>
-                            <TableCell align="right">Actions</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody sx={tableBodyStyles}>
-                        {reverseTransactions.map((transaction) => {
-                            const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
-                                year: 'numeric', month: '2-digit', day: '2-digit',
-                                hour: '2-digit', minute: '2-digit', hour12: false
-                            }).replace(',', '');
-                            return (
-                                <TableRow key={transaction.transactionId}>
-                                    <TableCell>
-                                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                            <img
-                                                src={`/images/${transaction.ticker}_icon.png`}
-                                                alt={transaction.ticker}
-                                                style={{ width: 24, height: 24, marginRight: 10 }}
-                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            />
-                                            <Typography>{transaction.ticker}</Typography>
-                                        </Box>
-                                    </TableCell>
-                                    <TableCell align="right">{transaction.quantity}</TableCell>
-                                    <TableCell align="right">{transaction.price?.toFixed(2) ?? 'N/A'}</TableCell>
-                                    <TableCell align="right">{transaction.totalAmount?.toFixed(2) ?? 'N/A'}</TableCell>
-                                    <TableCell align="right">{transaction.commission?.toFixed(2) ?? 'N/A'}</TableCell>
-                                    <TableCell>{formattedDate}</TableCell>
-                                    <TableCell>{transaction.transactionType}</TableCell>
-                                    <TableCell align="right">
-                                        <IconButton onClick={() => handleEditClick(transaction)} size="small" aria-label="edit">
-                                            <EditIcon />
-                                        </IconButton>
-                                        <IconButton onClick={() => handleDeleteClick(transaction)} size="small" aria-label="delete">
-                                            <DeleteIcon />
-                                        </IconButton>
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                    </TableBody>
-                </Table>
-            </TableContainer>
+            <div className="mt-6 flow-root">
+                <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                    <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                        <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                            <table className="min-w-full divide-y divide-slate-300">
+                                <thead className="bg-slate-50">
+                                    <tr>
+                                        <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6">Ticker</th>
+                                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-slate-900">Quantity</th>
+                                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-slate-900">Price ($)</th>
+                                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-slate-900">Total ($)</th>
+                                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-slate-900">Comm. ($)</th>
+                                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-slate-900">Date</th>
+                                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-slate-900">Type</th>
+                                        <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                                            <span className="sr-only">Actions</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 bg-white">
+                                    {reverseTransactions.map((transaction) => {
+                                        const formattedDate = new Date(transaction.date).toLocaleString('en-GB', {
+                                            year: 'numeric', month: '2-digit', day: '2-digit',
+                                            hour: '2-digit', minute: '2-digit', hour12: false
+                                        }).replace(',', '');
+
+                                        const isBuy = transaction.transactionType === 'BUY';
+                                        const isSell = transaction.transactionType === 'SELL';
+                                        const typeColor = isBuy ? 'text-green-700 bg-green-50 ring-green-600/20' :
+                                            isSell ? 'text-red-700 bg-red-50 ring-red-600/20' :
+                                                'text-slate-700 bg-slate-50 ring-slate-600/20';
+
+                                        return (
+                                            <tr key={transaction.transactionId} className="hover:bg-slate-50">
+                                                <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-slate-900 sm:pl-6">
+                                                    <div className="flex items-center">
+                                                        <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-100 flex items-center justify-center mr-3">
+                                                            {/* Placeholder icon */}
+                                                            <span className="text-xs font-bold text-slate-500">{transaction.ticker.substring(0, 2)}</span>
+                                                        </div>
+                                                        <div>{transaction.ticker}</div>
+                                                    </div>
+                                                </td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{transaction.quantity}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{transaction.price?.toFixed(2) ?? 'N/A'}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-900 font-medium">{transaction.totalAmount?.toFixed(2) ?? 'N/A'}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{transaction.commission?.toFixed(2) ?? 'N/A'}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500">{formattedDate}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500">
+                                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${typeColor}`}>
+                                                        {transaction.transactionType}
+                                                    </span>
+                                                </td>
+                                                <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => handleEditClick(transaction)}
+                                                            className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-slate-100"
+                                                        >
+                                                            <EditIcon className="h-4 w-4" />
+                                                            <span className="sr-only">Edit</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteClick(transaction)}
+                                                            className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-slate-100"
+                                                        >
+                                                            <DeleteIcon className="h-4 w-4" />
+                                                            <span className="sr-only">Delete</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         );
     };
 
-    const tableContainerStyles = {
-        mt: 3,
-        mb: 3,
-        borderRadius: '10px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        '& .MuiTable-root': {
-            minWidth: 650,
-        }
-    };
-
-    const tableBodyStyles = {
-        '& tr:nth-of-type(odd)': { backgroundColor: 'rgba(0, 0, 0, 0.03)' },
-        '& tr:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)', transition: 'background-color 0.2s ease' },
-        '& td': { padding: '16px', fontSize: '0.875rem', borderBottom: '1px solid rgba(224, 224, 224, 1)' }
-    };
-
-
-    // --- Main Return Structure ---
     return (
-        <Box sx={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-
-
-            {/* Year Dropdown - Always Visible */}
-            <FormControl variant="outlined" sx={{ minWidth: 120, mt: 2, mb: 2 }}> {/* Added mt */}
-                <InputLabel id="year-select-label">Year</InputLabel>
-                <Select
-                    labelId="year-select-label"
-                    id="year-select"
-                    value={selectedYear}
-                    label="Year"
-                    onChange={handleYearChange}
-                    disabled={loading}
-                >
-                    {yearOptions.map((year) => (
-                        <MenuItem key={year} value={year}>
-                            {year}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="sm:flex sm:items-center">
+                <div className="sm:flex-auto">
+                    <h1 className="text-2xl font-bold leading-6 text-slate-900">Transactions</h1>
+                    <p className="mt-2 text-sm text-slate-700">
+                        A list of all your transactions for the selected year.
+                    </p>
+                </div>
+                <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+                    <FormControl variant="outlined" size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel id="year-select-label">Year</InputLabel>
+                        <Select
+                            labelId="year-select-label"
+                            id="year-select"
+                            value={selectedYear}
+                            label="Year"
+                            onChange={handleYearChange}
+                            disabled={loading}
+                        >
+                            {yearOptions.map((year) => (
+                                <MenuItem key={year} value={year}>
+                                    {year}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </div>
+            </div>
 
             {renderContent()}
 
             {/* Edit Transaction Dialog */}
-            <Dialog open={editDialogOpen} onClose={handleEditClose}>
-                <DialogTitle>Edit Transaction</DialogTitle>
+            <Dialog open={editDialogOpen} onClose={handleEditClose} maxWidth="sm" fullWidth>
+                <DialogTitle className="font-bold">Edit Transaction</DialogTitle>
                 <DialogContent>
-                    <DialogContentText>
+                    <DialogContentText className="mb-4">
                         Update the details for the transaction.
                     </DialogContentText>
                     {editFormData && (
-                        <Stack spacing={2} sx={{ mt: 2 }}>
-                            <TextField
-                                autoFocus
-                                margin="dense"
-                                name="ticker"
-                                label="Ticker"
-                                type="text"
-                                fullWidth
-                                variant="outlined"
-                                value={editFormData.ticker}
-                                onChange={handleEditFormChange}
-                            />
-                            <FormControl fullWidth margin="dense">
-                                <InputLabel id="asset-type-label">Asset Type</InputLabel>
-                                <Select
-                                    labelId="asset-type-label"
-                                    name="assetType"
-                                    value={editFormData.assetType}
-                                    label="Asset Type"
+                        <Stack spacing={3} sx={{ mt: 1 }}>
+                            <div className="grid grid-cols-2 gap-4">
+                                <TextField
+                                    name="ticker"
+                                    label="Ticker"
+                                    fullWidth
+                                    variant="outlined"
+                                    value={editFormData.ticker}
                                     onChange={handleEditFormChange}
-                                >
-                                    <MenuItem value='STOCK'>STOCK</MenuItem>
-                                    <MenuItem value='FIGURINE'>FIGURINE</MenuItem>
-                                    <MenuItem value='COIN'>COIN</MenuItem>
-                                    <MenuItem value='FUND'>FUND</MenuItem>
-                                    <MenuItem value="CRYPTO">CRYPTO</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth margin="dense">
-                                <InputLabel id="currency-label">Currency</InputLabel>
-                                <Select
-                                    labelId="currency-label"
-                                    name="currency"
-                                    value={editFormData.currency}
-                                    label="Currency"
+                                />
+                                <TextField
+                                    name="date"
+                                    label="Date"
+                                    type="datetime-local"
+                                    fullWidth
+                                    variant="outlined"
+                                    value={editFormData.date}
                                     onChange={handleEditFormChange}
-                                >
-                                    <MenuItem value="USD">USD</MenuItem>
-                                    <MenuItem value="EUR">EUR</MenuItem>
-                                    <MenuItem value="GBP">GBP</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <FormControl fullWidth margin="dense">
-                                <InputLabel id="transaction-type-label">Transaction Type</InputLabel>
-                                <Select
-                                    labelId="transaction-type-label"
-                                    name="transactionType"
-                                    value={editFormData.transactionType}
-                                    label="Transaction Type"
+                                    InputLabelProps={{ shrink: true }}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormControl fullWidth>
+                                    <InputLabel>Type</InputLabel>
+                                    <Select
+                                        name="transactionType"
+                                        value={editFormData.transactionType}
+                                        label="Type"
+                                        onChange={handleEditFormChange}
+                                    >
+                                        <MenuItem value='BUY'>BUY</MenuItem>
+                                        <MenuItem value='SELL'>SELL</MenuItem>
+                                        <MenuItem value='TAX'>TAX</MenuItem>
+                                        <MenuItem value='DIVIDEND'>DIVIDEND</MenuItem>
+                                    </Select>
+                                </FormControl>
+                                <FormControl fullWidth>
+                                    <InputLabel>Asset Class</InputLabel>
+                                    <Select
+                                        name="assetType"
+                                        value={editFormData.assetType}
+                                        label="Asset Class"
+                                        onChange={handleEditFormChange}
+                                    >
+                                        <MenuItem value='STOCK'>STOCK</MenuItem>
+                                        <MenuItem value='FIGURINE'>FIGURINE</MenuItem>
+                                        <MenuItem value='COIN'>COIN</MenuItem>
+                                        <MenuItem value='FUND'>FUND</MenuItem>
+                                        <MenuItem value="CRYPTO">CRYPTO</MenuItem>
+                                    </Select>
+                                </FormControl>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <TextField
+                                    name="quantity"
+                                    label="Qty"
+                                    type="number"
+                                    fullWidth
+                                    value={editFormData.quantity}
                                     onChange={handleEditFormChange}
-                                >
-                                    <MenuItem value='BUY'>BUY</MenuItem>
-                                    <MenuItem value='SELL'>SELL</MenuItem>
-                                    <MenuItem value='TAX'>TAX</MenuItem>
-                                    <MenuItem value='DIVIDEND'>DIVIDEND</MenuItem>
-                                </Select>
-                            </FormControl>
-                            <TextField
-                                margin="dense"
-                                name="quantity"
-                                label="Quantity"
-                                type="number"
-                                fullWidth
-                                variant="outlined"
-                                value={editFormData.quantity}
-                                onChange={handleEditFormChange}
-                            />
-                            <TextField
-                                margin="dense"
-                                name="price"
-                                label="Price ($)"
-                                type="number"
-                                fullWidth
-                                variant="outlined"
-                                value={editFormData.price}
-                                onChange={handleEditFormChange}
-                            />
-                            <TextField
-                                margin="dense"
-                                name="commission"
-                                label="Commission ($)"
-                                type="number"
-                                fullWidth
-                                variant="outlined"
-                                value={editFormData.commission}
-                                onChange={handleEditFormChange}
-                            />
-                            <TextField
-                                margin="dense"
-                                name="date"
-                                label="Date"
-                                type="datetime-local"
-                                fullWidth
-                                variant="outlined"
-                                value={editFormData.date}
-                                onChange={handleEditFormChange}
-                                InputLabelProps={{ shrink: true }}
-                            />
+                                />
+                                <TextField
+                                    name="price"
+                                    label="Price"
+                                    type="number"
+                                    fullWidth
+                                    value={editFormData.price}
+                                    onChange={handleEditFormChange}
+                                />
+                                <TextField
+                                    name="commission"
+                                    label="Comm."
+                                    type="number"
+                                    fullWidth
+                                    value={editFormData.commission}
+                                    onChange={handleEditFormChange}
+                                />
+                            </div>
                         </Stack>
                     )}
                 </DialogContent>
                 <DialogActions>
                     <Button onClick={handleEditClose}>Cancel</Button>
-                    <Button onClick={handleUpdateTransaction} variant="contained">Save</Button>
+                    <Button onClick={handleUpdateTransaction} variant="contained" color="primary">Save Changes</Button>
                 </DialogActions>
             </Dialog>
 
             {/* Delete Confirmation Dialog */}
-            <Dialog
-                open={deleteConfirmOpen}
-                onClose={handleDeleteClose}
-            >
+            <Dialog open={deleteConfirmOpen} onClose={handleDeleteClose}>
                 <DialogTitle>Confirm Deletion</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
@@ -457,8 +429,7 @@ const TransactionsList = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-
-        </Box>
+        </div>
     );
 };
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
     Dashboard as DashboardIcon,
@@ -10,12 +10,30 @@ import {
     Folder as PortfolioIcon
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../api/api';
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     const match = useMatch('/:portfolioId/*');
     const portfolioId = match?.params?.portfolioId;
     const { logout } = useAuth();
     const navigate = useNavigate();
+    const [portfolios, setPortfolios] = useState([]);
+
+    useEffect(() => {
+        apiClient.get('portfolios')
+            .then(response => {
+                if (Array.isArray(response.data)) {
+                    setPortfolios(response.data);
+                } else {
+                    console.error('Expected array for portfolios, got:', response.data);
+                    setPortfolios([]);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching portfolios for sidebar:', error);
+                setPortfolios([]);
+            });
+    }, []);
 
     const handleLogout = async (e) => {
         e.preventDefault();
@@ -69,6 +87,33 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                             ))}
                         </ul>
                     </li>
+
+                    {Array.isArray(portfolios) && portfolios.length > 0 && (
+                        <li>
+                            <div className="text-xs font-semibold leading-6 text-slate-400 mt-4 mb-2">Your Portfolios</div>
+                            <ul role="list" className="-mx-2 space-y-1">
+                                {portfolios.map((portfolio) => (
+                                    <li key={portfolio.portfolioId}>
+                                        <NavLink
+                                            to={`/${portfolio.portfolioId}`}
+                                            onClick={() => setMobileOpen(false)}
+                                            className={({ isActive }) =>
+                                                `group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold transition-colors duration-200 ${isActive
+                                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                }`
+                                            }
+                                        >
+                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-[0.625rem] font-medium text-slate-400 group-hover:text-white group-hover:border-indigo-500 transition-colors">
+                                                {portfolio.portfolioName ? portfolio.portfolioName.charAt(0).toUpperCase() : 'P'}
+                                            </span>
+                                            <span className="truncate">{portfolio.portfolioName}</span>
+                                        </NavLink>
+                                    </li>
+                                ))}
+                            </ul>
+                        </li>
+                    )}
 
                     <li className="mt-auto">
                         <button

@@ -21,6 +21,7 @@ import {
 import CreateTransactionDialog from '../components/CreateTransactionDialog';
 import StackedAreaChart from '../components/StackedAreaChart';
 import apiClient from '../api/api';
+import ImportTransactionsModal from './ImportTransactionsModal';
 
 function HoldingsDetail() {
   const { portfolioId } = useParams();
@@ -30,6 +31,7 @@ function HoldingsDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const chartColors = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   const [tableConfigDialogOpen, setTableConfigDialogOpen] = useState(false);
   const [tableConfig, setTableConfig] = useState({
@@ -67,7 +69,8 @@ function HoldingsDetail() {
     apiClient
       .get(`${portfolioId}`)
       .then((response) => {
-        const dataToSort = [...response.data];
+        // Prevent silent crash by ensuring data is strictly an array before slicing/sorting
+        const dataToSort = Array.isArray(response.data) ? [...response.data] : [];
         const sortedData = dataToSort.sort((a, b) => {
           let valA, valB;
 
@@ -210,7 +213,7 @@ function HoldingsDetail() {
             Columns
           </button>
           <button
-            onClick={() => navigate(`/${portfolioId}/import`)}
+            onClick={() => setImportModalOpen(true)}
             className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
           >
             <CloudUploadIcon className="-ml-0.5 mr-1.5 h-5 w-5 text-slate-400" />
@@ -232,10 +235,17 @@ function HoldingsDetail() {
         onCreateTransaction={handleCreateTransaction}
       />
 
+      <ImportTransactionsModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        portfolioId={portfolioId}
+        onImportSuccess={fetchHoldingsList}
+      />
+
       {/* Chart Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Portfolio Performance</h2>
-        <div className="h-[300px] w-full">
+        <div className="h-[400px] w-full">
           <StackedAreaChart
             data={data}
             xAxisKey='month'

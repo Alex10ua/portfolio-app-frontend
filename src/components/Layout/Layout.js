@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Sidebar from './Sidebar';
 
-const Layout = ({ children }) => {
+const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -14,7 +15,7 @@ const Layout = ({ children }) => {
 
         <main className="py-10">
           <div className="px-4 sm:px-6 lg:px-8">
-            {children}
+            <Outlet />
           </div>
         </main>
       </div>

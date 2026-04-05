@@ -14,6 +14,8 @@ interface AppPieChartProps {
 const DEFAULT_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#3b82f6', '#10b981',
   '#f59e0b', '#ef4444', '#14b8a6', '#f97316', '#a855f7',
+  '#06b6d4', '#84cc16', '#e11d48', '#0ea5e9', '#d946ef',
+  '#22c55e', '#f43f5e', '#3b82f6', '#fb923c', '#a3e635',
 ];
 
 const renderActiveShape = (props: Record<string, unknown>) => {

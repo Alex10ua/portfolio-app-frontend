@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   AreaChart,
   Area,
@@ -29,6 +30,20 @@ export default function StackedAreaChart({
   areas,
   colors = DEFAULT_COLORS,
 }: StackedAreaChartProps) {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const tooltipStyle = isDark
+    ? { background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: 13, color: '#f1f5f9' }
+    : { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 13 };
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -44,7 +59,7 @@ export default function StackedAreaChart({
         <XAxis dataKey={xAxisKey} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v) => `$${v}`} />
         <Tooltip
-          contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 13 }}
+          contentStyle={tooltipStyle}
           formatter={(value: number) => [`$${value.toFixed(2)}`]}
         />
         <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13 }} />

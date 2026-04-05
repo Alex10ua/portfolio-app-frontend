@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Plus, FolderOpen } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { usePortfolios, useCreatePortfolio } from '../../hooks/usePortfolios';
+import { usePortfolioValues } from '../../hooks/usePortfolioValues';
+import { formatCurrency } from '../../lib/formatters';
 import Dialog from '../../components/ui/Dialog';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -16,10 +18,85 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+const PALETTE = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+type ChartItem = { portfolioId: number; name: string; value: number };
+
+function PortfolioValueChart({ items }: { items: ChartItem[] }) {
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+  const [tooltip, setTooltip] = useState<{ item: ChartItem; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const total = items.reduce((s, item) => s + item.value, 0);
+  if (total === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      {/* Segmented bar — outer wrapper is relative so tooltip can escape overflow-hidden */}
+      <div className="relative" onMouseLeave={() => setTooltip(null)}>
+        <div className="flex w-full rounded-full overflow-hidden" style={{ height: 24 }}>
+          {items.map((item, i) => {
+            const pct = (item.value / total) * 100;
+            return (
+              <div
+                key={item.portfolioId}
+                style={{ width: `${pct}%`, background: PALETTE[i % PALETTE.length] }}
+                className="h-full transition-opacity hover:opacity-80 cursor-pointer"
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const parentRect = e.currentTarget.parentElement!.parentElement!.getBoundingClientRect();
+                  setTooltip({ item, x: rect.left - parentRect.left + rect.width / 2, y: -8 });
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Tooltip rendered outside overflow-hidden */}
+        {tooltip && (
+          <div
+            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-lg px-3 py-2 text-xs shadow-lg"
+            style={{
+              left: tooltip.x,
+              top: tooltip.y,
+              background: isDark ? '#1e293b' : '#fff',
+              border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
+              color: isDark ? '#f1f5f9' : '#0f172a',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <p className="font-semibold">{tooltip.item.name}</p>
+            <p className="text-green-500">{formatCurrency(tooltip.item.value)}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        {items.map((item, i) => (
+          <div key={item.portfolioId} className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
+            <span className="text-xs text-slate-500 dark:text-slate-400">{item.name}</span>
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{formatCurrency(item.value, 0)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PortfolioListPage() {
   const [open, setOpen] = useState(false);
   const { data: portfolios = [], isLoading, error } = usePortfolios();
   const { mutateAsync: createPortfolio, isPending } = useCreatePortfolio();
+  const { items, total, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -48,6 +125,26 @@ export default function PortfolioListPage() {
           Create New Portfolio
         </button>
       </div>
+
+      {portfolios.length > 0 && (isLoadingValues || total > 0) && (
+        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Total Value
+            </h2>
+            {!isLoadingValues && (
+              <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                {formatCurrency(total)}
+              </span>
+            )}
+          </div>
+          {isLoadingValues ? (
+            <div className="h-[180px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded" />
+          ) : (
+            <PortfolioValueChart items={items} />
+          )}
+        </div>
+      )}
 
       {portfolios.length === 0 ? (
         <EmptyState

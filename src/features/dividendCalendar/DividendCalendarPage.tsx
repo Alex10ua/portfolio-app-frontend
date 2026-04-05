@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import StockLogo from '../../components/ui/StockLogo';
 import { CalendarDays } from 'lucide-react';
 import { useDividendCalendar } from '../../hooks/useDividendCalendar';
 import { FullPageSpinner } from '../../components/ui/Spinner';
@@ -20,24 +20,10 @@ function toTitleCase(s: string): string {
 }
 
 function DividendCard({ div }: { div: DividendCalendarEntry }) {
-  const [imgError, setImgError] = useState(false);
   const total = ((div.dividendAmount ?? 0) * (div.stockQuantity ?? 0)).toFixed(2);
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 flex items-center gap-3 hover:border-indigo-400 transition-colors">
-      <div className="h-12 w-12 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
-        {imgError ? (
-          <span className="text-sm font-bold text-slate-500 dark:text-slate-300">
-            {div.ticker.substring(0, 2)}
-          </span>
-        ) : (
-          <img
-            className="h-12 w-12 rounded-full object-cover"
-            src={`/images/${div.ticker}_icon.png`}
-            alt={div.ticker}
-            onError={() => setImgError(true)}
-          />
-        )}
-      </div>
+      <StockLogo ticker={div.ticker} size="lg" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-900 dark:text-white">{div.ticker}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400">

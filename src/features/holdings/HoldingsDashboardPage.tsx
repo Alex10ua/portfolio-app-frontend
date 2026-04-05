@@ -13,7 +13,9 @@ import Dialog from '../../components/ui/Dialog';
 import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
+import StockLogo from '../../components/ui/StockLogo';
 import type { Holding } from '../../types/holding';
+
 
 type SortOrder = 'asc' | 'desc';
 
@@ -140,9 +142,7 @@ export default function HoldingsDashboardPage() {
       case 'ticker':
         return (
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-300">{holding.ticker.substring(0, 2)}</span>
-            </div>
+            <StockLogo ticker={holding.ticker} />
             <span className="font-medium text-slate-900 dark:text-slate-100">{holding.ticker}</span>
           </div>
         );

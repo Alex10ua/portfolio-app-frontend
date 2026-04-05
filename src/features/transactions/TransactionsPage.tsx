@@ -12,6 +12,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Badge from '../../components/ui/Badge';
 import Dialog from '../../components/ui/Dialog';
 import { formatDate } from '../../lib/formatters';
+import StockLogo from '../../components/ui/StockLogo';
 import type { Transaction, TransactionType, Currency } from '../../types/transaction';
 import type { AssetType } from '../../types/holding';
 
@@ -144,9 +145,7 @@ export default function TransactionsPage() {
                         <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm">
                             <div className="flex items-center gap-3">
-                              <div className="h-7 w-7 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                                <span className="text-xs font-bold text-slate-500 dark:text-slate-300">{t.ticker.substring(0, 2)}</span>
-                              </div>
+                              <StockLogo ticker={t.ticker} size="sm" />
                               <span className="font-medium text-slate-900 dark:text-white">{t.ticker}</span>
                             </div>
                           </td>

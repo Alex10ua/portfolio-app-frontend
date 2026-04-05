@@ -2,12 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
-  TrendingUp, DollarSign, BarChart2, Percent,
+  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid,
 } from 'lucide-react';
 import { useHoldings, useFirstTradeYear, useCreateTransaction } from '../../hooks/useHoldings';
 import { FullPageSpinner } from '../../components/ui/Spinner';
-import SkeletonRow from '../../components/ui/SkeletonRow';
 import ErrorAlert from '../../components/ui/ErrorAlert';
+import EmptyState from '../../components/ui/EmptyState';
 import StatCard from '../../components/ui/StatCard';
 import Dialog from '../../components/ui/Dialog';
 import CreateTransactionDialog from './CreateTransactionDialog';
@@ -24,16 +24,24 @@ interface Column {
 }
 
 const DEFAULT_COLUMNS: Column[] = [
-  { key: 'ticker', label: 'Holding', visible: true },
-  { key: 'shareAmount', label: 'Shares', visible: true },
-  { key: 'costPerShare', label: 'Cost/Share', visible: true },
-  { key: 'currentShareValue', label: 'Total Value', visible: true },
-  { key: 'dividend', label: 'Dividends', visible: true },
-  { key: 'dividendYield', label: 'Yield', visible: true },
-  { key: 'dividendYieldOnCost', label: 'Yield on Cost', visible: true },
-  { key: 'totalProfit', label: 'Total Profit', visible: true },
-  { key: 'dailyChange', label: 'Daily Change', visible: true },
+  { key: 'ticker',             label: 'Holding',       visible: true  },
+  { key: 'shareAmount',        label: 'Shares',         visible: true  },
+  { key: 'costPerShare',       label: 'Cost/Share',     visible: true  },
+  { key: 'currentShareValue',  label: 'Total Value',    visible: true  },
+  { key: 'dividend',           label: 'Dividends',      visible: true  },
+  { key: 'dividendYield',      label: 'Yield',          visible: true  },
+  { key: 'dividendYieldOnCost',label: 'Yield on Cost',  visible: true  },
+  { key: 'totalProfit',        label: 'Total Profit',   visible: true  },
+  { key: 'dailyChange',        label: 'Daily Change',   visible: true  },
 ];
+
+// Merge saved config with defaults so new columns are never lost
+function mergeColumns(saved: Column[]): Column[] {
+  const savedMap = new Map(saved.map((c) => [c.key, c]));
+  return DEFAULT_COLUMNS.map((def) =>
+    savedMap.has(def.key) ? { ...def, visible: savedMap.get(def.key)!.visible } : def,
+  );
+}
 
 export default function HoldingsDashboardPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
@@ -53,7 +61,7 @@ export default function HoldingsDashboardPage() {
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem(`tableConfig-${pid}`);
     if (saved) {
-      try { return JSON.parse(saved) as Column[]; } catch { /* ignore */ }
+      try { return mergeColumns(JSON.parse(saved) as Column[]); } catch { /* ignore */ }
     }
     return DEFAULT_COLUMNS;
   });
@@ -75,15 +83,31 @@ export default function HoldingsDashboardPage() {
     }
   };
 
+  const toggleColumn = (key: string) => {
+    setColumns((prev) => {
+      const visibleCount = prev.filter((c) => c.visible).length;
+      return prev.map((c) => {
+        if (c.key !== key) return c;
+        // Prevent hiding the last visible column
+        if (c.visible && visibleCount === 1) return c;
+        return { ...c, visible: !c.visible };
+      });
+    });
+  };
+
   const sortedHoldings = useMemo(() => {
     if (!holdings) return [];
     return [...holdings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
 
+      // Sort by the displayed value, not the raw stored value
       if (orderBy === 'currentShareValue') {
         valA = (a.currentShareValue ?? 0) * (a.shareAmount ?? 0);
         valB = (b.currentShareValue ?? 0) * (b.shareAmount ?? 0);
+      } else if (orderBy === 'dividend') {
+        valA = (a.dividend ?? 0) * (a.shareAmount ?? 0);
+        valB = (b.dividend ?? 0) * (b.shareAmount ?? 0);
       } else {
         valA = (a as unknown as Record<string, unknown>)[orderBy] as number | string | null;
         valB = (b as unknown as Record<string, unknown>)[orderBy] as number | string | null;
@@ -100,17 +124,16 @@ export default function HoldingsDashboardPage() {
     });
   }, [holdings, orderBy, order]);
 
-  // Summary stats
   const stats = useMemo(() => {
     if (!holdings?.length) return null;
     const totalValue = holdings.reduce((s, h) => s + (h.currentShareValue ?? 0) * h.shareAmount, 0);
-    const totalCost = holdings.reduce((s, h) => s + (h.costPerShare ?? 0) * h.shareAmount, 0);
+    const totalCost  = holdings.reduce((s, h) => s + (h.costPerShare ?? 0) * h.shareAmount, 0);
     const totalProfit = holdings.reduce((s, h) => s + (h.totalProfit ?? 0), 0);
     const totalDivYield = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
     return { totalValue, totalCost, totalProfit, avgYield: totalDivYield };
   }, [holdings]);
 
-  const visibleColumns = columns.filter((c) => c.visible);
+  const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
 
   const renderCell = (holding: Holding, col: Column): React.ReactNode => {
     switch (col.key) {
@@ -138,7 +161,7 @@ export default function HoldingsDashboardPage() {
         return formatCurrency((holding.dividend ?? 0) * holding.shareAmount);
       case 'dividendYield':
         return (
-          <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+          <span className="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
             {formatPercent(holding.dividendYield)}
           </span>
         );
@@ -183,12 +206,12 @@ export default function HoldingsDashboardPage() {
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setConfigOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
-            <Settings className="h-4 w-4 text-slate-400 dark:text-slate-400" />
+            <Settings className="h-4 w-4 text-slate-400" />
             Columns
           </button>
           <button onClick={() => setImportOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
-            <Upload className="h-4 w-4 text-slate-400 dark:text-slate-400" />
+            <Upload className="h-4 w-4 text-slate-400" />
             Import
           </button>
           <button onClick={() => setCreateOpen(true)}
@@ -215,45 +238,51 @@ export default function HoldingsDashboardPage() {
       )}
 
       {/* Holdings table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-            <thead className="bg-slate-50 dark:bg-slate-800">
-              <tr>
-                {visibleColumns.map((col) => (
-                  <th
-                    key={col.key}
-                    className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    onClick={() => handleSort(col.key)}
-                  >
-                    <div className="flex items-center gap-1">
-                      {col.label}
-                      {orderBy === col.key && (
-                        order === 'asc' ? <ArrowUp className="h-3 w-3 text-indigo-500" /> : <ArrowDown className="h-3 w-3 text-indigo-500" />
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-              {isLoading ? (
-                <SkeletonRow cols={visibleColumns.length} />
-              ) : (
-                sortedHoldings.map((holding, idx) => (
-                  <tr key={holding.ticker + idx} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+      {holdings?.length === 0 ? (
+        <EmptyState
+          icon={LayoutGrid}
+          title="No holdings yet"
+          description="Create a transaction to add your first holding to this portfolio."
+        />
+      ) : (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800">
+                <tr>
+                  {visibleColumns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                      onClick={() => handleSort(col.key)}
+                    >
+                      <div className="flex items-center gap-1">
+                        {col.label}
+                        {orderBy === col.key && (
+                          order === 'asc'
+                            ? <ArrowUp className="h-3 w-3 text-indigo-500" />
+                            : <ArrowDown className="h-3 w-3 text-indigo-500" />
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+                {sortedHoldings.map((holding) => (
+                  <tr key={holding.ticker} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     {visibleColumns.map((col) => (
                       <td key={col.key} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
                         {renderCell(holding, col)}
                       </td>
                     ))}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Create transaction dialog */}
       <CreateTransactionDialog
@@ -272,21 +301,24 @@ export default function HoldingsDashboardPage() {
       {/* Column config dialog */}
       <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">
         <div className="space-y-2">
-          {columns.map((col) => (
-            <label key={col.key} className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={col.visible}
-                onChange={() =>
-                  setColumns((prev) =>
-                    prev.map((c) => (c.key === col.key ? { ...c, visible: !c.visible } : c)),
-                  )
-                }
-                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
-            </label>
-          ))}
+          {columns.map((col) => {
+            const isLastVisible = col.visible && visibleColumns.length === 1;
+            return (
+              <label
+                key={col.key}
+                className={`flex items-center gap-3 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={col.visible}
+                  disabled={isLastVisible}
+                  onChange={() => toggleColumn(col.key)}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                />
+                <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
+              </label>
+            );
+          })}
         </div>
         <div className="flex justify-end mt-4">
           <button onClick={() => setConfigOpen(false)}

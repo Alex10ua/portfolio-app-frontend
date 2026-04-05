@@ -27,8 +27,8 @@ const editSchema = z.object({
 });
 type EditValues = z.infer<typeof editSchema>;
 
-const selectClass = 'block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white';
-const inputClass = 'block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+const selectClass = 'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
+const inputClass = 'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
 
 export default function TransactionsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
@@ -141,8 +141,8 @@ export default function TransactionsPage() {
                         <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm">
                             <div className="flex items-center gap-3">
-                              <div className="h-7 w-7 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
-                                <span className="text-xs font-bold text-slate-500">{t.ticker.substring(0, 2)}</span>
+                              <div className="h-7 w-7 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                                <span className="text-xs font-bold text-slate-500 dark:text-slate-300">{t.ticker.substring(0, 2)}</span>
                               </div>
                               <span className="font-medium text-slate-900 dark:text-white">{t.ticker}</span>
                             </div>
@@ -158,11 +158,11 @@ export default function TransactionsPage() {
                           <td className="whitespace-nowrap py-4 pl-3 pr-6 text-right">
                             <div className="flex justify-end gap-1">
                               <button onClick={() => openEdit(t)}
-                                className="p-1.5 rounded-full text-indigo-600 hover:bg-slate-100">
+                                className="p-1.5 rounded-full text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700">
                                 <Edit2 className="h-4 w-4" />
                               </button>
                               <button onClick={() => setDeleteTarget(t)}
-                                className="p-1.5 rounded-full text-red-500 hover:bg-slate-100">
+                                className="p-1.5 rounded-full text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -183,25 +183,25 @@ export default function TransactionsPage() {
         <form onSubmit={handleSubmit(onEdit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Ticker</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ticker</label>
               <input {...register('ticker')} className={inputClass} />
               {errors.ticker && <p className="mt-1 text-xs text-red-600">{errors.ticker.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date</label>
               <input type="datetime-local" {...register('date')} className={inputClass} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
               <select {...register('transactionType')} className={selectClass}>
                 {(['BUY', 'SELL', 'TAX', 'DIVIDEND'] as TransactionType[]).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Asset Class</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Asset Class</label>
               <select {...register('assetType')} className={selectClass}>
                 {(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO'] as AssetType[]).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -210,22 +210,22 @@ export default function TransactionsPage() {
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Qty</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Qty</label>
               <input type="number" step="any" {...register('quantity')} className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Price</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price</label>
               <input type="number" step="any" {...register('price')} className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Comm.</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Comm.</label>
               <input type="number" step="any" {...register('commission')} className={inputClass} />
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setEditTarget(null)}
-              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
               Cancel
             </button>
             <button type="submit" disabled={updating}
@@ -238,12 +238,12 @@ export default function TransactionsPage() {
 
       {/* Delete confirm dialog */}
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title="Confirm Deletion" maxWidth="sm">
-        <p className="text-sm text-slate-600 mb-6">
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
           Are you sure you want to delete this transaction? This action cannot be undone.
         </p>
         <div className="flex justify-end gap-3">
           <button onClick={() => setDeleteTarget(null)}
-            className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+            className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
             Cancel
           </button>
           <button onClick={onDelete} disabled={deleting}

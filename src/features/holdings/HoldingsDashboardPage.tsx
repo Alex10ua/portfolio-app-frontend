@@ -117,10 +117,10 @@ export default function HoldingsDashboardPage() {
       case 'ticker':
         return (
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
-              <span className="text-xs font-bold text-slate-500">{holding.ticker.substring(0, 2)}</span>
+            <div className="h-8 w-8 shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-300">{holding.ticker.substring(0, 2)}</span>
             </div>
-            <span className="font-medium text-slate-900">{holding.ticker}</span>
+            <span className="font-medium text-slate-900 dark:text-slate-100">{holding.ticker}</span>
           </div>
         );
       case 'costPerShare':
@@ -129,8 +129,8 @@ export default function HoldingsDashboardPage() {
         const total = (holding.currentShareValue ?? 0) * holding.shareAmount;
         return (
           <div>
-            <div className="font-medium text-slate-900">{formatCurrency(total)}</div>
-            <div className="text-xs text-slate-500">Price: {formatCurrency(holding.currentShareValue)}</div>
+            <div className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(total)}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Price: {formatCurrency(holding.currentShareValue)}</div>
           </div>
         );
       }
@@ -173,7 +173,7 @@ export default function HoldingsDashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <button onClick={() => navigate('/')}
-            className="flex items-center gap-1 text-sm text-slate-500 hover:text-indigo-600 mb-2 transition-colors">
+            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-2 transition-colors">
             <ArrowLeft className="h-4 w-4" />
             Back to Portfolios
           </button>
@@ -182,13 +182,13 @@ export default function HoldingsDashboardPage() {
 
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setConfigOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
-            <Settings className="h-4 w-4 text-slate-400" />
+            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
+            <Settings className="h-4 w-4 text-slate-400 dark:text-slate-400" />
             Columns
           </button>
           <button onClick={() => setImportOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50">
-            <Upload className="h-4 w-4 text-slate-400" />
+            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
+            <Upload className="h-4 w-4 text-slate-400 dark:text-slate-400" />
             Import
           </button>
           <button onClick={() => setCreateOpen(true)}
@@ -284,7 +284,7 @@ export default function HoldingsDashboardPage() {
                 }
                 className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
               />
-              <span className="text-sm text-slate-700">{col.label}</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
             </label>
           ))}
         </div>

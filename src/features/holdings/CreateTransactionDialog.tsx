@@ -29,8 +29,8 @@ const transactionTypesByAsset: Record<AssetType, TransactionType[]> = {
   CRYPTO: ['BUY', 'SELL'],
 };
 
-const selectClass = 'block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white';
-const inputClass = 'block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
+const selectClass = 'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
+const inputClass = 'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500';
 
 interface Props {
   open: boolean;
@@ -83,7 +83,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
       <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Asset Type</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Asset Type</label>
             <select {...register('assetType')} className={selectClass}>
               {(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO'] as AssetType[]).map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -91,7 +91,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Transaction Type</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Transaction Type</label>
             <select {...register('transactionType')} className={selectClass}>
               {availableTypes.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -100,35 +100,35 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Ticker *</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ticker *</label>
             <input {...register('ticker')} className={inputClass} placeholder="AAPL" />
             {errors.ticker && <p className="mt-1 text-xs text-red-600">{errors.ticker.message}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Date *</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date *</label>
             <input type="date" {...register('date')} className={inputClass} />
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
             <input type="number" step="any" min="0" {...register('quantity')} className={inputClass} placeholder="10" />
             {errors.quantity && <p className="mt-1 text-xs text-red-600">{errors.quantity.message}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Price *</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price *</label>
             <input type="number" step="any" min="0" {...register('price')} className={inputClass} placeholder="150.00" />
             {errors.price && <p className="mt-1 text-xs text-red-600">{errors.price.message}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Commission</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Commission</label>
             <input type="number" step="any" min="0" {...register('commission')} className={inputClass} placeholder="0.00" />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
           <select {...register('currency')} className={selectClass}>
             {(['USD', 'EUR', 'GBP'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -137,13 +137,13 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
         {showNameField && (
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 {assetType === 'FUND' ? 'Fund Name' : assetType === 'FIGURINE' ? 'Figurine Name' : 'Coin Name'}
               </label>
               <input {...register('name')} className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Price Now</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Price Now</label>
               <input type="number" step="any" min="0" {...register('priceNow')} className={inputClass} />
             </div>
           </div>
@@ -151,7 +151,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={handleClose}
-            className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+            className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
             Cancel
           </button>
           <button type="submit" disabled={isPending}

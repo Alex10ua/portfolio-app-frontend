@@ -45,7 +45,7 @@ export default function AppBarChart({
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#e2e8f0'} />
         <XAxis dataKey={xKey} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
         <YAxis
           axisLine={false}
@@ -59,7 +59,7 @@ export default function AppBarChart({
           cursor={{ fill: isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)' }}
           formatter={(value: number) => [`$${value.toFixed(2)}`]}
         />
-        <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13 }} />
+        <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }} />
         <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} name="Amount ($)" />
       </BarChart>
     </ResponsiveContainer>

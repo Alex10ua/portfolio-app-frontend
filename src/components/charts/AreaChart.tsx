@@ -55,14 +55,14 @@ export default function StackedAreaChart({
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#e2e8f0'} />
         <XAxis dataKey={xAxisKey} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v) => `$${v}`} />
         <Tooltip
           contentStyle={tooltipStyle}
           formatter={(value: number) => [`$${value.toFixed(2)}`]}
         />
-        <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13 }} />
+        <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }} />
         {areas.map((area, i) => (
           <Area
             key={area.dataKey}

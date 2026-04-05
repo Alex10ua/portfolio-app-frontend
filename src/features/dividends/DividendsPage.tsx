@@ -13,48 +13,72 @@ export default function DividendsPage() {
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading dividends" message={(error as Error).message} />;
-  if (!data || Object.keys(data).length === 0) {
-    return <EmptyState icon={BarChartIcon} title="No dividend data" description="Dividend data is not available for this portfolio." />;
+
+  const yearly = data?.yearlyCombineDividendsProjection ?? 0;
+  const amountByMonth = data?.amountByMonth ?? {};
+  const tickerAmountArr = data?.tickerAmount ?? [];
+
+  const hasData =
+    yearly > 0 ||
+    Object.keys(amountByMonth).length > 0 ||
+    tickerAmountArr.length > 0;
+
+  if (!hasData) {
+    return (
+      <EmptyState
+        icon={BarChartIcon}
+        title="No dividend data"
+        description="Dividend data is not available for this portfolio."
+      />
+    );
   }
 
-  const yearly = data.yearlyCombineDividendsProjection ?? 0;
   const monthly = yearly / 12;
   const daily = yearly / 365;
   const hourly = daily / 24;
 
-  const amountByMonth = data.amountByMonth ?? {};
-  const tickerAmountArr = data.tickerAmount ?? [];
-
-  // By year
+  // By year — numeric sort
   const byYearMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
     const year = String(new Date(month).getFullYear());
-    acc[year] = (acc[year] ?? 0) + (parseFloat(String(amount)) || 0);
+    acc[year] = (acc[year] ?? 0) + (Number(amount) || 0);
     return acc;
   }, {});
   const byYear = Object.entries(byYearMap)
     .map(([year, amount]) => ({ year, amount: parseFloat(amount.toFixed(2)) }))
-    .sort((a, b) => a.year.localeCompare(b.year));
+    .sort((a, b) => Number(a.year) - Number(b.year));
 
-  // By quarter
+  // By quarter — structured sort by year then quarter number
   const byQuarterMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
     const d = new Date(month);
     const key = `${d.getFullYear()} Q${Math.floor(d.getMonth() / 3) + 1}`;
-    acc[key] = (acc[key] ?? 0) + (parseFloat(String(amount)) || 0);
+    acc[key] = (acc[key] ?? 0) + (Number(amount) || 0);
     return acc;
   }, {});
   const byQuarter = Object.entries(byQuarterMap)
     .map(([yearQuarter, amount]) => ({ yearQuarter, amount: parseFloat(amount.toFixed(2)) }))
-    .sort((a, b) => a.yearQuarter.localeCompare(b.yearQuarter));
+    .sort((a, b) => {
+      const [aYear, aQ] = a.yearQuarter.split(' Q').map(Number);
+      const [bYear, bQ] = b.yearQuarter.split(' Q').map(Number);
+      return aYear !== bYear ? aYear - bYear : aQ - bQ;
+    });
 
-  // By month
+  // By month — formatted label for X-axis
   const byMonth = Object.entries(amountByMonth)
-    .map(([month, amount]) => ({ month, amount: parseFloat(parseFloat(String(amount)).toFixed(2)) }))
-    .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+    .map(([month, amount]) => {
+      const d = new Date(month);
+      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), _date: d.getTime() };
+    })
+    .sort((a, b) => a._date - b._date)
+    .map(({ month, amount }) => ({ month, amount }));
 
-  // By stock
-  const tickerMap = tickerAmountArr.reduce<Record<string, number>>((acc, obj) => ({ ...acc, ...obj }), {});
+  // By stock — sorted descending by amount
+  const tickerMap = tickerAmountArr.reduce<Record<string, number>>(
+    (acc, obj) => Object.assign(acc, obj),
+    {},
+  );
   const byStock = Object.entries(tickerMap)
-    .map(([ticker, amount]) => ({ ticker, amount: parseFloat(parseFloat(String(amount)).toFixed(2)) }))
+    .map(([ticker, amount]) => ({ ticker, amount: parseFloat(Number(amount).toFixed(2)) }))
     .sort((a, b) => b.amount - a.amount);
 
   return (
@@ -63,10 +87,10 @@ export default function DividendsPage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Stock Dividends Projection</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label="Yearly Projection" value={`$${yearly.toFixed(2)}`} icon={TrendingUp} />
-          <StatCard label="Monthly Average" value={`$${monthly.toFixed(2)}`} icon={CalendarDays} iconColor="bg-purple-500" />
-          <StatCard label="Daily Average" value={`$${daily.toFixed(2)}`} icon={BarChart2} iconColor="bg-emerald-500" />
-          <StatCard label="Hourly Average" value={`$${hourly.toFixed(4)}`} icon={Clock} iconColor="bg-amber-500" />
+          <StatCard label="Yearly Projection"  value={`$${yearly.toFixed(2)}`}   icon={TrendingUp} />
+          <StatCard label="Monthly Average"    value={`$${monthly.toFixed(2)}`}  icon={CalendarDays} iconColor="bg-purple-500" />
+          <StatCard label="Daily Average"      value={`$${daily.toFixed(2)}`}    icon={BarChart2}    iconColor="bg-emerald-500" />
+          <StatCard label="Hourly Average"     value={`$${hourly.toFixed(4)}`}   icon={Clock}        iconColor="bg-amber-500" />
         </div>
       </div>
 

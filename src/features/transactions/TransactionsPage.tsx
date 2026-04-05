@@ -47,7 +47,8 @@ export default function TransactionsPage() {
   const { mutateAsync: deleteTransaction, isPending: deleting } = useDeleteTransaction(pid, selectedYear);
 
   const firstYear = firstTradeYear ?? cachedFirst;
-  const yearOptions = Array.from({ length: currentYear - firstYear + 1 }, (_, i) => firstYear + i);
+  // Most recent year first
+  const yearOptions = Array.from({ length: currentYear - firstYear + 1 }, (_, i) => currentYear - i);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<EditValues>({
     resolver: zodResolver(editSchema),
@@ -98,7 +99,9 @@ export default function TransactionsPage() {
       <div className="sm:flex sm:items-center mb-6">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Transactions</h1>
-          <p className="mt-1 text-sm text-slate-700 dark:text-slate-400">All transactions for the selected year.</p>
+          <p className="mt-1 text-sm text-slate-700 dark:text-slate-400">
+            {isLoading ? 'Loading…' : `${reversed.length} transaction${reversed.length !== 1 ? 's' : ''} in ${selectedYear}`}
+          </p>
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16">
           <select
@@ -122,7 +125,7 @@ export default function TransactionsPage() {
         <div className="flow-root">
           <div className="-mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+              <div className="overflow-hidden shadow ring-1 ring-black/5 dark:ring-slate-700 rounded-lg">
                 <table className="min-w-full divide-y divide-slate-300 dark:divide-slate-700">
                   <thead className="bg-slate-50 dark:bg-slate-800">
                     <tr>
@@ -147,11 +150,11 @@ export default function TransactionsPage() {
                               <span className="font-medium text-slate-900 dark:text-white">{t.ticker}</span>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{t.quantity}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{t.price?.toFixed(2) ?? '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.quantity}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.price?.toFixed(2) ?? '—'}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-slate-900 dark:text-white">{t.totalAmount?.toFixed(2) ?? '—'}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500">{t.commission?.toFixed(2) ?? '—'}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500">{formatDate(t.date)}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.commission?.toFixed(2) ?? '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 dark:text-slate-400">{formatDate(t.date)}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm">
                             <Badge type={t.transactionType} />
                           </td>
@@ -223,6 +226,13 @@ export default function TransactionsPage() {
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+            <select {...register('currency')} className={selectClass}>
+              {(['USD', 'EUR', 'GBP'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setEditTarget(null)}
               className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
@@ -238,9 +248,17 @@ export default function TransactionsPage() {
 
       {/* Delete confirm dialog */}
       <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} title="Confirm Deletion" maxWidth="sm">
-        <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
           Are you sure you want to delete this transaction? This action cannot be undone.
         </p>
+        {deleteTarget && (
+          <div className="mt-3 mb-6 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm">
+            <span className="font-semibold text-slate-900 dark:text-white">{deleteTarget.ticker}</span>
+            <span className="text-slate-500 dark:text-slate-400">
+              {' '}· {deleteTarget.transactionType} · {deleteTarget.quantity} shares @ ${deleteTarget.price?.toFixed(2)} · {formatDate(deleteTarget.date)}
+            </span>
+          </div>
+        )}
         <div className="flex justify-end gap-3">
           <button onClick={() => setDeleteTarget(null)}
             className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">

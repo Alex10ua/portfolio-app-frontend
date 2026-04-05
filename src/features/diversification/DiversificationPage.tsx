@@ -20,9 +20,7 @@ function PieCard({ title, data }: { title: string; data: PieEntry[] }) {
   return (
     <div className="bg-white dark:bg-slate-900 overflow-hidden shadow-sm rounded-lg border border-slate-100 dark:border-slate-800 p-6">
       <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">{title}</h3>
-      <div className="h-80">
-        <AppPieChart data={data} />
-      </div>
+      <AppPieChart data={data} />
     </div>
   );
 }

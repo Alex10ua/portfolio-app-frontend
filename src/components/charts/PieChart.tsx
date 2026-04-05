@@ -1,5 +1,5 @@
 import { PieChart, Pie, Sector, ResponsiveContainer, Cell } from 'recharts';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface PieDataItem {
   name: string;
@@ -17,39 +17,30 @@ const DEFAULT_COLORS = [
 ];
 
 const renderActiveShape = (props: Record<string, unknown>) => {
-  const RADIAN = Math.PI / 180;
   const {
-    cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle,
+    cx, cy, innerRadius, outerRadius, startAngle, endAngle,
     fill, payload, percent, amount,
   } = props as {
-    cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number;
+    cx: number; cy: number; innerRadius: number; outerRadius: number;
     startAngle: number; endAngle: number; fill: string;
     payload: { name: string }; percent: number; amount: number;
   };
 
-  const sin = Math.sin(-RADIAN * midAngle);
-  const cos = Math.cos(-RADIAN * midAngle);
-  const sx = cx + (outerRadius + 10) * cos;
-  const sy = cy + (outerRadius + 10) * sin;
-  const mx = cx + (outerRadius + 30) * cos;
-  const my = cy + (outerRadius + 30) * sin;
-  const ex = mx + (cos >= 0 ? 1 : -1) * 22;
-  const ey = my;
-  const textAnchor = cos >= 0 ? 'start' : 'end';
+  const isDark = document.documentElement.classList.contains('dark');
+  const labelColor = isDark ? '#f1f5f9' : '#1e293b';
+  const subColor = isDark ? '#94a3b8' : '#64748b';
 
   return (
     <g>
-      <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} fontSize={13} fontWeight={600}>
+      <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 6} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+      <Sector cx={cx} cy={cy} startAngle={startAngle} endAngle={endAngle} innerRadius={outerRadius + 10} outerRadius={outerRadius + 14} fill={fill} />
+      <text x={cx} y={cy - 14} textAnchor="middle" fill={labelColor} fontSize={12} fontWeight={600}>
+        {payload.name.length > 12 ? payload.name.slice(0, 12) + '…' : payload.name}
+      </text>
+      <text x={cx} y={cy + 6} textAnchor="middle" fill={fill} fontSize={14} fontWeight={700}>
         {`$${typeof amount === 'number' ? amount.toFixed(2) : 'N/A'}`}
       </text>
-      <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-      <Sector cx={cx} cy={cy} startAngle={startAngle} endAngle={endAngle} innerRadius={outerRadius + 6} outerRadius={outerRadius + 10} fill={fill} />
-      <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
-      <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#333" fontSize={12}>
-        {payload.name}
-      </text>
-      <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={16} textAnchor={textAnchor} fill="#999" fontSize={11}>
+      <text x={cx} y={cy + 22} textAnchor="middle" fill={subColor} fontSize={11}>
         {`${(percent * 100).toFixed(1)}%`}
       </text>
     </g>
@@ -58,14 +49,25 @@ const renderActiveShape = (props: Record<string, unknown>) => {
 
 export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieChartProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   if (!data.length) {
-    return <div className="flex items-center justify-center h-full text-slate-400 text-sm">No data available</div>;
+    return <div className="flex items-center justify-center h-40 text-slate-400 text-sm">No data available</div>;
   }
 
+  const total = data.reduce((s, d) => s + d.amount, 0);
+
   return (
-    <div className="flex flex-col lg:flex-row items-center gap-4 h-full">
-      <div className="flex-1 h-80 min-w-0">
+    <div className="flex flex-col lg:flex-row items-center gap-4">
+      <div className="w-full lg:flex-1 min-w-0" style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
@@ -90,16 +92,22 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
       </div>
 
       {/* Legend */}
-      <div className="flex flex-col gap-1.5 min-w-[140px] max-h-72 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1.5 w-full lg:w-auto lg:min-w-[160px] max-h-64 overflow-y-auto pr-1">
         {data.map((item, i) => (
           <div
             key={item.name}
-            className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1 py-0.5 ${i === activeIndex ? 'bg-slate-100' : ''}`}
+            className={`flex items-center gap-2 text-xs cursor-pointer rounded px-1 py-0.5 transition-colors ${
+              i === activeIndex
+                ? 'bg-slate-100 dark:bg-slate-700'
+                : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
             onMouseEnter={() => setActiveIndex(i)}
           >
             <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: colors[i % colors.length] }} />
-            <span className="text-slate-700 truncate">{item.name}</span>
-            <span className="ml-auto text-slate-500 shrink-0">{((item.amount / data.reduce((s, d) => s + d.amount, 0)) * 100).toFixed(1)}%</span>
+            <span className={`truncate ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{item.name}</span>
+            <span className={`ml-auto shrink-0 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+              {((item.amount / total) * 100).toFixed(1)}%
+            </span>
           </div>
         ))}
       </div>

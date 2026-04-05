@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import StockLogo from '../../components/ui/StockLogo';
 import { CalendarDays } from 'lucide-react';
 import { useDividendCalendar } from '../../hooks/useDividendCalendar';
+import { useTheme } from '../../hooks/useTheme';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -17,6 +18,26 @@ const MONTH_NAME_TO_INDEX: Record<string, number> = {
 
 function toTitleCase(s: string): string {
   return s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+function heatmapColor(intensity: number, isDark: boolean): { background: string; border: string } {
+  if (isDark) {
+    // Dark theme: low = deep emerald, high = bright emerald — visible against slate-900
+    const lightness = 18 + intensity * 37;
+    const saturation = 40 + intensity * 20;
+    return {
+      background: `hsl(142, ${saturation}%, ${lightness}%)`,
+      border: `hsl(142, ${saturation}%, ${lightness + 8}%)`,
+    };
+  } else {
+    // Light theme: low = pale green, high = rich dark green — visible against white
+    const lightness = 82 - intensity * 52;
+    const saturation = 45 + intensity * 20;
+    return {
+      background: `hsl(142, ${saturation}%, ${lightness}%)`,
+      border: `hsl(142, ${saturation}%, ${lightness - 10}%)`,
+    };
+  }
 }
 
 function DividendCard({ div }: { div: DividendCalendarEntry }) {
@@ -37,6 +58,7 @@ function DividendCard({ div }: { div: DividendCalendarEntry }) {
 
 export default function DividendCalendarPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
+  const { dark } = useTheme();
   const { data, isLoading, error } = useDividendCalendar(portfolioId!);
 
   if (isLoading) return <FullPageSpinner />;
@@ -87,14 +109,15 @@ export default function DividendCalendarPage() {
           {monthlyTotals.map((total, i) => {
             const intensity = maxMonthly > 0 ? total / maxMonthly : 0;
             const isCurrent = i === currentMonth;
+            const colors = heatmapColor(Math.max(0.08, intensity), dark);
             return (
               <div key={i} className="flex flex-col items-center gap-1">
                 <div
                   className={`w-full rounded-md transition-all ${isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
                   style={{
                     height: '48px',
-                    background: `rgba(99, 102, 241, ${Math.max(0.08, intensity)})`,
-                    border: `1px solid rgba(99, 102, 241, ${isCurrent ? 0.6 : 0.2})`,
+                    background: colors.background,
+                    border: `1px solid ${colors.border}`,
                   }}
                   title={`${MONTHS[i]}: $${total.toFixed(2)}`}
                 />
@@ -114,14 +137,15 @@ export default function DividendCalendarPage() {
           {monthlyTotals.map((total, i) => {
             const intensity = maxMonthly > 0 ? total / maxMonthly : 0;
             const isCurrent = i === currentMonth;
+            const colors = heatmapColor(Math.max(0.08, intensity), dark);
             return (
               <div key={i} className="flex flex-col items-center gap-1">
                 <div
                   className={`w-full rounded-md transition-all ${isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
                   style={{
                     height: '40px',
-                    background: `rgba(99, 102, 241, ${Math.max(0.08, intensity)})`,
-                    border: `1px solid rgba(99, 102, 241, ${isCurrent ? 0.6 : 0.2})`,
+                    background: colors.background,
+                    border: `1px solid ${colors.border}`,
                   }}
                   title={`${MONTHS[i]}: $${total.toFixed(2)}`}
                 />

@@ -19,7 +19,7 @@ import type { AssetType } from '../../types/holding';
 const editSchema = z.object({
   ticker: z.string().min(1),
   transactionType: z.enum(['BUY', 'SELL', 'TAX', 'DIVIDEND']),
-  assetType: z.enum(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO']),
+  assetType: z.enum(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO', 'CUSTOM']),
   quantity: z.string().min(1),
   price: z.string().min(1),
   commission: z.string(),

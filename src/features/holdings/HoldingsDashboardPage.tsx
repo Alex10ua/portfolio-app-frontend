@@ -14,7 +14,7 @@ import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
-import type { Holding } from '../../types/holding';
+import type { AssetType, Holding } from '../../types/holding';
 
 
 type SortOrder = 'asc' | 'desc';
@@ -59,6 +59,7 @@ export default function HoldingsDashboardPage() {
   const [configOpen, setConfigOpen] = useState(false);
   const [orderBy, setOrderBy] = useState<string>('ticker');
   const [order, setOrder] = useState<SortOrder>('asc');
+  const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>('ALL');
 
   const [columns, setColumns] = useState<Column[]>(() => {
     const saved = localStorage.getItem(`tableConfig-${pid}`);
@@ -97,9 +98,24 @@ export default function HoldingsDashboardPage() {
     });
   };
 
-  const sortedHoldings = useMemo(() => {
+  const filteredHoldings = useMemo(() => {
     if (!holdings) return [];
-    return [...holdings].sort((a, b) => {
+    if (assetFilter === 'ALL') return holdings;
+    return holdings.filter((h) => h.assetType === assetFilter);
+  }, [holdings, assetFilter]);
+
+  const assetFilterCounts = useMemo(() => {
+    if (!holdings) return {};
+    return holdings.reduce<Record<string, number>>((acc, h) => {
+      const key = h.assetType ?? 'UNKNOWN';
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [holdings]);
+
+  const sortedHoldings = useMemo(() => {
+    if (!filteredHoldings) return [];
+    return [...filteredHoldings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
 
@@ -124,7 +140,7 @@ export default function HoldingsDashboardPage() {
       const cmp = String(valA).localeCompare(String(valB));
       return order === 'asc' ? cmp : -cmp;
     });
-  }, [holdings, orderBy, order]);
+  }, [filteredHoldings, orderBy, order]);
 
   const stats = useMemo(() => {
     if (!holdings?.length) return null;
@@ -142,8 +158,13 @@ export default function HoldingsDashboardPage() {
       case 'ticker':
         return (
           <div className="flex items-center gap-3">
-            <StockLogo ticker={holding.ticker} />
-            <span className="font-medium text-slate-900 dark:text-slate-100">{holding.ticker}</span>
+            <StockLogo ticker={holding.ticker} name={holding.name} assetType={holding.assetType} />
+            <div>
+              <div className="font-medium text-slate-900 dark:text-slate-100">{holding.ticker}</div>
+              {holding.name && holding.assetType === 'CUSTOM' && (
+                <div className="text-xs text-slate-400 dark:text-slate-500">{holding.name}</div>
+              )}
+            </div>
           </div>
         );
       case 'costPerShare':
@@ -222,6 +243,39 @@ export default function HoldingsDashboardPage() {
         </div>
       </div>
 
+      {/* Asset type filter chips */}
+      {holdings && holdings.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {(['ALL', ...Object.keys(assetFilterCounts)] as (AssetType | 'ALL')[]).map((type) => (
+            <button
+              key={type}
+              onClick={() => setAssetFilter(type)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                assetFilter === type
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              {type}
+              {type !== 'ALL' && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs ${
+                  assetFilter === type ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'
+                }`}>
+                  {assetFilterCounts[type]}
+                </span>
+              )}
+              {type === 'ALL' && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs ${
+                  assetFilter === 'ALL' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'
+                }`}>
+                  {holdings.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Summary stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -293,6 +347,7 @@ export default function HoldingsDashboardPage() {
           setCreateOpen(false);
         }}
         isPending={creating}
+        portfolioId={pid}
       />
 
       {/* Import modal */}

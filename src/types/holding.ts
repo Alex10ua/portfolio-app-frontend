@@ -1,7 +1,9 @@
-export type AssetType = 'STOCK' | 'FIGURINE' | 'COIN' | 'FUND' | 'CRYPTO';
+export type AssetType = 'STOCK' | 'FIGURINE' | 'COIN' | 'FUND' | 'CRYPTO' | 'CUSTOM';
 
 export interface Holding {
   ticker: string;
+  assetType: AssetType | null;
+  name: string | null;
   shareAmount: number;
   costPerShare: number | null;
   currentShareValue: number | null;

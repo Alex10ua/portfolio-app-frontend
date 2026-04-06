@@ -8,6 +8,7 @@ import {
   LogOut,
   FolderOpen,
   X,
+  Boxes,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -38,6 +39,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     navigation.push(
       { name: 'Dashboard', href: `/${portfolioId}`, icon: LayoutDashboard, exact: true },
       { name: 'Transactions', href: `/${portfolioId}/transactions`, icon: ReceiptText, exact: false },
+      { name: 'Custom Assets', href: `/${portfolioId}/custom-assets`, icon: Boxes, exact: false },
       { name: 'Dividends', href: `/${portfolioId}/dividends`, icon: DollarSign, exact: false },
       { name: 'Dividend Calendar', href: `/${portfolioId}/dividend-calendar`, icon: CalendarDays, exact: false },
       { name: 'Diversification', href: `/${portfolioId}/diversification`, icon: PieChart, exact: false },

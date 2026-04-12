@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getCustomAssets,
+  getCustomAsset,
   createCustomAsset,
   updateCustomAsset,
   deleteCustomAsset,
@@ -13,6 +14,14 @@ export function useCustomAssets(portfolioId: string) {
     queryKey: ['customAssets', portfolioId],
     queryFn: () => getCustomAssets(portfolioId),
     enabled: Boolean(portfolioId),
+  });
+}
+
+export function useCustomAsset(portfolioId: string, ticker: string | null) {
+  return useQuery({
+    queryKey: ['customAsset', portfolioId, ticker],
+    queryFn: () => getCustomAsset(portfolioId, ticker!),
+    enabled: Boolean(portfolioId) && Boolean(ticker),
   });
 }
 

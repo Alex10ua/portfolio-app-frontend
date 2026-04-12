@@ -12,6 +12,7 @@ import StatCard from '../../components/ui/StatCard';
 import Dialog from '../../components/ui/Dialog';
 import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
+import HoldingDetailDialog from './HoldingDetailDialog';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { AssetType, Holding } from '../../types/holding';
@@ -57,6 +58,7 @@ export default function HoldingsDashboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
   const [orderBy, setOrderBy] = useState<string>('ticker');
   const [order, setOrder] = useState<SortOrder>('asc');
   const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>('ALL');
@@ -157,10 +159,13 @@ export default function HoldingsDashboardPage() {
     switch (col.key) {
       case 'ticker':
         return (
-          <div className="flex items-center gap-3">
+          <div
+            className="flex items-center gap-3 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            onClick={() => setDetailHolding(holding)}
+          >
             <StockLogo ticker={holding.ticker} name={holding.name} assetType={holding.assetType} />
             <div>
-              <div className="font-medium text-slate-900 dark:text-slate-100">{holding.ticker}</div>
+              <div className="font-medium text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400">{holding.ticker}</div>
               {holding.name && holding.assetType === 'CUSTOM' && (
                 <div className="text-xs text-slate-400 dark:text-slate-500">{holding.name}</div>
               )}
@@ -352,6 +357,14 @@ export default function HoldingsDashboardPage() {
 
       {/* Import modal */}
       <ImportTransactionsModal open={importOpen} onClose={() => setImportOpen(false)} portfolioId={pid} />
+
+      {/* Holding detail dialog */}
+      <HoldingDetailDialog
+        holding={detailHolding}
+        open={detailHolding !== null}
+        onClose={() => setDetailHolding(null)}
+        portfolioId={pid}
+      />
 
       {/* Column config dialog */}
       <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">

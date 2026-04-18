@@ -65,7 +65,7 @@ export default function StockLogo({ ticker, name, assetType, size = 'md' }: Prop
   }
 
   return (
-    <div className={`${outer} shrink-0 rounded-full bg-white dark:bg-slate-700 border border-slate-100 dark:border-slate-600 overflow-hidden flex items-center justify-center`}>
+    <div className={`${outer} shrink-0 rounded-full bg-slate-700 dark:bg-white border border-slate-600 dark:border-slate-200 overflow-hidden flex items-center justify-center`}>
       <img
         src={src}
         alt={ticker}

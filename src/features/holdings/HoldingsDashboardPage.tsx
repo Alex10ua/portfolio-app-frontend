@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
-  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid,
+  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
 } from 'lucide-react';
-import { useHoldings, useFirstTradeYear, useCreateTransaction } from '../../hooks/useHoldings';
+import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -54,6 +54,7 @@ export default function HoldingsDashboardPage() {
   const { data: holdings, isLoading, error } = useHoldings(pid);
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
+  const { data: cashBalance } = useCashBalance(pid);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -293,6 +294,24 @@ export default function HoldingsDashboardPage() {
             iconColor={stats.totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}
           />
           <StatCard label="Avg Yield" value={formatPercent(stats.avgYield)} icon={Percent} iconColor="bg-purple-500" />
+        </div>
+      )}
+
+      {/* Cash position */}
+      {cashBalance && Object.keys(cashBalance).length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Cash Position</h2>
+          <div className="flex flex-wrap gap-4">
+            {Object.entries(cashBalance).map(([currency, amount]) => (
+              <StatCard
+                key={currency}
+                label={`Cash (${currency})`}
+                value={`${amount < 0 ? '-' : ''}${currency} ${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                icon={Banknote}
+                iconColor={amount >= 0 ? 'bg-teal-500' : 'bg-red-500'}
+              />
+            ))}
+          </div>
         </div>
       )}
 

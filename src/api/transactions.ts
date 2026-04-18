@@ -26,3 +26,9 @@ export async function updateTransaction(
 export async function deleteTransaction(portfolioId: string, transactionId: number): Promise<void> {
   await apiClient.delete(`${portfolioId}/transactions/${transactionId}/delete`);
 }
+
+/** Returns cash balance per currency derived from DEPOSIT/WITHDRAWAL transactions. */
+export async function getCashBalance(portfolioId: string): Promise<Record<string, number>> {
+  const response = await apiClient.get<Record<string, number>>(`${portfolioId}/cashBalance`);
+  return response.data ?? {};
+}

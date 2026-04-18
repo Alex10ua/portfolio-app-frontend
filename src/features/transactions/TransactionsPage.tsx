@@ -18,7 +18,7 @@ import type { AssetType } from '../../types/holding';
 
 const editSchema = z.object({
   ticker: z.string().min(1),
-  transactionType: z.enum(['BUY', 'SELL', 'TAX', 'DIVIDEND']),
+  transactionType: z.enum(['BUY', 'SELL', 'TAX', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL']),
   assetType: z.enum(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO', 'CUSTOM']),
   quantity: z.string().min(1),
   price: z.string().min(1),
@@ -199,7 +199,7 @@ export default function TransactionsPage() {
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
               <select {...register('transactionType')} className={selectClass}>
-                {(['BUY', 'SELL', 'TAX', 'DIVIDEND'] as TransactionType[]).map((t) => <option key={t} value={t}>{t}</option>)}
+                {(['BUY', 'SELL', 'TAX', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL'] as TransactionType[]).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>

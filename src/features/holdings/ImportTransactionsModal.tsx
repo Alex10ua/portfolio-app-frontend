@@ -5,7 +5,8 @@ import Spinner from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import { useImports, useSubmitImportBatch, useDeleteImport, useImportDetail } from '../../hooks/useImports';
 import { parseTransactionFile } from '../../lib/parseTransactionFile';
-import type { CreateTransactionPayload } from '../../types/transaction';
+import { tryParseIBActivityStatement } from '../../lib/parseIBTransactionFile';
+import type { CreateTransactionPayload, TransactionType } from '../../types/transaction';
 import type { AssetType } from '../../types/holding';
 
 interface Props {
@@ -19,11 +20,27 @@ type View = 'drop' | 'preview';
 interface ParsedPreview {
   filename: string;
   rows: CreateTransactionPayload[];
+  isIB: boolean;
 }
 
 const selectClass = 'block rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
 
 const ASSET_TYPES: AssetType[] = ['STOCK', 'CRYPTO', 'FUND', 'COIN', 'FIGURINE'];
+
+function txTypeBadgeClass(type: TransactionType): string {
+  switch (type) {
+    case 'BUY':        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400';
+    case 'SELL':       return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400';
+    case 'DIVIDEND':   return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400';
+    case 'TAX':        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400';
+    case 'DEPOSIT':    return 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400';
+    case 'WITHDRAWAL': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400';
+    default:           return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+  }
+}
+
+const isCashType = (type: TransactionType) => type === 'DEPOSIT' || type === 'WITHDRAWAL';
+const isAmountType = (type: TransactionType) => type === 'DIVIDEND' || type === 'TAX' || isCashType(type);
 
 export default function ImportTransactionsModal({ open, onClose, portfolioId }: Props) {
   const [view, setView] = useState<View>('drop');
@@ -43,8 +60,16 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
   async function handleFile(file: File) {
     setParseError(null);
     try {
+      // First try IB Activity Statement format
+      const ibRows = await tryParseIBActivityStatement(file);
+      if (ibRows !== null) {
+        setPreview({ filename: file.name, rows: ibRows, isIB: true });
+        setView('preview');
+        return;
+      }
+      // Fall back to generic CSV/XLSX parser
       const rows = await parseTransactionFile(file);
-      setPreview({ filename: file.name, rows });
+      setPreview({ filename: file.name, rows, isIB: false });
       setAssetType('STOCK');
       setView('preview');
     } catch (e) {
@@ -67,7 +92,11 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
 
   const handleConfirmImport = async () => {
     if (!preview) return;
-    const rows = preview.rows.map((r) => ({ ...r, assetType }));
+    // For IB imports each transaction carries its own assetType — don't override.
+    // For generic imports apply the user-selected assetType to every row.
+    const rows = preview.isIB
+      ? preview.rows
+      : preview.rows.map((r) => ({ ...r, assetType }));
     await submitBatch({ filename: preview.filename, transactions: rows });
     setPreview(null);
     setView('drop');
@@ -105,7 +134,9 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
               <span className="mt-2 block text-sm font-semibold text-slate-900 dark:text-slate-100">
                 Drag and drop a transactions file here
               </span>
-              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">or click below to select a file (.csv, .xlsx)</span>
+              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                Supports Interactive Brokers Activity Statement (.csv) and generic .csv / .xlsx files
+              </span>
               <input id="file-input-modal" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="hidden" />
               <label htmlFor="file-input-modal">
                 <span className="mt-4 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 cursor-pointer">
@@ -170,22 +201,32 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           <div className="space-y-4">
             {/* Preview header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                <span className="font-medium text-slate-900 dark:text-slate-100">{preview.filename}</span>
-                {' — '}{preview.rows.length} transaction{preview.rows.length !== 1 ? 's' : ''} detected
-              </p>
-              <div className="flex items-center gap-2 shrink-0">
-                <label className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Asset type</label>
-                <select
-                  value={assetType}
-                  onChange={(e) => setAssetType(e.target.value as AssetType)}
-                  className={selectClass}
-                >
-                  {ASSET_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  <span className="font-medium text-slate-900 dark:text-slate-100">{preview.filename}</span>
+                  {' — '}{preview.rows.length} transaction{preview.rows.length !== 1 ? 's' : ''} detected
+                </p>
+                {preview.isIB && (
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">
+                    Interactive Brokers Activity Statement — trades, dividends, taxes and cash flows imported
+                  </p>
+                )}
               </div>
+              {/* Asset type override only for non-IB imports */}
+              {!preview.isIB && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Asset type</label>
+                  <select
+                    value={assetType}
+                    onChange={(e) => setAssetType(e.target.value as AssetType)}
+                    className={selectClass}
+                  >
+                    {ASSET_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Preview table */}
@@ -193,7 +234,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
               <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
                   <tr>
-                    {['Ticker', 'Type', 'Qty', 'Price', 'Commission', 'Currency', 'Date'].map((h) => (
+                    {['Ticker', 'Type', 'Qty / Amount', 'Price', 'Commission', 'Currency', 'Date'].map((h) => (
                       <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
@@ -203,16 +244,18 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                     <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
                       <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{row.ticker}</td>
                       <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          row.transactionType === 'BUY'
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
-                            : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-                        }`}>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${txTypeBadgeClass(row.transactionType)}`}>
                           {row.transactionType}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{Number(row.quantity).toFixed(4).replace(/\.?0+$/, '')}</td>
-                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{Number(row.price).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                        {isAmountType(row.transactionType)
+                          ? (row.amount != null ? Number(row.amount).toFixed(2) : '—')
+                          : Number(row.quantity).toFixed(4).replace(/\.?0+$/, '')}
+                      </td>
+                      <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                        {isAmountType(row.transactionType) ? '—' : Number(row.price).toFixed(2)}
+                      </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{Number(row.commission).toFixed(2)}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{row.currency}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{row.date}</td>
@@ -257,33 +300,32 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                 <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                   <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
                     <tr>
-                      {['Ticker', 'Type', 'Qty', 'Price', 'Commission', 'Currency', 'Date'].map((h) => (
+                      {['Ticker', 'Type', 'Qty / Amount', 'Price', 'Commission', 'Currency', 'Date'].map((h) => (
                         <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                    {detailData.transactions.map((t, i) => (
-                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                        <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{t.ticker}</td>
-                        <td className="px-3 py-2">
-                          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            t.transactionType === 'BUY'
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
-                              : t.transactionType === 'SELL'
-                              ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
-                          }`}>
-                            {t.transactionType}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.quantity}</td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.price}</td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.commission ?? '—'}</td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.currency}</td>
-                        <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.date}</td>
-                      </tr>
-                    ))}
+                    {detailData.transactions.map((t, i) => {
+                      const isAmt = isAmountType(t.transactionType as TransactionType);
+                      return (
+                        <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                          <td className="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">{t.ticker}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${txTypeBadgeClass(t.transactionType as TransactionType)}`}>
+                              {t.transactionType}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
+                            {isAmt ? (t.amount != null ? Number(t.amount).toFixed(2) : '—') : t.quantity}
+                          </td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{isAmt ? '—' : t.price}</td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.commission ?? '—'}</td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{t.currency}</td>
+                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 whitespace-nowrap">{t.date}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -293,6 +335,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           </div>
         )}
       </Dialog>
+
       {/* Confirm delete dialog */}
       <Dialog open={confirmDeleteId !== null} onClose={() => setConfirmDeleteId(null)} title="Delete Import Batch" maxWidth="sm">
         <p className="text-sm text-slate-600 dark:text-slate-400 mb-5">

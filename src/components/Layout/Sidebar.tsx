@@ -9,6 +9,7 @@ import {
   FolderOpen,
   X,
   Boxes,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -43,6 +44,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       { name: 'Dividends', href: `/${portfolioId}/dividends`, icon: DollarSign, exact: false },
       { name: 'Dividend Calendar', href: `/${portfolioId}/dividend-calendar`, icon: CalendarDays, exact: false },
       { name: 'Diversification', href: `/${portfolioId}/diversification`, icon: PieChart, exact: false },
+      { name: 'Performance', href: `/${portfolioId}/performance`, icon: TrendingUp, exact: false },
     );
   }
 

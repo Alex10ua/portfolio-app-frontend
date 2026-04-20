@@ -11,6 +11,7 @@ import DividendsPage from './features/dividends/DividendsPage';
 import DiversificationPage from './features/diversification/DiversificationPage';
 import DividendCalendarPage from './features/dividendCalendar/DividendCalendarPage';
 import CustomAssetsPage from './features/customAssets/CustomAssetsPage';
+import PerformancePage from './features/performance/PerformancePage';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/:portfolioId/diversification" element={<DiversificationPage />} />
             <Route path="/:portfolioId/dividend-calendar" element={<DividendCalendarPage />} />
             <Route path="/:portfolioId/custom-assets" element={<CustomAssetsPage />} />
+            <Route path="/:portfolioId/performance" element={<PerformancePage />} />
           </Route>
         </Route>
       </Routes>

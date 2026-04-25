@@ -8,6 +8,7 @@ import { useImports, useSubmitImportBatch, useDeleteImport, useImportDetail } fr
 import { parseTransactionFile } from '../../lib/parseTransactionFile';
 import { tryParseIBActivityStatement } from '../../lib/parseIBTransactionFile';
 import { tryParseNNFile, buildNNFingerprint, NN_TICKERS, NN_TICKER_DISPLAY_NAME } from '../../lib/parseNNTransactionFile';
+import { tryParseVUBFile, buildVUBFingerprint, vubTickerDisplayName } from '../../lib/parseVUBGeneraliFile';
 import { getCustomAssets, createCustomAsset, updateCustomAssetPrice } from '../../api/customAssets';
 import { getTransactions } from '../../api/transactions';
 import type { CreateTransactionPayload, TransactionType } from '../../types/transaction';
@@ -19,7 +20,7 @@ interface Props {
   portfolioId: string;
 }
 
-type View = 'drop' | 'preview' | 'nn-confirming';
+type View = 'drop' | 'preview' | 'nn-confirming' | 'vub-confirming';
 
 interface ParsedPreview {
   filename: string;
@@ -29,6 +30,10 @@ interface ParsedPreview {
   nnFundPrices?: Map<string, number>;
   nnYearsPresent?: Set<number>;
   nnSkippedZeroCount?: number;
+  isVUB?: true;
+  vubFundPrices?: Map<string, number>;
+  vubYearsPresent?: Set<number>;
+  vubSkippedZeroCount?: number;
 }
 
 const selectClass = 'block rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
@@ -57,6 +62,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
   const [preview, setPreview] = useState<ParsedPreview | null>(null);
   const [assetType, setAssetType] = useState<AssetType>('STOCK');
   const [nnConfirmError, setNNConfirmError] = useState<string | null>(null);
+  const [vubConfirmError, setVUBConfirmError] = useState<string | null>(null);
   const [detailImportId, setDetailImportId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -89,6 +95,21 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           nnFundPrices: nnResult.fundPrices,
           nnYearsPresent: nnResult.yearsPresent,
           nnSkippedZeroCount: nnResult.skippedZeroCount,
+        });
+        setView('preview');
+        return;
+      }
+      // Try VUB Generali DDS 2nd pillar format
+      const vubResult = await tryParseVUBFile(file);
+      if (vubResult !== null) {
+        setPreview({
+          filename: file.name,
+          rows: vubResult.transactions,
+          isIB: false,
+          isVUB: true,
+          vubFundPrices: vubResult.fundPrices,
+          vubYearsPresent: vubResult.yearsPresent,
+          vubSkippedZeroCount: vubResult.skippedZeroCount,
         });
         setView('preview');
         return;
@@ -170,6 +191,73 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     }
   }
 
+  async function handleConfirmVUB() {
+    if (!preview?.isVUB) return;
+    setVUBConfirmError(null);
+    setView('vub-confirming');
+    try {
+      // Step 1: Fetch existing custom assets
+      const existingAssets = await getCustomAssets(portfolioId);
+      const existingTickers = new Set(existingAssets.map((a) => a.ticker));
+
+      // Step 2: Auto-create missing VUB fund custom assets
+      for (const [ticker, price] of preview.vubFundPrices ?? []) {
+        if (!existingTickers.has(ticker)) {
+          await createCustomAsset(portfolioId, {
+            ticker,
+            name: vubTickerDisplayName(ticker),
+            assetType: 'FUND',
+            currency: 'EUR',
+            unit: 'DJ',
+            priceNow: price,
+            priceUpdateMethod: 'MANUAL',
+            customFields: {},
+          });
+        }
+      }
+
+      // Step 3: Fetch existing transactions for all years present in the file
+      const years = [...(preview.vubYearsPresent ?? [])];
+      const txArrays = await Promise.all(years.map((y) => getTransactions(portfolioId, y)));
+      const allExistingTx = txArrays.flat();
+
+      // Step 4: Build fingerprint set of already-imported VUB transactions
+      const existingFingerprints = new Set<string>();
+      for (const tx of allExistingTx) {
+        if (!tx.ticker.startsWith('VUB-DDS-')) continue;
+        existingFingerprints.add(buildVUBFingerprint(tx.date, tx.ticker, tx.quantity, tx.price));
+      }
+
+      // Step 5: Filter to only new transactions
+      const newRows = preview.rows.filter((row) => {
+        const fp = buildVUBFingerprint(row.date, row.ticker, Number(row.quantity), Number(row.price));
+        return !existingFingerprints.has(fp);
+      });
+
+      // Step 6: Submit import batch (skip if nothing new)
+      if (newRows.length > 0) {
+        await submitBatch({ filename: preview.filename, transactions: newRows });
+      }
+
+      // Step 7: Update current price for each fund from the report
+      for (const [ticker, price] of preview.vubFundPrices ?? []) {
+        if (price > 0) {
+          await updateCustomAssetPrice(portfolioId, ticker, price);
+        }
+      }
+
+      // Step 8: Refresh caches
+      await queryClient.invalidateQueries({ queryKey: ['customAssets', portfolioId] });
+      await queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+
+      setPreview(null);
+      setView('drop');
+    } catch (e) {
+      setVUBConfirmError((e as Error).message);
+      setView('preview');
+    }
+  }
+
   async function handleConfirmGeneric() {
     if (!preview) return;
     const rows = preview.isIB
@@ -204,6 +292,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     setPreview(null);
     setParseError(null);
     setNNConfirmError(null);
+    setVUBConfirmError(null);
     onClose();
   };
 
@@ -228,7 +317,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                 Drag and drop a transactions file here
               </span>
               <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-                Supports Interactive Brokers Activity Statement (.csv), NN Slovensko report (.xlsx) and generic .csv / .xlsx files
+                Supports Interactive Brokers Activity Statement (.csv), NN Slovensko report (.xlsx), VUB Generali DDS report (.xlsx) and generic .csv / .xlsx files
               </span>
               <input id="file-input-modal" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="hidden" />
               <label htmlFor="file-input-modal">
@@ -299,6 +388,15 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           </div>
         )}
 
+        {view === 'vub-confirming' && (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <Spinner />
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Preparing import — creating assets, checking for duplicates…
+            </p>
+          </div>
+        )}
+
         {view === 'preview' && preview && (
           <div className="space-y-4">
             {/* Preview header */}
@@ -323,9 +421,19 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                     )}
                   </p>
                 )}
+                {preview.isVUB && (
+                  <p className="text-xs text-violet-600 dark:text-violet-400 mt-0.5">
+                    VUB Generali DDS 2nd Pillar — pension fund contributions detected
+                    {(preview.vubSkippedZeroCount ?? 0) > 0 && (
+                      <span className="ml-2 text-slate-500 dark:text-slate-400">
+                        ({preview.vubSkippedZeroCount} zero-amount rows skipped)
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
-              {/* Asset type override only for non-IB, non-NN imports */}
-              {!preview.isIB && !preview.isNN && (
+              {/* Asset type override only for non-IB, non-NN, non-VUB imports */}
+              {!preview.isIB && !preview.isNN && !preview.isVUB && (
                 <div className="flex items-center gap-2 shrink-0">
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Asset type</label>
                   <select
@@ -344,9 +452,15 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                   Asset type: CUSTOM / FUND · Currency: EUR (fixed)
                 </span>
               )}
+              {preview.isVUB && (
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 shrink-0">
+                  Asset type: CUSTOM / FUND · Currency: EUR (fixed)
+                </span>
+              )}
             </div>
 
             {nnConfirmError && <ErrorAlert message={nnConfirmError} />}
+            {vubConfirmError && <ErrorAlert message={vubConfirmError} />}
 
             {/* Preview table */}
             <div className="overflow-auto max-h-80 rounded-md border border-slate-200 dark:border-slate-700">
@@ -393,7 +507,11 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                 Cancel
               </button>
               <button
-                onClick={() => preview.isNN ? void handleConfirmNN() : void handleConfirmGeneric()}
+                onClick={() =>
+                  preview.isNN  ? void handleConfirmNN()  :
+                  preview.isVUB ? void handleConfirmVUB() :
+                  void handleConfirmGeneric()
+                }
                 disabled={submitting}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudUpload, File as FileIcon, Trash2, Eye } from 'lucide-react';
 import Dialog from '../../components/ui/Dialog';
 import Spinner from '../../components/ui/Spinner';
@@ -6,6 +7,9 @@ import ErrorAlert from '../../components/ui/ErrorAlert';
 import { useImports, useSubmitImportBatch, useDeleteImport, useImportDetail } from '../../hooks/useImports';
 import { parseTransactionFile } from '../../lib/parseTransactionFile';
 import { tryParseIBActivityStatement } from '../../lib/parseIBTransactionFile';
+import { tryParseNNFile, buildNNFingerprint, NN_TICKERS, NN_TICKER_DISPLAY_NAME } from '../../lib/parseNNTransactionFile';
+import { getCustomAssets, createCustomAsset, updateCustomAssetPrice } from '../../api/customAssets';
+import { getTransactions } from '../../api/transactions';
 import type { CreateTransactionPayload, TransactionType } from '../../types/transaction';
 import type { AssetType } from '../../types/holding';
 
@@ -15,12 +19,16 @@ interface Props {
   portfolioId: string;
 }
 
-type View = 'drop' | 'preview';
+type View = 'drop' | 'preview' | 'nn-confirming';
 
 interface ParsedPreview {
   filename: string;
   rows: CreateTransactionPayload[];
   isIB: boolean;
+  isNN?: true;
+  nnFundPrices?: Map<string, number>;
+  nnYearsPresent?: Set<number>;
+  nnSkippedZeroCount?: number;
 }
 
 const selectClass = 'block rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
@@ -48,10 +56,12 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
   const [parseError, setParseError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedPreview | null>(null);
   const [assetType, setAssetType] = useState<AssetType>('STOCK');
+  const [nnConfirmError, setNNConfirmError] = useState<string | null>(null);
   const [detailImportId, setDetailImportId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const { data: imports = [], error: importsError } = useImports(portfolioId, open);
   const { mutateAsync: submitBatch, isPending: submitting } = useSubmitImportBatch(portfolioId);
   const { mutateAsync: deleteImport } = useDeleteImport(portfolioId);
@@ -59,11 +69,27 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
 
   async function handleFile(file: File) {
     setParseError(null);
+    setNNConfirmError(null);
     try {
       // First try IB Activity Statement format
       const ibRows = await tryParseIBActivityStatement(file);
       if (ibRows !== null) {
         setPreview({ filename: file.name, rows: ibRows, isIB: true });
+        setView('preview');
+        return;
+      }
+      // Try NN Slovensko 3rd pillar format
+      const nnResult = await tryParseNNFile(file);
+      if (nnResult !== null) {
+        setPreview({
+          filename: file.name,
+          rows: nnResult.transactions,
+          isIB: false,
+          isNN: true,
+          nnFundPrices: nnResult.fundPrices,
+          nnYearsPresent: nnResult.yearsPresent,
+          nnSkippedZeroCount: nnResult.skippedZeroCount,
+        });
         setView('preview');
         return;
       }
@@ -75,6 +101,83 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     } catch (e) {
       setParseError((e as Error).message);
     }
+  }
+
+  async function handleConfirmNN() {
+    if (!preview?.isNN) return;
+    setNNConfirmError(null);
+    setView('nn-confirming');
+    try {
+      // Step 1: Fetch existing custom assets
+      const existingAssets = await getCustomAssets(portfolioId);
+      const existingTickers = new Set(existingAssets.map((a) => a.ticker));
+
+      // Step 2: Auto-create missing NN fund custom assets
+      for (const [ticker, price] of preview.nnFundPrices ?? []) {
+        if (!existingTickers.has(ticker)) {
+          await createCustomAsset(portfolioId, {
+            ticker,
+            name: NN_TICKER_DISPLAY_NAME[ticker] ?? ticker,
+            assetType: 'FUND',
+            currency: 'EUR',
+            unit: 'DJ',
+            priceNow: price,
+            priceUpdateMethod: 'MANUAL',
+            customFields: {},
+          });
+        }
+      }
+
+      // Step 3: Fetch existing transactions for all years present in the file
+      const years = [...(preview.nnYearsPresent ?? [])];
+      const txArrays = await Promise.all(years.map((y) => getTransactions(portfolioId, y)));
+      const allExistingTx = txArrays.flat();
+
+      // Step 4: Build fingerprint set of already-imported NN transactions
+      const existingFingerprints = new Set<string>();
+      for (const tx of allExistingTx) {
+        if (!NN_TICKERS.has(tx.ticker)) continue;
+        existingFingerprints.add(buildNNFingerprint(tx.date, tx.ticker, tx.quantity, tx.price));
+      }
+
+      // Step 5: Filter to only new transactions
+      const newRows = preview.rows.filter((row) => {
+        const fp = buildNNFingerprint(row.date, row.ticker, Number(row.quantity), Number(row.price));
+        return !existingFingerprints.has(fp);
+      });
+
+      // Step 6: Submit import batch (skip if nothing new)
+      if (newRows.length > 0) {
+        await submitBatch({ filename: preview.filename, transactions: newRows });
+      }
+
+      // Step 7: Update current price for each fund from the report
+      for (const [ticker, price] of preview.nnFundPrices ?? []) {
+        if (price > 0) {
+          await updateCustomAssetPrice(portfolioId, ticker, price);
+        }
+      }
+
+      // Step 8: Refresh caches
+      await queryClient.invalidateQueries({ queryKey: ['customAssets', portfolioId] });
+      await queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+
+      setPreview(null);
+      setView('drop');
+    } catch (e) {
+      setNNConfirmError((e as Error).message);
+      setView('preview');
+    }
+  }
+
+  async function handleConfirmGeneric() {
+    if (!preview) return;
+    const rows = preview.isIB
+      ? preview.rows
+      : preview.rows.map((r) => ({ ...r, assetType }));
+    await submitBatch({ filename: preview.filename, transactions: rows });
+    setPreview(null);
+    setView('drop');
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -90,17 +193,6 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     e.target.value = '';
   };
 
-  const handleConfirmImport = async () => {
-    if (!preview) return;
-    // For IB imports each transaction carries its own assetType — don't override.
-    // For generic imports apply the user-selected assetType to every row.
-    const rows = preview.isIB
-      ? preview.rows
-      : preview.rows.map((r) => ({ ...r, assetType }));
-    await submitBatch({ filename: preview.filename, transactions: rows });
-    setPreview(null);
-    setView('drop');
-  };
 
   const handleCancelPreview = () => {
     setPreview(null);
@@ -111,6 +203,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     setView('drop');
     setPreview(null);
     setParseError(null);
+    setNNConfirmError(null);
     onClose();
   };
 
@@ -135,7 +228,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                 Drag and drop a transactions file here
               </span>
               <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-                Supports Interactive Brokers Activity Statement (.csv) and generic .csv / .xlsx files
+                Supports Interactive Brokers Activity Statement (.csv), NN Slovensko report (.xlsx) and generic .csv / .xlsx files
               </span>
               <input id="file-input-modal" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="hidden" />
               <label htmlFor="file-input-modal">
@@ -197,6 +290,15 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           </div>
         )}
 
+        {view === 'nn-confirming' && (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <Spinner />
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Preparing import — creating assets, checking for duplicates…
+            </p>
+          </div>
+        )}
+
         {view === 'preview' && preview && (
           <div className="space-y-4">
             {/* Preview header */}
@@ -211,9 +313,19 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                     Interactive Brokers Activity Statement — trades, dividends, taxes and cash flows imported
                   </p>
                 )}
+                {preview.isNN && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                    NN Slovensko 3rd Pillar — pension fund contributions detected
+                    {(preview.nnSkippedZeroCount ?? 0) > 0 && (
+                      <span className="ml-2 text-slate-500 dark:text-slate-400">
+                        ({preview.nnSkippedZeroCount} zero-amount rows skipped)
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
-              {/* Asset type override only for non-IB imports */}
-              {!preview.isIB && (
+              {/* Asset type override only for non-IB, non-NN imports */}
+              {!preview.isIB && !preview.isNN && (
                 <div className="flex items-center gap-2 shrink-0">
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Asset type</label>
                   <select
@@ -227,7 +339,14 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                   </select>
                 </div>
               )}
+              {preview.isNN && (
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 shrink-0">
+                  Asset type: CUSTOM / FUND · Currency: EUR (fixed)
+                </span>
+              )}
             </div>
+
+            {nnConfirmError && <ErrorAlert message={nnConfirmError} />}
 
             {/* Preview table */}
             <div className="overflow-auto max-h-80 rounded-md border border-slate-200 dark:border-slate-700">
@@ -254,7 +373,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                           : Number(row.quantity).toFixed(4).replace(/\.?0+$/, '')}
                       </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">
-                        {isAmountType(row.transactionType) ? '—' : Number(row.price).toFixed(2)}
+                        {isAmountType(row.transactionType) ? '—' : Number(row.price).toFixed(6)}
                       </td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{Number(row.commission).toFixed(2)}</td>
                       <td className="px-3 py-2 text-slate-700 dark:text-slate-300">{row.currency}</td>
@@ -274,7 +393,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                 Cancel
               </button>
               <button
-                onClick={() => void handleConfirmImport()}
+                onClick={() => preview.isNN ? void handleConfirmNN() : void handleConfirmGeneric()}
                 disabled={submitting}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
               >

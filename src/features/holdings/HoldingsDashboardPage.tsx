@@ -145,13 +145,22 @@ export default function HoldingsDashboardPage() {
     });
   }, [filteredHoldings, orderBy, order]);
 
-  const stats = useMemo(() => {
-    if (!holdings?.length) return null;
-    const totalValue = holdings.reduce((s, h) => s + (h.currentShareValue ?? 0) * h.shareAmount, 0);
-    const totalCost  = holdings.reduce((s, h) => s + (h.costPerShare ?? 0) * h.shareAmount, 0);
-    const totalProfit = holdings.reduce((s, h) => s + (h.totalProfit ?? 0), 0);
+  const { baseCurrency, stats } = useMemo(() => {
+    if (!holdings?.length) return { baseCurrency: '', stats: null };
+
+    const uniqueCurrencies = [...new Set(holdings.map(h => h.currency).filter((c): c is string => !!c))];
+    const isMulti = uniqueCurrencies.length > 1;
+    const base = isMulti ? 'EUR' : (uniqueCurrencies[0] ?? '');
+
+    const convertToBase = (value: number, fxRate?: number) =>
+      isMulti && fxRate && fxRate !== 0 ? value / fxRate : value;
+
+    const totalValue  = holdings.reduce((s, h) => s + convertToBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0);
+    const totalCost   = holdings.reduce((s, h) => s + convertToBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0);
+    const totalProfit = holdings.reduce((s, h) => s + convertToBase(h.totalProfit ?? 0, h.fxRate), 0);
     const totalDivYield = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
-    return { totalValue, totalCost, totalProfit, avgYield: totalDivYield };
+
+    return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield: totalDivYield } };
   }, [holdings]);
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
@@ -285,10 +294,10 @@ export default function HoldingsDashboardPage() {
       {/* Summary stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label="Total Value" value={formatCurrency(stats.totalValue)} icon={TrendingUp} />
-          <StatCard label="Cost Basis" value={formatCurrency(stats.totalCost)} icon={DollarSign} iconColor="bg-slate-500" />
+          <StatCard label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalValue)} icon={TrendingUp} />
+          <StatCard label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalCost)} icon={DollarSign} iconColor="bg-slate-500" />
           <StatCard
-            label="Total P&L"
+            label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
             value={formatCurrency(stats.totalProfit)}
             icon={BarChart2}
             iconColor={stats.totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}

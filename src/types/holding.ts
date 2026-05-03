@@ -13,4 +13,6 @@ export interface Holding {
   totalProfit: number | null;
   totalProfitPercentage: number | null;
   dailyChange: number | null;
+  currency?: string;   // native currency of the asset, e.g. "USD"
+  fxRate?: number;     // rateVsEur: units of this currency per 1 EUR
 }

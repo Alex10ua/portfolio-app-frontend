@@ -24,7 +24,7 @@ const editSchema = z.object({
   price: z.string().min(1),
   commission: z.string(),
   date: z.string().min(1),
-  currency: z.enum(['USD', 'EUR', 'GBP']),
+  currency: z.enum(['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK']),
 });
 type EditValues = z.infer<typeof editSchema>;
 
@@ -228,7 +228,7 @@ export default function TransactionsPage() {
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
             <select {...register('currency')} className={selectClass}>
-              {(['USD', 'EUR', 'GBP'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
+              {(['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 

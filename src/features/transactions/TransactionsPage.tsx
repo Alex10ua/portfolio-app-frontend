@@ -11,7 +11,7 @@ import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
 import Badge from '../../components/ui/Badge';
 import Dialog from '../../components/ui/Dialog';
-import { formatDate } from '../../lib/formatters';
+import { formatDate, formatCurrency } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { Transaction, TransactionType, Currency } from '../../types/transaction';
 import type { AssetType } from '../../types/holding';
@@ -130,7 +130,7 @@ export default function TransactionsPage() {
                 <table className="min-w-full divide-y divide-slate-300 dark:divide-slate-700">
                   <thead className="bg-slate-50 dark:bg-slate-800">
                     <tr>
-                      {['Ticker', 'Qty', 'Price ($)', 'Total ($)', 'Comm. ($)', 'Date', 'Type', ''].map((h) => (
+                      {['Ticker', 'Qty', 'Price', 'Total', 'Comm.', 'Date', 'Type', ''].map((h) => (
                         <th key={h} className={`py-3.5 px-3 text-${h === 'Ticker' || h === 'Date' || h === 'Type' || h === '' ? 'left' : 'right'} text-sm font-semibold text-slate-900 dark:text-slate-200 first:pl-6 last:pr-6`}>
                           {h}
                         </th>
@@ -150,9 +150,9 @@ export default function TransactionsPage() {
                             </div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.quantity}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.price?.toFixed(2) ?? '—'}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-slate-900 dark:text-white">{t.totalAmount?.toFixed(2) ?? '—'}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.commission?.toFixed(2) ?? '—'}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{formatCurrency(t.price, 2, t.currency)}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-slate-900 dark:text-white">{formatCurrency(t.totalAmount, 2, t.currency)}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{formatCurrency(t.commission, 2, t.currency)}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 dark:text-slate-400">{formatDate(t.date)}</td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm">
                             <Badge type={t.transactionType} />
@@ -254,7 +254,7 @@ export default function TransactionsPage() {
           <div className="mt-3 mb-6 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm">
             <span className="font-semibold text-slate-900 dark:text-white">{deleteTarget.ticker}</span>
             <span className="text-slate-500 dark:text-slate-400">
-              {' '}· {deleteTarget.transactionType} · {deleteTarget.quantity} shares @ ${deleteTarget.price?.toFixed(2)} · {formatDate(deleteTarget.date)}
+              {' '}· {deleteTarget.transactionType} · {deleteTarget.quantity} shares @ {formatCurrency(deleteTarget.price, 2, deleteTarget.currency)} · {formatDate(deleteTarget.date)}
             </span>
           </div>
         )}

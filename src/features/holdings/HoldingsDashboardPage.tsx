@@ -183,18 +183,18 @@ export default function HoldingsDashboardPage() {
           </div>
         );
       case 'costPerShare':
-        return formatCurrency(holding.costPerShare);
+        return formatCurrency(holding.costPerShare, undefined, holding.currency);
       case 'currentShareValue': {
         const total = (holding.currentShareValue ?? 0) * holding.shareAmount;
         return (
           <div>
-            <div className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(total)}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Price: {formatCurrency(holding.currentShareValue)}</div>
+            <div className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(total, undefined, holding.currency)}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Price: {formatCurrency(holding.currentShareValue, undefined, holding.currency)}</div>
           </div>
         );
       }
       case 'dividend':
-        return formatCurrency((holding.dividend ?? 0) * holding.shareAmount);
+        return formatCurrency((holding.dividend ?? 0) * holding.shareAmount, undefined, holding.currency);
       case 'dividendYield':
         return (
           <span className="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
@@ -209,14 +209,14 @@ export default function HoldingsDashboardPage() {
         const isPos = (profit ?? 0) >= 0;
         return (
           <div className={isPos ? 'text-green-600' : 'text-red-600'}>
-            <span className="font-medium">{formatCurrency(profit)}</span>
+            <span className="font-medium">{formatCurrency(profit, undefined, holding.currency)}</span>
             <span className="ml-1 text-xs">({formatPercent(pct)})</span>
           </div>
         );
       }
       case 'dailyChange': {
         const change = holding.dailyChange;
-        return <span className={(change ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(change)}</span>;
+        return <span className={(change ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(change, undefined, holding.currency)}</span>;
       }
       default:
         return String((holding as unknown as Record<string, unknown>)[col.key] ?? 'N/A');
@@ -294,11 +294,11 @@ export default function HoldingsDashboardPage() {
       {/* Summary stats */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalValue)} icon={TrendingUp} />
-          <StatCard label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalCost)} icon={DollarSign} iconColor="bg-slate-500" />
+          <StatCard label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalValue, undefined, baseCurrency)} icon={TrendingUp} />
+          <StatCard label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalCost, undefined, baseCurrency)} icon={DollarSign} iconColor="bg-slate-500" />
           <StatCard
             label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
-            value={formatCurrency(stats.totalProfit)}
+            value={formatCurrency(stats.totalProfit, undefined, baseCurrency)}
             icon={BarChart2}
             iconColor={stats.totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}
           />

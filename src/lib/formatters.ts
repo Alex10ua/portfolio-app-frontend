@@ -1,10 +1,18 @@
-export function formatCurrency(value: number | null | undefined, decimals?: number): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  CHF: 'CHF ',
+  PLN: 'zł',
+  CZK: 'Kč',
+};
+
+export function formatCurrency(value: number | null | undefined, decimals?: number, currency = 'USD'): string {
   if (value == null) return 'N/A';
   const absVal = Math.abs(value);
-  // When no explicit precision: use 6 decimal places for sub-unit prices (e.g. fund DJ units ~0.058),
-  // otherwise 2 decimal places for normal amounts.
   const d = decimals !== undefined ? decimals : (absVal > 0 && absVal < 1 ? 6 : 2);
-  return `$${value.toFixed(d)}`;
+  const symbol = CURRENCY_SYMBOLS[currency] ?? currency + ' ';
+  return `${symbol}${value.toFixed(d)}`;
 }
 
 export function formatPercent(value: number | null | undefined, decimals = 2): string {

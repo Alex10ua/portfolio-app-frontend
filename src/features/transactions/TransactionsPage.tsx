@@ -145,7 +145,7 @@ export default function TransactionsPage() {
                         <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm">
                             <div className="flex items-center gap-3">
-                              <StockLogo ticker={t.ticker} size="sm" />
+                              <StockLogo ticker={t.ticker} assetType={t.assetType} size="sm" />
                               <span className="font-medium text-slate-900 dark:text-white">{t.ticker}</span>
                             </div>
                           </td>

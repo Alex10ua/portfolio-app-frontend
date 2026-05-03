@@ -89,7 +89,7 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
     const ticker = mapFundName(fund);
 
     if (!ticker || !date) {
-      if (fund) console.warn(`[NN parser] Unknown fund name: "${fund}" — row skipped`);
+      if (import.meta.env.DEV && fund) console.warn(`[NN parser] Unknown fund name: "${fund}" — row skipped`);
       continue;
     }
 
@@ -122,9 +122,20 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
   return { transactions, skippedZeroCount, fingerprints, fundPrices, yearsPresent };
 }
 
-export function tryParseNNFile(file: File): Promise<NNParseResult | null> {
+async function validateXlsxSignature(file: File): Promise<boolean> {
+  const buffer = await file.slice(0, 4).arrayBuffer();
+  const b = new Uint8Array(buffer);
+  const isZip = b[0] === 0x50 && b[1] === 0x4B;
+  const isOle = b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0;
+  return isZip || isOle;
+}
+
+export async function tryParseNNFile(file: File): Promise<NNParseResult | null> {
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext !== 'xlsx' && ext !== 'xls') return Promise.resolve(null);
+  if (ext !== 'xlsx' && ext !== 'xls') return null;
+
+  const validSignature = await validateXlsxSignature(file);
+  if (!validSignature) return null;
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

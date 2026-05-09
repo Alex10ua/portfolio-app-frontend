@@ -17,7 +17,7 @@ const schema = z.object({
   quantity: z.string().optional(),
   price: z.string().optional(),
   commission: z.string(),
-  currency: z.enum(['USD', 'EUR', 'GBP']),
+  currency: z.enum(['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK']),
   amount: z.string().optional(),
   name: z.string().optional(),
   priceNow: z.string().optional(),
@@ -173,7 +173,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
                   <select {...register('currency')} className={selectClass}>
-                    {(['USD', 'EUR', 'GBP'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
+                    {(['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -242,7 +242,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
                 <select {...register('currency')} className={selectClass}>
-                  {(['USD', 'EUR', 'GBP'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
+                  {(['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK'] as Currency[]).map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
 

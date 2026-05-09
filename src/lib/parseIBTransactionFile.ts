@@ -43,7 +43,8 @@ function toMap(headers: string[], row: Row): Record<string, string> {
 // Extract ticker from IB description like "GOOGL(US02079K3059) Cash Dividend..."
 function extractTicker(description: string): string {
   const match = description.match(/^([A-Z0-9./ ]+)\(/);
-  return match ? match[1].trim() : '';
+  const ticker = match ? match[1].trim() : '';
+  return ticker.length <= 20 ? ticker : '';
 }
 
 // "2024-10-07, 13:56:32" → "2024-10-07"

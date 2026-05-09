@@ -20,7 +20,7 @@ type FormValues = z.infer<typeof schema>;
 
 const PALETTE = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
 
-type ChartItem = { portfolioId: number; name: string; value: number };
+type ChartItem = { portfolioId: number; name: string; value: number; currency: string };
 
 function PortfolioValueChart({ items }: { items: ChartItem[] }) {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -73,7 +73,7 @@ function PortfolioValueChart({ items }: { items: ChartItem[] }) {
             }}
           >
             <p className="font-semibold">{tooltip.item.name}</p>
-            <p className="text-green-500">{formatCurrency(tooltip.item.value)}</p>
+            <p className="text-green-500">{formatCurrency(tooltip.item.value, undefined, tooltip.item.currency)}</p>
           </div>
         )}
       </div>
@@ -84,7 +84,7 @@ function PortfolioValueChart({ items }: { items: ChartItem[] }) {
           <div key={item.portfolioId} className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
             <span className="text-xs text-slate-500 dark:text-slate-400">{item.name}</span>
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{formatCurrency(item.value, 0)}</span>
+            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{formatCurrency(item.value, 0, item.currency)}</span>
           </div>
         ))}
       </div>
@@ -96,7 +96,7 @@ export default function PortfolioListPage() {
   const [open, setOpen] = useState(false);
   const { data: portfolios = [], isLoading, error } = usePortfolios();
   const { mutateAsync: createPortfolio, isPending } = useCreatePortfolio();
-  const { items, total, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
+  const { items, total, totalCurrency, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -134,7 +134,7 @@ export default function PortfolioListPage() {
             </h2>
             {!isLoadingValues && (
               <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(total)}
+                {formatCurrency(total, undefined, totalCurrency)}
               </span>
             )}
           </div>

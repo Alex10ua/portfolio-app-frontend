@@ -1,7 +1,7 @@
 import type { AssetType } from './holding';
 
 export type TransactionType = 'BUY' | 'SELL' | 'TAX' | 'DIVIDEND' | 'DEPOSIT' | 'WITHDRAWAL';
-export type Currency = 'USD' | 'EUR' | 'GBP';
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'CHF' | 'PLN' | 'CZK';
 
 export interface Transaction {
   transactionId: number;
@@ -15,6 +15,7 @@ export interface Transaction {
   commission: number | null;
   date: string;
   currency: Currency;
+  fxRate?: number; // rateVsEur for this transaction's currency
 }
 
 export interface CreateTransactionPayload {

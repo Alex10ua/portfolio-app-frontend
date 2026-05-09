@@ -81,9 +81,29 @@ function parseXlsx(file: File): Promise<CreateTransactionPayload[]> {
   });
 }
 
+async function validateFileSignature(file: File, expectedType: 'csv' | 'xlsx'): Promise<void> {
+  const buffer = await file.slice(0, 4).arrayBuffer();
+  const b = new Uint8Array(buffer);
+  const isZip = b[0] === 0x50 && b[1] === 0x4B;
+  const isOle = b[0] === 0xD0 && b[1] === 0xCF && b[2] === 0x11 && b[3] === 0xE0;
+  const isSpreadsheet = isZip || isOle;
+  if (expectedType === 'xlsx' && !isSpreadsheet) {
+    throw new Error('File content does not match a valid Excel file. The file may be corrupt or misnamed.');
+  }
+  if (expectedType === 'csv' && isSpreadsheet) {
+    throw new Error('File content does not match a valid CSV text file. The file may be corrupt or misnamed.');
+  }
+}
+
 export async function parseTransactionFile(file: File): Promise<CreateTransactionPayload[]> {
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext === 'csv') return parseCsv(file);
-  if (ext === 'xlsx' || ext === 'xls') return parseXlsx(file);
+  if (ext === 'csv') {
+    await validateFileSignature(file, 'csv');
+    return parseCsv(file);
+  }
+  if (ext === 'xlsx' || ext === 'xls') {
+    await validateFileSignature(file, 'xlsx');
+    return parseXlsx(file);
+  }
   throw new Error(`Unsupported file type ".${ext}". Please upload a .csv or .xlsx file.`);
 }

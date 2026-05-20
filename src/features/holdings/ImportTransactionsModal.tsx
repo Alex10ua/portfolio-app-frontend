@@ -9,7 +9,7 @@ import { parseTransactionFile } from '../../lib/parseTransactionFile';
 import { tryParseIBActivityStatement } from '../../lib/parseIBTransactionFile';
 import { tryParseNNFile, buildNNFingerprint, NN_TICKERS, NN_TICKER_DISPLAY_NAME } from '../../lib/parseNNTransactionFile';
 import { tryParseVUBFile, buildVUBFingerprint, vubTickerDisplayName } from '../../lib/parseVUBGeneraliFile';
-import { getCustomAssets, createCustomAsset, updateCustomAssetPrice } from '../../api/customAssets';
+import { getCustomAssets, createCustomAsset, bulkAddPriceHistory } from '../../api/customAssets';
 import { getTransactions } from '../../api/transactions';
 import type { CreateTransactionPayload, TransactionType } from '../../types/transaction';
 import type { AssetType } from '../../types/holding';
@@ -28,10 +28,12 @@ interface ParsedPreview {
   isIB: boolean;
   isNN?: true;
   nnFundPrices?: Map<string, number>;
+  nnFundPriceHistory?: Map<string, { date: string; price: number }[]>;
   nnYearsPresent?: Set<number>;
   nnSkippedZeroCount?: number;
   isVUB?: true;
   vubFundPrices?: Map<string, number>;
+  vubFundPriceHistory?: Map<string, { date: string; price: number }[]>;
   vubYearsPresent?: Set<number>;
   vubSkippedZeroCount?: number;
 }
@@ -93,6 +95,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           isIB: false,
           isNN: true,
           nnFundPrices: nnResult.fundPrices,
+          nnFundPriceHistory: nnResult.fundPriceHistory,
           nnYearsPresent: nnResult.yearsPresent,
           nnSkippedZeroCount: nnResult.skippedZeroCount,
         });
@@ -108,6 +111,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           isIB: false,
           isVUB: true,
           vubFundPrices: vubResult.fundPrices,
+          vubFundPriceHistory: vubResult.fundPriceHistory,
           vubYearsPresent: vubResult.yearsPresent,
           vubSkippedZeroCount: vubResult.skippedZeroCount,
         });
@@ -172,10 +176,10 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
         await submitBatch({ filename: preview.filename, transactions: newRows });
       }
 
-      // Step 7: Update current price for each fund from the report
-      for (const [ticker, price] of preview.nnFundPrices ?? []) {
-        if (price > 0) {
-          await updateCustomAssetPrice(portfolioId, ticker, price);
+      // Step 7: Bulk-merge monthly price history for each fund (also updates priceNow to latest entry)
+      for (const [ticker, entries] of preview.nnFundPriceHistory ?? []) {
+        if (entries.length > 0) {
+          await bulkAddPriceHistory(portfolioId, ticker, entries);
         }
       }
 
@@ -239,10 +243,10 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
         await submitBatch({ filename: preview.filename, transactions: newRows });
       }
 
-      // Step 7: Update current price for each fund from the report
-      for (const [ticker, price] of preview.vubFundPrices ?? []) {
-        if (price > 0) {
-          await updateCustomAssetPrice(portfolioId, ticker, price);
+      // Step 7: Bulk-merge monthly price history for each fund (also updates priceNow to latest entry)
+      for (const [ticker, entries] of preview.vubFundPriceHistory ?? []) {
+        if (entries.length > 0) {
+          await bulkAddPriceHistory(portfolioId, ticker, entries);
         }
       }
 

@@ -12,6 +12,7 @@ export interface VUBParseResult {
   skippedZeroCount: number;
   fingerprints: Map<string, string>;
   fundPrices:   Map<string, number>;
+  fundPriceHistory: Map<string, { date: string; price: number }[]>;
   yearsPresent: Set<number>;
 }
 
@@ -69,6 +70,8 @@ function parseRows(jsonRows: Record<string, unknown>[]): VUBParseResult {
   const transactions: CreateTransactionPayload[] = [];
   const fingerprints = new Map<string, string>();
   const fundPrices   = new Map<string, number>();
+  const fundPriceHistory = new Map<string, { date: string; price: number }[]>();
+  const seenMonths   = new Map<string, Set<string>>();
   const yearsPresent = new Set<number>();
   let skippedZeroCount = 0;
 
@@ -96,6 +99,17 @@ function parseRows(jsonRows: Record<string, unknown>[]): VUBParseResult {
       fundPrices.set(ticker, price);
     }
 
+    // Track one price entry per (ticker, YYYY-MM) — first occurrence = latest date in that month
+    if (price > 0) {
+      const ym = date.substring(0, 7);
+      if (!seenMonths.has(ticker)) seenMonths.set(ticker, new Set());
+      if (!seenMonths.get(ticker)!.has(ym)) {
+        seenMonths.get(ticker)!.add(ym);
+        if (!fundPriceHistory.has(ticker)) fundPriceHistory.set(ticker, []);
+        fundPriceHistory.get(ticker)!.push({ date, price });
+      }
+    }
+
     const tx: CreateTransactionPayload = {
       ticker,
       transactionType,
@@ -113,7 +127,7 @@ function parseRows(jsonRows: Record<string, unknown>[]): VUBParseResult {
     transactions.push(tx);
   }
 
-  return { transactions, skippedZeroCount, fingerprints, fundPrices, yearsPresent };
+  return { transactions, skippedZeroCount, fingerprints, fundPrices, fundPriceHistory, yearsPresent };
 }
 
 export function tryParseVUBFile(file: File): Promise<VUBParseResult | null> {

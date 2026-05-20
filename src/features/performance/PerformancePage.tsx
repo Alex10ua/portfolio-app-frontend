@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { ArrowLeft, TrendingUp, DollarSign, BarChart2, Percent, ArrowUpDown } from 'lucide-react';
+import { TrendingUp, DollarSign, BarChart2, Percent, ArrowUpDown } from 'lucide-react';
 import { usePerformance } from '../../hooks/usePerformance';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -27,7 +27,6 @@ function formatPnl(value: number | null | undefined, pct?: number | null) {
 
 export default function PerformancePage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const navigate = useNavigate();
   const pid = portfolioId!;
 
   const [period, setPeriod] = useState<PerformancePeriod>('1Y');
@@ -45,30 +44,16 @@ export default function PerformancePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <button
-            onClick={() => navigate(`/${pid}`)}
-            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-2 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </button>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Performance & Returns</h1>
-        </div>
-      </div>
-
       {/* Period selector */}
-      <div className="flex gap-2">
+      <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1 gap-0.5">
         {PERIODS.map((p) => (
           <button
             key={p}
             onClick={() => setPeriod(p)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-colors ${
               period === p
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             {p}
@@ -77,8 +62,9 @@ export default function PerformancePage() {
       </div>
 
       {/* Portfolio value chart */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-        <h2 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Portfolio Value</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+        <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value</div>
+        <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">Historical performance</div>
         {chartData.length === 0 ? (
           <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-12">
             No price history available for this period.
@@ -137,46 +123,47 @@ export default function PerformancePage() {
               label="Total Invested"
               value={formatCurrency(data.totalInvested)}
               icon={DollarSign}
-              iconColor="bg-slate-500"
+              accent="#64748B"
             />
             <StatCard
               label="Current Value"
               value={formatCurrency(data.currentValue)}
               icon={TrendingUp}
+              accent="#4F46E5"
             />
             <StatCard
               label="Total Return"
               value={formatPnl(data.totalReturn, data.totalReturnPct)}
               icon={BarChart2}
-              iconColor={data.totalReturn >= 0 ? 'bg-green-500' : 'bg-red-500'}
+              accent={data.totalReturn >= 0 ? '#10B981' : '#EF4444'}
             />
             <StatCard
               label="XIRR (Annualized)"
               value={formatPercent(data.xirr)}
               icon={Percent}
-              iconColor={data.xirr >= 0 ? 'bg-indigo-500' : 'bg-red-500'}
+              accent={data.xirr >= 0 ? '#4F46E5' : '#EF4444'}
             />
           </div>
 
           {/* Secondary cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 px-6 py-5">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Unrealized P&L</p>
-              <p className={`mt-1 text-2xl font-semibold ${pnlColor(data.unrealizedPnL)}`}>
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Unrealized P&L</div>
+              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.unrealizedPnL)}`}>
                 {formatPnl(data.unrealizedPnL, data.unrealizedPnLPct)}
-              </p>
+              </div>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 px-6 py-5">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Realized P&L</p>
-              <p className={`mt-1 text-2xl font-semibold ${pnlColor(data.realizedPnL)}`}>
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Realized P&L</div>
+              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.realizedPnL)}`}>
                 {formatPnl(data.realizedPnL)}
-              </p>
+              </div>
             </div>
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 px-6 py-5">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Dividends</p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900 dark:text-white">
+            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Total Dividends</div>
+              <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-white">
                 {formatCurrency(data.totalDividends)}
-              </p>
+              </div>
             </div>
           </div>
         </>

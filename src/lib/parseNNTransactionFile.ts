@@ -33,6 +33,7 @@ export interface NNParseResult {
   skippedZeroCount: number;
   fingerprints: Map<string, string>;
   fundPrices: Map<string, number>;
+  fundPriceHistory: Map<string, { date: string; price: number }[]>;
   yearsPresent: Set<number>;
 }
 
@@ -72,6 +73,8 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
   const transactions: CreateTransactionPayload[] = [];
   const fingerprints = new Map<string, string>();
   const fundPrices = new Map<string, number>();
+  const fundPriceHistory = new Map<string, { date: string; price: number }[]>();
+  const seenMonths = new Map<string, Set<string>>();
   const yearsPresent = new Set<number>();
   let skippedZeroCount = 0;
 
@@ -102,6 +105,17 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
       fundPrices.set(ticker, pricePerUnit);
     }
 
+    // Track one price entry per (ticker, YYYY-MM) — first occurrence = latest date in that month
+    if (pricePerUnit > 0) {
+      const ym = date.substring(0, 7);
+      if (!seenMonths.has(ticker)) seenMonths.set(ticker, new Set());
+      if (!seenMonths.get(ticker)!.has(ym)) {
+        seenMonths.get(ticker)!.add(ym);
+        if (!fundPriceHistory.has(ticker)) fundPriceHistory.set(ticker, []);
+        fundPriceHistory.get(ticker)!.push({ date, price: pricePerUnit });
+      }
+    }
+
     const tx: CreateTransactionPayload = {
       ticker,
       transactionType,
@@ -119,7 +133,7 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
     transactions.push(tx);
   }
 
-  return { transactions, skippedZeroCount, fingerprints, fundPrices, yearsPresent };
+  return { transactions, skippedZeroCount, fingerprints, fundPrices, fundPriceHistory, yearsPresent };
 }
 
 async function validateXlsxSignature(file: File): Promise<boolean> {

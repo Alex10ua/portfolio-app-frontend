@@ -97,23 +97,18 @@ export default function TransactionsPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <div className="sm:flex sm:items-center mb-6">
-        <div className="sm:flex-auto">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Transactions</h1>
-          <p className="mt-1 text-sm text-slate-700 dark:text-slate-400">
-            {isLoading ? 'Loading…' : `${reversed.length} transaction${reversed.length !== 1 ? 's' : ''} in ${selectedYear}`}
-          </p>
+      <div className="flex items-center justify-between mb-5">
+        <div className="text-[13px] text-slate-500 dark:text-slate-400">
+          {isLoading ? 'Loading…' : `${reversed.length} transaction${reversed.length !== 1 ? 's' : ''} in ${selectedYear}`}
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16">
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
-            disabled={isLoading}
-            className={selectClass + ' min-w-[100px]'}
-          >
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+        <select
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+          disabled={isLoading}
+          className="rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 min-w-[90px]"
+        >
+          {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
       </div>
 
       {error && <ErrorAlert title="Error loading transactions" message={(error as Error).message} />}
@@ -126,46 +121,46 @@ export default function TransactionsPage() {
         <div className="flow-root">
           <div className="-mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black/5 dark:ring-slate-700 rounded-lg">
-                <table className="min-w-full divide-y divide-slate-300 dark:divide-slate-700">
-                  <thead className="bg-slate-50 dark:bg-slate-800">
-                    <tr>
+              <div className="overflow-hidden border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
                       {['Ticker', 'Qty', 'Price', 'Total', 'Comm.', 'Date', 'Type', ''].map((h) => (
-                        <th key={h} className={`py-3.5 px-3 text-${h === 'Ticker' || h === 'Date' || h === 'Type' || h === '' ? 'left' : 'right'} text-sm font-semibold text-slate-900 dark:text-slate-200 first:pl-6 last:pr-6`}>
+                        <th key={h} className={`py-3 px-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 ${h === 'Ticker' || h === 'Date' || h === 'Type' || h === '' ? 'text-left' : 'text-right'} first:pl-5 last:pr-5`}>
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 bg-white dark:bg-slate-800">
                     {isLoading ? (
                       <SkeletonRow cols={8} />
                     ) : (
                       reversed.map((t) => (
-                        <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                          <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm">
-                            <div className="flex items-center gap-3">
+                        <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                          <td className="whitespace-nowrap py-3.5 pl-5 pr-4 text-[13px]">
+                            <div className="flex items-center gap-2.5">
                               <StockLogo ticker={t.ticker} assetType={t.assetType} size="sm" />
-                              <span className="font-medium text-slate-900 dark:text-white">{t.ticker}</span>
+                              <span className="font-semibold text-slate-900 dark:text-white">{t.ticker}</span>
                             </div>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{t.quantity}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{formatCurrency(t.price, 2, t.currency)}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-slate-900 dark:text-white">{formatCurrency(t.totalAmount, 2, t.currency)}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-slate-500 dark:text-slate-400">{formatCurrency(t.commission, 2, t.currency)}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-slate-500 dark:text-slate-400">{formatDate(t.date)}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-right font-mono tabular-nums text-slate-500 dark:text-slate-400">{t.quantity}</td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-right font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatCurrency(t.price, 2, t.currency)}</td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-right font-mono tabular-nums font-semibold text-slate-900 dark:text-white">{formatCurrency(t.totalAmount, 2, t.currency)}</td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] text-right font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatCurrency(t.commission, 2, t.currency)}</td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatDate(t.date)}</td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px]">
                             <Badge type={t.transactionType} />
                           </td>
-                          <td className="whitespace-nowrap py-4 pl-3 pr-6 text-right">
-                            <div className="flex justify-end gap-1">
+                          <td className="whitespace-nowrap py-3.5 pl-4 pr-5 text-right">
+                            <div className="flex justify-end gap-1 opacity-40 hover:opacity-100 transition-opacity">
                               <button onClick={() => openEdit(t)}
-                                className="p-1.5 rounded-full text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700">
-                                <Edit2 className="h-4 w-4" />
+                                className="p-1.5 rounded text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                <Edit2 className="h-3.5 w-3.5" />
                               </button>
                               <button onClick={() => setDeleteTarget(t)}
-                                className="p-1.5 rounded-full text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700">
-                                <Trash2 className="h-4 w-4" />
+                                className="p-1.5 rounded text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </td>

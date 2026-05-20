@@ -3,11 +3,27 @@ import { getHoldings } from '../api/holdings';
 import { getFxRates } from '../api/fxRates';
 import type { Portfolio } from '../types/portfolio';
 
+export type AssetSegment = { label: string; weight: number; color: string };
+
 export type PortfolioValueItem = {
   portfolioId: number;
   name: string;
   value: number;
+  cost: number;
+  profit: number;
+  profitPct: number;
   currency: string;
+  assetCount: number;
+  allocation: AssetSegment[];
+};
+
+const ASSET_COLORS: Record<string, string> = {
+  STOCK:    '#3B82F6',
+  FUND:     '#8B5CF6',
+  CRYPTO:   '#F59E0B',
+  COIN:     '#14B8A6',
+  FIGURINE: '#EF4444',
+  CUSTOM:   '#94A3B8',
 };
 
 export function usePortfolioValues(portfolios: Portfolio[]) {
@@ -32,34 +48,51 @@ export function usePortfolioValues(portfolios: Portfolio[]) {
       holdings.map((h) => h.currency).filter((c): c is string => !!c)
     )];
     const isMulti = uniqueCurrencies.length > 1;
-    const displayCurrency = isMulti ? 'USD' : (uniqueCurrencies[0] ?? 'USD');
+    const displayCurrency = isMulti ? 'EUR' : (uniqueCurrencies[0] ?? 'EUR');
 
-    // Sum everything in EUR first
-    const eurValue = holdings.reduce((s, h) => {
-      const native = (h.currentShareValue ?? 0) * h.shareAmount;
-      return s + (h.fxRate && h.fxRate !== 0 ? native / h.fxRate : native);
-    }, 0);
+    const toEur = (native: number, fxRate?: number) =>
+      isMulti && fxRate && fxRate !== 0 ? native / fxRate : native;
 
-    // Convert EUR to displayCurrency (fxRate = units of currency per 1 EUR)
+    const eurValue = holdings.reduce((s, h) =>
+      s + toEur((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0);
+    const eurCost = holdings.reduce((s, h) =>
+      s + toEur((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0);
+    const eurProfit = eurValue - eurCost;
+
     const displayRate = fxRates[displayCurrency] ?? 1;
-    const value = eurValue * displayRate;
+    const value  = eurValue  * displayRate;
+    const cost   = eurCost   * displayRate;
+    const profit = eurProfit * displayRate;
 
-    return { portfolioId: p.portfolioId, name: p.portfolioName, value, currency: displayCurrency };
+    // Asset type allocation
+    const byType: Record<string, number> = {};
+    for (const h of holdings) {
+      const type = h.assetType ?? 'CUSTOM';
+      byType[type] = (byType[type] ?? 0) + toEur((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate);
+    }
+    const totalVal = Object.values(byType).reduce((s, v) => s + v, 0);
+    const allocation: AssetSegment[] = Object.entries(byType).map(([label, v]) => ({
+      label,
+      weight: totalVal > 0 ? (v / totalVal) * 100 : 0,
+      color: ASSET_COLORS[label] ?? '#94A3B8',
+    }));
+
+    return {
+      portfolioId: p.portfolioId,
+      name: p.portfolioName,
+      value, cost, profit,
+      profitPct: cost > 0 ? (profit / cost) * 100 : 0,
+      currency: displayCurrency,
+      assetCount: holdings.length,
+      allocation,
+    };
   });
 
-  // Grand total: all in EUR, then convert to single currency if all portfolios share one
   const allCurrencies = [...new Set(items.map((item) => item.currency))];
-  const totalCurrency = allCurrencies.length === 1 ? allCurrencies[0] : 'USD';
+  const totalCurrency = allCurrencies.length === 1 ? allCurrencies[0] : 'EUR';
 
-  const totalEur = portfolios.reduce((sum, _, i) => {
-    const holdings = results[i]?.data ?? [];
-    return sum + holdings.reduce((s, h) => {
-      const native = (h.currentShareValue ?? 0) * h.shareAmount;
-      return s + (h.fxRate && h.fxRate !== 0 ? native / h.fxRate : native);
-    }, 0);
-  }, 0);
-  const totalDisplayRate = fxRates[totalCurrency] ?? 1;
-  const total = totalEur * totalDisplayRate;
+  const total     = items.reduce((s, it) => s + it.value,  0);
+  const totalCost = items.reduce((s, it) => s + it.cost,   0);
 
-  return { items, total, totalCurrency, isLoading };
+  return { items, total, totalCost, totalCurrency, isLoading };
 }

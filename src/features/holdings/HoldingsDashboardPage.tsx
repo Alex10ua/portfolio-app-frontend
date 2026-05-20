@@ -13,10 +13,10 @@ import Dialog from '../../components/ui/Dialog';
 import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
 import HoldingDetailDialog from './HoldingDetailDialog';
+import PortfolioValueChart from './PortfolioValueChart';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { AssetType, Holding } from '../../types/holding';
-
 
 type SortOrder = 'asc' | 'desc';
 
@@ -27,24 +27,32 @@ interface Column {
 }
 
 const DEFAULT_COLUMNS: Column[] = [
-  { key: 'ticker',             label: 'Holding',       visible: true  },
-  { key: 'shareAmount',        label: 'Shares',         visible: true  },
-  { key: 'costPerShare',       label: 'Cost/Share',     visible: true  },
-  { key: 'currentShareValue',  label: 'Total Value',    visible: true  },
-  { key: 'dividend',           label: 'Dividends',      visible: true  },
-  { key: 'dividendYield',      label: 'Yield',          visible: true  },
-  { key: 'dividendYieldOnCost',label: 'Yield on Cost',  visible: true  },
-  { key: 'totalProfit',        label: 'Total Profit',   visible: true  },
-  { key: 'dailyChange',        label: 'Daily Change',   visible: true  },
+  { key: 'ticker',              label: 'Holding',      visible: true  },
+  { key: 'shareAmount',         label: 'Shares',       visible: true  },
+  { key: 'costPerShare',        label: 'Cost/Share',   visible: true  },
+  { key: 'currentShareValue',   label: 'Total Value',  visible: true  },
+  { key: 'dividend',            label: 'Dividends',    visible: true  },
+  { key: 'dividendYield',       label: 'Yield',        visible: true  },
+  { key: 'dividendYieldOnCost', label: 'Yield on Cost',visible: true  },
+  { key: 'totalProfit',         label: 'Total P&L',    visible: true  },
+  { key: 'dailyChange',         label: 'Daily Change', visible: true  },
 ];
 
-// Merge saved config with defaults so new columns are never lost
 function mergeColumns(saved: Column[]): Column[] {
   const savedMap = new Map(saved.map((c) => [c.key, c]));
   return DEFAULT_COLUMNS.map((def) =>
     savedMap.has(def.key) ? { ...def, visible: savedMap.get(def.key)!.visible } : def,
   );
 }
+
+const ASSET_CHIP_COLORS: Record<string, string> = {
+  STOCK:    'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
+  FUND:     'bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400',
+  CRYPTO:   'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400',
+  COIN:     'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400',
+  FIGURINE: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400',
+  CUSTOM:   'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
+};
 
 export default function HoldingsDashboardPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
@@ -56,12 +64,12 @@ export default function HoldingsDashboardPage() {
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
   const { data: cashBalance } = useCashBalance(pid);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
+  const [createOpen, setCreateOpen]   = useState(false);
+  const [importOpen, setImportOpen]   = useState(false);
+  const [configOpen, setConfigOpen]   = useState(false);
   const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
-  const [orderBy, setOrderBy] = useState<string>('ticker');
-  const [order, setOrder] = useState<SortOrder>('asc');
+  const [orderBy, setOrderBy]         = useState<string>('ticker');
+  const [order, setOrder]             = useState<SortOrder>('asc');
   const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>('ALL');
 
   const [columns, setColumns] = useState<Column[]>(() => {
@@ -81,12 +89,8 @@ export default function HoldingsDashboardPage() {
   }, [firstTradeYear]);
 
   const handleSort = (key: string) => {
-    if (orderBy === key) {
-      setOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setOrderBy(key);
-      setOrder('asc');
-    }
+    if (orderBy === key) setOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    else { setOrderBy(key); setOrder('asc'); }
   };
 
   const toggleColumn = (key: string) => {
@@ -94,7 +98,6 @@ export default function HoldingsDashboardPage() {
       const visibleCount = prev.filter((c) => c.visible).length;
       return prev.map((c) => {
         if (c.key !== key) return c;
-        // Prevent hiding the last visible column
         if (c.visible && visibleCount === 1) return c;
         return { ...c, visible: !c.visible };
       });
@@ -117,12 +120,9 @@ export default function HoldingsDashboardPage() {
   }, [holdings]);
 
   const sortedHoldings = useMemo(() => {
-    if (!filteredHoldings) return [];
     return [...filteredHoldings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
-
-      // Sort by the displayed value, not the raw stored value
       if (orderBy === 'currentShareValue') {
         valA = (a.currentShareValue ?? 0) * (a.shareAmount ?? 0);
         valB = (b.currentShareValue ?? 0) * (b.shareAmount ?? 0);
@@ -133,34 +133,26 @@ export default function HoldingsDashboardPage() {
         valA = (a as unknown as Record<string, unknown>)[orderBy] as number | string | null;
         valB = (b as unknown as Record<string, unknown>)[orderBy] as number | string | null;
       }
-
       if (valA == null && valB == null) return 0;
       if (valA == null) return order === 'asc' ? -1 : 1;
       if (valB == null) return order === 'asc' ? 1 : -1;
-      if (typeof valA === 'number' && typeof valB === 'number') {
+      if (typeof valA === 'number' && typeof valB === 'number')
         return order === 'asc' ? valA - valB : valB - valA;
-      }
-      const cmp = String(valA).localeCompare(String(valB));
-      return order === 'asc' ? cmp : -cmp;
+      return order === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
     });
   }, [filteredHoldings, orderBy, order]);
 
   const { baseCurrency, stats } = useMemo(() => {
     if (!holdings?.length) return { baseCurrency: '', stats: null };
-
-    const uniqueCurrencies = [...new Set(holdings.map(h => h.currency).filter((c): c is string => !!c))];
+    const uniqueCurrencies = [...new Set(holdings.map((h) => h.currency).filter((c): c is string => !!c))];
     const isMulti = uniqueCurrencies.length > 1;
     const base = isMulti ? 'EUR' : (uniqueCurrencies[0] ?? '');
-
-    const convertToBase = (value: number, fxRate?: number) =>
-      isMulti && fxRate && fxRate !== 0 ? value / fxRate : value;
-
-    const totalValue  = holdings.reduce((s, h) => s + convertToBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0);
-    const totalCost   = holdings.reduce((s, h) => s + convertToBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0);
-    const totalProfit = holdings.reduce((s, h) => s + convertToBase(h.totalProfit ?? 0, h.fxRate), 0);
-    const totalDivYield = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
-
-    return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield: totalDivYield } };
+    const toBase = (v: number, fx?: number) => isMulti && fx && fx !== 0 ? v / fx : v;
+    const totalValue  = holdings.reduce((s, h) => s + toBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0);
+    const totalCost   = holdings.reduce((s, h) => s + toBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0);
+    const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.fxRate), 0);
+    const avgYield    = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
+    return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield } };
   }, [holdings]);
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
@@ -170,56 +162,61 @@ export default function HoldingsDashboardPage() {
       case 'ticker':
         return (
           <div
-            className="flex items-center gap-3 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+            className="flex items-center gap-3 cursor-pointer group/ticker"
             onClick={() => setDetailHolding(holding)}
           >
             <StockLogo ticker={holding.ticker} name={holding.name} assetType={holding.assetType} />
             <div>
-              <div className="font-medium text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400">{holding.ticker}</div>
+              <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover/ticker:text-indigo-600 dark:group-hover/ticker:text-indigo-400 transition-colors">
+                {holding.ticker}
+              </div>
               {holding.name && holding.assetType === 'CUSTOM' && (
-                <div className="text-xs text-slate-400 dark:text-slate-500">{holding.name}</div>
+                <div className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px]">{holding.name}</div>
               )}
             </div>
           </div>
         );
+      case 'shareAmount':
+        return <span className="font-mono tabular-nums">{holding.shareAmount < 1 ? holding.shareAmount.toFixed(4) : holding.shareAmount}</span>;
       case 'costPerShare':
-        return formatCurrency(holding.costPerShare, undefined, holding.currency);
+        return <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatCurrency(holding.costPerShare, undefined, holding.currency)}</span>;
       case 'currentShareValue': {
         const total = (holding.currentShareValue ?? 0) * holding.shareAmount;
         return (
           <div>
-            <div className="font-medium text-slate-900 dark:text-slate-100">{formatCurrency(total, undefined, holding.currency)}</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Price: {formatCurrency(holding.currentShareValue, undefined, holding.currency)}</div>
+            <div className="font-semibold tabular-nums">{formatCurrency(total, undefined, holding.currency)}</div>
+            <div className="text-[11px] text-slate-400 tabular-nums">{formatCurrency(holding.currentShareValue, undefined, holding.currency)}/sh</div>
           </div>
         );
       }
       case 'dividend':
-        return formatCurrency((holding.dividend ?? 0) * holding.shareAmount, undefined, holding.currency);
+        return <span className="font-mono tabular-nums">{formatCurrency((holding.dividend ?? 0) * holding.shareAmount, undefined, holding.currency)}</span>;
       case 'dividendYield':
         return (
-          <span className="inline-flex items-center rounded-md bg-green-50 dark:bg-green-900/30 px-2 py-1 text-xs font-medium text-green-700 dark:text-green-400 ring-1 ring-inset ring-green-600/20 dark:ring-green-500/20">
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 tabular-nums">
             {formatPercent(holding.dividendYield)}
           </span>
         );
       case 'dividendYieldOnCost':
-        return formatPercent(holding.dividendYieldOnCost);
+        return <span className="text-slate-500 dark:text-slate-400 tabular-nums">{formatPercent(holding.dividendYieldOnCost)}</span>;
       case 'totalProfit': {
         const profit = holding.totalProfit;
         const pct = holding.totalProfitPercentage;
-        const isPos = (profit ?? 0) >= 0;
+        const pos = (profit ?? 0) >= 0;
         return (
-          <div className={isPos ? 'text-green-600' : 'text-red-600'}>
-            <span className="font-medium">{formatCurrency(profit, undefined, holding.currency)}</span>
-            <span className="ml-1 text-xs">({formatPercent(pct)})</span>
+          <div className={pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+            <div className="font-semibold tabular-nums">{formatCurrency(profit, undefined, holding.currency)}</div>
+            <div className="text-[11px] tabular-nums opacity-85">{formatPercent(pct)}</div>
           </div>
         );
       }
       case 'dailyChange': {
         const change = holding.dailyChange;
-        return <span className={(change ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(change, undefined, holding.currency)}</span>;
+        const pos = (change ?? 0) >= 0;
+        return <span className={`font-semibold tabular-nums ${pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{formatCurrency(change, undefined, holding.currency)}</span>;
       }
       default:
-        return String((holding as unknown as Record<string, unknown>)[col.key] ?? 'N/A');
+        return String((holding as unknown as Record<string, unknown>)[col.key] ?? '—');
     }
   };
 
@@ -227,99 +224,108 @@ export default function HoldingsDashboardPage() {
   if (error) return <ErrorAlert title="Error loading holdings" message={(error as Error).message} />;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <button onClick={() => navigate('/')}
-            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-2 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Portfolios
-          </button>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Portfolio Holdings</h1>
-        </div>
-
+    <div className="max-w-7xl mx-auto space-y-5">
+      {/* Page actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1 text-[13px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors self-start"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          All Portfolios
+        </button>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setConfigOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
-            <Settings className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => setConfigOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Settings className="h-3.5 w-3.5 text-slate-400" />
             Columns
           </button>
-          <button onClick={() => setImportOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700">
-            <Upload className="h-4 w-4 text-slate-400" />
+          <button
+            onClick={() => setImportOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Upload className="h-3.5 w-3.5 text-slate-400" />
             Import
           </button>
-          <button onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
-            <Plus className="h-4 w-4" />
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white hover:bg-primary-hover transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
             New Transaction
           </button>
         </div>
       </div>
 
-      {/* Asset type filter chips */}
-      {holdings && holdings.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {(['ALL', ...Object.keys(assetFilterCounts)] as (AssetType | 'ALL')[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setAssetFilter(type)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                assetFilter === type
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
-            >
-              {type}
-              {type !== 'ALL' && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs ${
-                  assetFilter === type ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'
-                }`}>
-                  {assetFilterCounts[type]}
-                </span>
-              )}
-              {type === 'ALL' && (
-                <span className={`rounded-full px-1.5 py-0.5 text-xs ${
-                  assetFilter === 'ALL' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'
-                }`}>
-                  {holdings.length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Summary stats */}
+      {/* KPI stat cards */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalValue, undefined, baseCurrency)} icon={TrendingUp} />
-          <StatCard label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`} value={formatCurrency(stats.totalCost, undefined, baseCurrency)} icon={DollarSign} iconColor="bg-slate-500" />
+          <StatCard
+            label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
+            value={formatCurrency(stats.totalValue, undefined, baseCurrency)}
+            icon={TrendingUp}
+            accent="#4F46E5"
+          />
+          <StatCard
+            label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`}
+            value={formatCurrency(stats.totalCost, undefined, baseCurrency)}
+            icon={DollarSign}
+            accent="#14B8A6"
+          />
           <StatCard
             label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
             value={formatCurrency(stats.totalProfit, undefined, baseCurrency)}
             icon={BarChart2}
-            iconColor={stats.totalProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}
+            accent={stats.totalProfit >= 0 ? '#10B981' : '#EF4444'}
           />
-          <StatCard label="Avg Yield" value={formatPercent(stats.avgYield)} icon={Percent} iconColor="bg-purple-500" />
+          <StatCard
+            label="Avg Yield"
+            value={formatPercent(stats.avgYield)}
+            icon={Percent}
+            accent="#8B5CF6"
+          />
         </div>
       )}
 
       {/* Cash position */}
       {cashBalance && Object.keys(cashBalance).length > 0 && (
-        <div>
-          <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Cash Position</h2>
-          <div className="flex flex-wrap gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Cash Position</div>
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              {Object.keys(cashBalance).length} {Object.keys(cashBalance).length === 1 ? 'currency' : 'currencies'}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-5">
             {Object.entries(cashBalance).map(([currency, amount]) => (
-              <StatCard
-                key={currency}
-                label={`Cash (${currency})`}
-                value={`${amount < 0 ? '-' : ''}${currency} ${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                icon={Banknote}
-                iconColor={amount >= 0 ? 'bg-teal-500' : 'bg-red-500'}
-              />
+              <div key={currency} className="flex items-center gap-3 min-w-[140px]">
+                <div
+                  className="flex items-center justify-center rounded-lg flex-shrink-0"
+                  style={{ width: 32, height: 32, background: amount >= 0 ? '#14B8A61A' : '#EF44441A' }}
+                >
+                  <Banknote className="h-4 w-4" style={{ color: amount >= 0 ? '#14B8A6' : '#EF4444' }} />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">{currency}</div>
+                  <div className={`text-[16px] font-semibold tabular-nums ${amount < 0 ? 'text-red-500' : 'text-slate-900 dark:text-white'}`}>
+                    {amount < 0 ? '-' : ''}{currency} {Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Portfolio value chart */}
+      {holdings && holdings.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+          <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value Over Time</div>
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All currencies converted to base</div>
+          <div className="h-56">
+            <PortfolioValueChart portfolioId={pid} />
           </div>
         </div>
       )}
@@ -329,37 +335,69 @@ export default function HoldingsDashboardPage() {
         <EmptyState
           icon={LayoutGrid}
           title="No holdings yet"
-          description="Create a transaction to add your first holding to this portfolio."
+          description="Add a transaction to get started."
         />
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          {/* Table header with filter chips */}
+          <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Holdings</div>
+              <div className="text-[12px] text-slate-500 dark:text-slate-400">Sorted by {orderBy}</div>
+            </div>
+            {holdings && holdings.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {(['ALL', ...Object.keys(assetFilterCounts)] as (AssetType | 'ALL')[]).map((type) => {
+                  const isActive = assetFilter === type;
+                  const chipColor = type !== 'ALL' ? ASSET_CHIP_COLORS[type] ?? ASSET_CHIP_COLORS.CUSTOM : '';
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => setAssetFilter(type)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
+                        isActive
+                          ? 'bg-primary text-white'
+                          : `${chipColor || 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'} hover:opacity-80`
+                      }`}
+                    >
+                      {type}
+                      <span className={`rounded-full px-1.5 py-px text-[10px] ${isActive ? 'bg-white/20' : 'bg-black/10 dark:bg-white/10'}`}>
+                        {type === 'ALL' ? holdings.length : assetFilterCounts[type]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-              <thead className="bg-slate-50 dark:bg-slate-800">
-                <tr>
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-900/50">
                   {visibleColumns.map((col) => (
                     <th
                       key={col.key}
-                      className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                       onClick={() => handleSort(col.key)}
+                      className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:hover:text-slate-200 transition-colors whitespace-nowrap border-b border-slate-200 dark:border-slate-700"
                     >
-                      <div className="flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1">
                         {col.label}
                         {orderBy === col.key && (
                           order === 'asc'
                             ? <ArrowUp className="h-3 w-3 text-indigo-500" />
                             : <ArrowDown className="h-3 w-3 text-indigo-500" />
                         )}
-                      </div>
+                      </span>
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {sortedHoldings.map((holding) => (
-                  <tr key={holding.ticker} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <tr key={holding.ticker} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                     {visibleColumns.map((col) => (
-                      <td key={col.key} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-300">
+                      <td key={col.key} className="px-4 py-3.5 text-[13px] text-slate-700 dark:text-slate-300 whitespace-nowrap">
                         {renderCell(holding, col)}
                       </td>
                     ))}
@@ -371,39 +409,23 @@ export default function HoldingsDashboardPage() {
         </div>
       )}
 
-      {/* Create transaction dialog */}
+      {/* Dialogs */}
       <CreateTransactionDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onSubmit={async (payload) => {
-          await createTransaction(payload);
-          setCreateOpen(false);
-        }}
+        onSubmit={async (payload) => { await createTransaction(payload); setCreateOpen(false); }}
         isPending={creating}
         portfolioId={pid}
       />
-
-      {/* Import modal */}
       <ImportTransactionsModal open={importOpen} onClose={() => setImportOpen(false)} portfolioId={pid} />
+      <HoldingDetailDialog holding={detailHolding} open={detailHolding !== null} onClose={() => setDetailHolding(null)} portfolioId={pid} />
 
-      {/* Holding detail dialog */}
-      <HoldingDetailDialog
-        holding={detailHolding}
-        open={detailHolding !== null}
-        onClose={() => setDetailHolding(null)}
-        portfolioId={pid}
-      />
-
-      {/* Column config dialog */}
       <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">
         <div className="space-y-2">
           {columns.map((col) => {
             const isLastVisible = col.visible && visibleColumns.length === 1;
             return (
-              <label
-                key={col.key}
-                className={`flex items-center gap-3 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}
-              >
+              <label key={col.key} className={`flex items-center gap-3 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}>
                 <input
                   type="checkbox"
                   checked={col.visible}
@@ -418,7 +440,7 @@ export default function HoldingsDashboardPage() {
         </div>
         <div className="flex justify-end mt-4">
           <button onClick={() => setConfigOpen(false)}
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500">
+            className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover">
             Done
           </button>
         </div>

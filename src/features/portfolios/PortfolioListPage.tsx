@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Plus, FolderOpen } from 'lucide-react';
+import { Plus, ChevronRight, TrendingUp, FolderOpen } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { usePortfolios, useCreatePortfolio } from '../../hooks/usePortfolios';
 import { usePortfolioValues } from '../../hooks/usePortfolioValues';
-import { formatCurrency } from '../../lib/formatters';
+import { formatCurrency, formatPercent } from '../../lib/formatters';
 import Dialog from '../../components/ui/Dialog';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -18,76 +18,17 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-const PALETTE = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+const PALETTE = [
+  '#4F46E5', '#14B8A6', '#F59E0B', '#8B5CF6',
+  '#EF4444', '#10B981', '#3B82F6', '#EC4899',
+];
 
-type ChartItem = { portfolioId: number; name: string; value: number; currency: string };
-
-function PortfolioValueChart({ items }: { items: ChartItem[] }) {
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
-  const [tooltip, setTooltip] = useState<{ item: ChartItem; x: number; y: number } | null>(null);
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  const total = items.reduce((s, item) => s + item.value, 0);
-  if (total === 0) return null;
-
+function AllocBar({ segments }: { segments: { weight: number; color: string; label: string }[] }) {
   return (
-    <div className="space-y-4">
-      {/* Segmented bar — outer wrapper is relative so tooltip can escape overflow-hidden */}
-      <div className="relative" onMouseLeave={() => setTooltip(null)}>
-        <div className="flex w-full rounded-full overflow-hidden" style={{ height: 24 }}>
-          {items.map((item, i) => {
-            const pct = (item.value / total) * 100;
-            return (
-              <div
-                key={item.portfolioId}
-                style={{ width: `${pct}%`, background: PALETTE[i % PALETTE.length] }}
-                className="h-full transition-opacity hover:opacity-80 cursor-pointer"
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const parentRect = e.currentTarget.parentElement!.parentElement!.getBoundingClientRect();
-                  setTooltip({ item, x: rect.left - parentRect.left + rect.width / 2, y: -8 });
-                }}
-              />
-            );
-          })}
-        </div>
-
-        {/* Tooltip rendered outside overflow-hidden */}
-        {tooltip && (
-          <div
-            className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-lg px-3 py-2 text-xs shadow-lg"
-            style={{
-              left: tooltip.x,
-              top: tooltip.y,
-              background: isDark ? '#1e293b' : '#fff',
-              border: `1px solid ${isDark ? '#334155' : '#e2e8f0'}`,
-              color: isDark ? '#f1f5f9' : '#0f172a',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <p className="font-semibold">{tooltip.item.name}</p>
-            <p className="text-green-500">{formatCurrency(tooltip.item.value, undefined, tooltip.item.currency)}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {items.map((item, i) => (
-          <div key={item.portfolioId} className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
-            <span className="text-xs text-slate-500 dark:text-slate-400">{item.name}</span>
-            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{formatCurrency(item.value, 0, item.currency)}</span>
-          </div>
-        ))}
-      </div>
+    <div className="flex w-full rounded-full overflow-hidden" style={{ height: 6 }}>
+      {segments.map((s, i) => (
+        <div key={i} style={{ flex: s.weight, background: s.color }} title={`${s.label} ${s.weight.toFixed(1)}%`} />
+      ))}
     </div>
   );
 }
@@ -96,7 +37,7 @@ export default function PortfolioListPage() {
   const [open, setOpen] = useState(false);
   const { data: portfolios = [], isLoading, error } = usePortfolios();
   const { mutateAsync: createPortfolio, isPending } = useCreatePortfolio();
-  const { items, total, totalCurrency, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
+  const { items, total, totalCost, totalCurrency, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -112,111 +53,224 @@ export default function PortfolioListPage() {
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading portfolios" message={(error as Error).message} />;
 
-  return (
-    <div className="max-w-7xl mx-auto">
-      <div className="md:flex md:items-center md:justify-between mb-8">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">My Portfolios</h2>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-4 md:mt-0 inline-flex items-center gap-x-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-        >
-          <Plus className="-ml-0.5 h-5 w-5" />
-          Create New Portfolio
-        </button>
-      </div>
+  const totalProfit = total - totalCost;
+  const totalProfitPct = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
 
-      {portfolios.length > 0 && (isLoadingValues || total > 0) && (
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Total Value
-            </h2>
-            {!isLoadingValues && (
-              <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(total, undefined, totalCurrency)}
-              </span>
-            )}
-          </div>
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Aggregate summary card */}
+      {portfolios.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
           {isLoadingValues ? (
-            <div className="h-[180px] animate-pulse bg-slate-100 dark:bg-slate-800 rounded" />
+            <div className="animate-pulse space-y-3">
+              <div className="h-8 w-48 bg-slate-100 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-64 bg-slate-100 dark:bg-slate-700 rounded" />
+              <div className="h-3 w-full bg-slate-100 dark:bg-slate-700 rounded-full mt-4" />
+            </div>
           ) : (
-            <PortfolioValueChart items={items} />
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-start gap-6 mb-6">
+                {/* Net worth */}
+                <div className="flex-1">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
+                    Net Worth · All Portfolios
+                  </div>
+                  <div className="text-[32px] font-bold text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
+                    {formatCurrency(total, undefined, totalCurrency)}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`flex items-center gap-1 text-[13px] font-semibold tabular-nums ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, undefined, totalCurrency)}
+                    </span>
+                    <span className={`text-[13px] font-semibold tabular-nums ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                      ({totalProfit >= 0 ? '+' : ''}{formatPercent(totalProfitPct)})
+                    </span>
+                    <span className="text-[12px] text-slate-500 dark:text-slate-400">total unrealized P&amp;L</span>
+                  </div>
+                </div>
+
+                <div className="hidden sm:block w-px self-stretch bg-slate-200 dark:bg-slate-700" />
+
+                {/* Cost basis */}
+                <div className="sm:w-48">
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">Cost Basis</div>
+                  <div className="text-[20px] font-semibold text-slate-900 dark:text-white tabular-nums">
+                    {formatCurrency(totalCost, undefined, totalCurrency)}
+                  </div>
+                  <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">across {portfolios.length} portfolios</div>
+                </div>
+              </div>
+
+              {/* Allocation bar — one segment per portfolio */}
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+                Allocation by Portfolio
+              </div>
+              <div className="flex w-full rounded-full overflow-hidden" style={{ height: 10 }}>
+                {items.map((item, i) => {
+                  const pct = total > 0 ? (item.value / total) * 100 : 0;
+                  return (
+                    <div
+                      key={item.portfolioId}
+                      style={{ flex: pct, background: PALETTE[i % PALETTE.length] }}
+                      title={`${item.name}: ${pct.toFixed(1)}%`}
+                      className="transition-opacity hover:opacity-80"
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+                {items.map((item, i) => {
+                  const pct = total > 0 ? (item.value / total) * 100 : 0;
+                  return (
+                    <div key={item.portfolioId} className="flex items-center gap-1.5 text-[12px]">
+                      <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{item.name}</span>
+                      <span className="text-slate-500 dark:text-slate-400 tabular-nums">{pct.toFixed(1)}%</span>
+                      <span className="text-slate-400 dark:text-slate-500 tabular-nums">· {formatCurrency(item.value, 0, item.currency)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}
 
+      {/* Portfolio list header */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="text-[14px] font-semibold text-slate-900 dark:text-white">
+          {portfolios.length > 0 ? 'Your portfolios' : ''}
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white hover:bg-primary-hover transition-colors shadow-sm"
+        >
+          <Plus className="h-4 w-4" />
+          New Portfolio
+        </button>
+      </div>
+
       {portfolios.length === 0 ? (
-        <EmptyState
-          icon={FolderOpen}
-          title="No portfolios yet"
-          description="Create your first portfolio to get started."
-        />
+        <EmptyState icon={FolderOpen} title="No portfolios yet" description="Create your first portfolio to get started." />
       ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {portfolios.map((portfolio) => (
-            <div
-              key={portfolio.portfolioId}
-              className="col-span-1 divide-y divide-slate-200 dark:divide-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-shadow border border-slate-100 dark:border-slate-800"
-            >
-              <div className="flex w-full items-center justify-between space-x-6 p-6">
-                <div className="flex-1 truncate">
-                  <h3 className="truncate text-lg font-medium text-slate-900 dark:text-white">
-                    {portfolio.portfolioName}
-                  </h3>
-                  <p className="mt-1 truncate text-sm text-slate-500">
-                    {portfolio.description || 'No description provided'}
-                  </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {portfolios.map((portfolio, idx) => {
+            const color = PALETTE[idx % PALETTE.length];
+            const letter = portfolio.portfolioName.charAt(0).toUpperCase();
+            const item = items.find((it) => it.portfolioId === portfolio.portfolioId);
+
+            return (
+              <Link
+                key={portfolio.portfolioId}
+                to={`/${portfolio.portfolioId}`}
+                className="group bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all"
+              >
+                {/* Header row */}
+                <div className="flex items-center gap-3 mb-5">
+                  <span
+                    className="inline-flex items-center justify-center rounded-full font-semibold text-white flex-shrink-0 text-sm"
+                    style={{ width: 36, height: 36, background: color }}
+                  >
+                    {letter}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-semibold text-slate-900 dark:text-white truncate">
+                      {portfolio.portfolioName}
+                    </div>
+                    {item && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {item.assetCount} assets · {item.currency}
+                      </div>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
                 </div>
-                <div className="h-10 w-10 flex-shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                  {portfolio.portfolioName.charAt(0).toUpperCase()}
-                </div>
-              </div>
-              <div>
-                <Link
-                  to={`/${portfolio.portfolioId}`}
-                  className="relative inline-flex w-full items-center justify-center gap-x-3 rounded-b-lg border border-transparent py-4 text-sm font-semibold text-slate-900 dark:text-slate-200 hover:text-indigo-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  View Dashboard
-                  <ArrowRight className="h-4 w-4 text-slate-400" />
-                </Link>
-              </div>
-            </div>
-          ))}
+
+                {isLoadingValues || !item ? (
+                  <div className="space-y-2 animate-pulse">
+                    <div className="h-6 w-32 bg-slate-100 dark:bg-slate-700 rounded" />
+                    <div className="h-4 w-24 bg-slate-100 dark:bg-slate-700 rounded" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Value */}
+                    <div className="mb-4">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Total Value</div>
+                      <div className="text-[20px] font-semibold text-slate-900 dark:text-white tabular-nums">
+                        {formatCurrency(item.value, undefined, item.currency)}
+                      </div>
+                    </div>
+
+                    {/* P&L */}
+                    <div className="flex gap-6 mb-4">
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Cost Basis</div>
+                        <div className="text-[13px] font-medium text-slate-700 dark:text-slate-300 tabular-nums">
+                          {formatCurrency(item.cost, undefined, item.currency)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">P&amp;L</div>
+                        <div className={`text-[13px] font-semibold tabular-nums ${item.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                          {item.profit >= 0 ? '+' : ''}{formatCurrency(item.profit, undefined, item.currency)}
+                          {' '}
+                          <span className="font-medium opacity-85">({item.profit >= 0 ? '+' : ''}{formatPercent(item.profitPct)})</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Allocation bar */}
+                    {item.allocation.length > 0 && (
+                      <>
+                        <AllocBar segments={item.allocation} />
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                          {item.allocation.map((a) => (
+                            <div key={a.label} className="flex items-center gap-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+                              <span className="inline-block w-1.5 h-1.5 rounded-sm" style={{ background: a.color }} />
+                              {a.label} {a.weight.toFixed(0)}%
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </Link>
+            );
+          })}
         </div>
       )}
 
+      {/* Create portfolio dialog */}
       <Dialog open={open} onClose={() => { reset(); setOpen(false); }} title="Create New Portfolio">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <p className="text-sm text-slate-500">Enter the details to create a new portfolio.</p>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Portfolio Name</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Portfolio Name</label>
             <input
               autoFocus
               {...register('portfolioName')}
-              className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="My Portfolio"
+              className="block w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="e.g. Global Growth"
             />
             {errors.portfolioName && <p className="mt-1 text-xs text-red-600">{errors.portfolioName.message}</p>}
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
             <input
               {...register('description')}
-              className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="block w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               placeholder="Optional"
             />
           </div>
-
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-2 pt-1">
             <button type="button" onClick={() => { reset(); setOpen(false); }}
-              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
               Cancel
             </button>
             <button type="submit" disabled={isPending}
-              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+              className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50 transition-colors">
               {isPending ? 'Creating…' : 'Create Portfolio'}
             </button>
           </div>

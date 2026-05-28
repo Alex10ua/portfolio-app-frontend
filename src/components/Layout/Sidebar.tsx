@@ -1,7 +1,7 @@
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ReceiptText, DollarSign, CalendarDays,
-  PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X,
+  PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X, Network,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -48,6 +48,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     { name: 'Dividend Calendar',  href: `/${portfolioId}/dividend-calendar`,      icon: CalendarDays,    exact: false },
     { name: 'Diversification',    href: `/${portfolioId}/diversification`,        icon: PieChart,        exact: false },
     { name: 'Performance',        href: `/${portfolioId}/performance`,            icon: TrendingUp,      exact: false },
+    { name: 'Tag Mind Map',       href: `/${portfolioId}/tags`,                   icon: Network,         exact: false },
   ];
 
   const SidebarContent = () => (

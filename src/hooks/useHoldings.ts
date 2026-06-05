@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getHoldings, getFirstTradeYear } from '../api/holdings';
+import { getHoldings, getFirstTradeYear, getPortfolioHistory } from '../api/holdings';
 import { createTransaction, getCashBalance } from '../api/transactions';
 import type { CreateTransactionPayload } from '../types/transaction';
 
@@ -25,6 +25,15 @@ export function useCashBalance(portfolioId: string) {
     queryKey: ['cashBalance', portfolioId],
     queryFn: () => getCashBalance(portfolioId),
     enabled: Boolean(portfolioId),
+  });
+}
+
+export function usePortfolioHistory(portfolioId: string) {
+  return useQuery({
+    queryKey: ['portfolioHistory', portfolioId],
+    queryFn: () => getPortfolioHistory(portfolioId),
+    enabled: Boolean(portfolioId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 

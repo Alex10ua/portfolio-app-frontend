@@ -10,3 +10,8 @@ export async function getFirstTradeYear(portfolioId: string): Promise<number | n
   const response = await apiClient.get<{ firstTradeYear?: number }>(`${portfolioId}/firstTradeYear`);
   return response.data.firstTradeYear ?? null;
 }
+
+export async function getPortfolioHistory(portfolioId: string): Promise<{ date: string; portfolioValue: number }[]> {
+  const response = await apiClient.get<{ date: string; portfolioValue: number }[]>(`${portfolioId}/portfolio-history`);
+  return response.data;
+}

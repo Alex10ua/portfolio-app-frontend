@@ -82,60 +82,56 @@ export default function DividendsPage() {
     .sort((a, b) => b.amount - a.amount);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      {/* Projections */}
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Stock Dividends Projection</h2>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard label="Yearly Projection"  value={`$${yearly.toFixed(2)}`}   icon={TrendingUp} />
-          <StatCard label="Monthly Average"    value={`$${monthly.toFixed(2)}`}  icon={CalendarDays} iconColor="bg-purple-500" />
-          <StatCard label="Daily Average"      value={`$${daily.toFixed(2)}`}    icon={BarChart2}    iconColor="bg-emerald-500" />
-          <StatCard label="Hourly Average"     value={`$${hourly.toFixed(4)}`}   icon={Clock}        iconColor="bg-amber-500" />
-        </div>
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* KPI projection row */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard label="Yearly Projection" value={`$${yearly.toFixed(2)}`}   icon={TrendingUp}  accent="#4F46E5" />
+        <StatCard label="Monthly Average"   value={`$${monthly.toFixed(2)}`}  icon={CalendarDays} accent="#14B8A6" sub="Projected" />
+        <StatCard label="Daily Average"     value={`$${daily.toFixed(2)}`}    icon={BarChart2}    accent="#10B981" sub="Calendar daily" />
+        <StatCard label="Hourly Average"    value={`$${hourly.toFixed(4)}`}   icon={Clock}        accent="#8B5CF6" sub="While you sleep" />
       </div>
 
-      <hr className="border-slate-200 dark:border-slate-800" />
-
       {/* Charts */}
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Dividends Analysis</h2>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {byYear.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Dividends By Year</h3>
-              <div className="h-72">
-                <AppBarChart data={byYear} xKey="year" color="#6366f1" />
-              </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {byYear.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Year</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All-time history</div>
+            <div className="h-64">
+              <AppBarChart data={byYear} xKey="year" color="#4F46E5" />
             </div>
-          )}
+          </div>
+        )}
 
-          {byQuarter.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Dividends By Quarter</h3>
-              <div className="h-72">
-                <AppBarChart data={byQuarter} xKey="yearQuarter" color="#8b5cf6" />
-              </div>
+        {byQuarter.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Quarter</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All quarters</div>
+            <div className="h-64">
+              <AppBarChart data={byQuarter} xKey="yearQuarter" color="#14B8A6" />
             </div>
-          )}
+          </div>
+        )}
 
-          {byMonth.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6 lg:col-span-2">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">Dividends By Month</h3>
-              <div className="h-72">
-                <AppBarChart data={byMonth} xKey="month" color="#ec4899" />
-              </div>
+        {byMonth.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm lg:col-span-2">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Month</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">Monthly breakdown</div>
+            <div className="h-64">
+              <AppBarChart data={byMonth} xKey="month" color="#4F46E5" />
             </div>
-          )}
+          </div>
+        )}
 
-          {byStock.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6 lg:col-span-2">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-white mb-4">All Time Dividends By Stock</h3>
-              <div className="h-80">
-                <AppBarChart data={byStock} xKey="ticker" color="#3b82f6" />
-              </div>
+        {byStock.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm lg:col-span-2">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker</div>
+            <div className="h-72">
+              <AppBarChart data={byStock} xKey="ticker" color="#3B82F6" />
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

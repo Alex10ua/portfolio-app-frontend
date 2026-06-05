@@ -29,3 +29,15 @@ export async function updateCustomAssetPrice(portfolioId: string, ticker: string
   const response = await apiClient.put<CustomAsset>(`${portfolioId}/custom-assets/${ticker}/price`, { price });
   return response.data;
 }
+
+export async function bulkAddPriceHistory(
+  portfolioId: string,
+  ticker: string,
+  entries: { date: string; price: number }[],
+): Promise<CustomAsset> {
+  const response = await apiClient.post<CustomAsset>(
+    `${portfolioId}/custom-assets/${ticker}/price-history/bulk`,
+    entries,
+  );
+  return response.data;
+}

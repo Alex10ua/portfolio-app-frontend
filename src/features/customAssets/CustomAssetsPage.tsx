@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, RefreshCw, Clock } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Plus, Trash2, RefreshCw, Clock } from 'lucide-react';
 import {
   useCustomAssets,
   useCreateCustomAsset,
@@ -17,7 +17,6 @@ import type { CustomAsset } from '../../types/customAsset';
 
 export default function CustomAssetsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const navigate = useNavigate();
   const pid = portfolioId!;
 
   const { data: assets, isLoading, error } = useCustomAssets(pid);
@@ -30,26 +29,15 @@ export default function CustomAssetsPage() {
   const [priceTarget, setPriceTarget] = useState<CustomAsset | null>(null);
   const [newPrice, setNewPrice] = useState('');
 
+
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading custom assets" message={(error as Error).message} />;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <button onClick={() => navigate(`/${pid}`)}
-            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-2 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Holdings
-          </button>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Custom Assets</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage your custom asset definitions (coins, figures, collectibles, etc.)
-          </p>
-        </div>
+      <div className="flex items-center justify-end">
         <button onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-primary-hover transition-colors">
           <Plus className="h-4 w-4" />
           New Custom Asset
         </button>
@@ -66,7 +54,7 @@ export default function CustomAssetsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => (
             <div key={asset.ticker}
-              className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-5 space-y-3">
+              className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-semibold text-slate-900 dark:text-white truncate">{asset.name}</p>
@@ -106,7 +94,7 @@ export default function CustomAssetsPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-700">
                 <button
                   onClick={() => {
                     setPriceTarget(asset);

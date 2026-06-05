@@ -21,21 +21,16 @@ function toTitleCase(s: string): string {
 }
 
 function heatmapColor(intensity: number, isDark: boolean): { background: string; border: string } {
+  const alpha = 0.08 + intensity * 0.82;
   if (isDark) {
-    // Dark theme: low = deep emerald, high = bright emerald — visible against slate-900
-    const lightness = 18 + intensity * 37;
-    const saturation = 40 + intensity * 20;
     return {
-      background: `hsl(142, ${saturation}%, ${lightness}%)`,
-      border: `hsl(142, ${saturation}%, ${lightness + 8}%)`,
+      background: `rgba(79, 70, 229, ${alpha})`,
+      border: `rgba(99, 90, 255, ${Math.min(alpha + 0.15, 1)})`,
     };
   } else {
-    // Light theme: low = pale green, high = rich dark green — visible against white
-    const lightness = 82 - intensity * 52;
-    const saturation = 45 + intensity * 20;
     return {
-      background: `hsl(142, ${saturation}%, ${lightness}%)`,
-      border: `hsl(142, ${saturation}%, ${lightness - 10}%)`,
+      background: `rgba(79, 70, 229, ${alpha})`,
+      border: `rgba(67, 56, 202, ${Math.min(alpha + 0.1, 1)})`,
     };
   }
 }
@@ -87,22 +82,21 @@ export default function DividendCalendarPage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">Dividend Calendar</h1>
-        {annualTotal > 0 && (
-          <div className="text-right shrink-0">
-            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Annual Total</p>
-            <p className="text-xl font-bold text-green-600 dark:text-green-400">${annualTotal.toFixed(2)}</p>
-          </div>
-        )}
-      </div>
-
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* 12-month income heatmap */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-slate-100 dark:border-slate-800 p-6">
-        <h2 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4">
-          Monthly Income
-        </h2>
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-0.5">Monthly Income</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400">Projected heatmap</div>
+          </div>
+          {annualTotal > 0 && (
+            <div className="text-right shrink-0">
+              <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-0.5">Annual Total</div>
+              <div className="text-[18px] font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">${annualTotal.toFixed(2)}</div>
+            </div>
+          )}
+        </div>
 
         {/* Desktop: all 12 months in one row */}
         <div className="hidden sm:grid sm:grid-cols-12 gap-2">
@@ -159,18 +153,18 @@ export default function DividendCalendarPage() {
       </div>
 
       {/* Month cards */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         {sortedEntries.map(([month, dividends]) => {
           const totalMonth = dividends.reduce((s, d) => s + (d.dividendAmount ?? 0) * (d.stockQuantity ?? 0), 0);
           return (
-            <div key={month} className="bg-white dark:bg-slate-900 shadow-sm rounded-lg border border-slate-100 dark:border-slate-800 overflow-hidden">
-              <div className="border-b border-slate-200 dark:border-slate-800 px-4 py-4 sm:px-6 flex justify-between items-center bg-slate-50 dark:bg-slate-800">
-                <h3 className="text-base font-semibold text-slate-900 dark:text-white">{toTitleCase(month)}</h3>
-                <span className="inline-flex items-center rounded-full px-3 py-0.5 text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                  Total: ${totalMonth.toFixed(2)}
+            <div key={month} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="border-b border-slate-200 dark:border-slate-700 px-5 py-3.5 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
+                <div className="text-[13px] font-semibold text-slate-900 dark:text-white">{toTitleCase(month)}</div>
+                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 tabular-nums">
+                  ${totalMonth.toFixed(2)}
                 </span>
               </div>
-              <div className="px-4 py-5 sm:p-6">
+              <div className="p-5">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {dividends.map((div, idx) => (
                     <DividendCard key={`${div.ticker}-${idx}`} div={div} />

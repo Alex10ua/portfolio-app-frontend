@@ -10,7 +10,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 export function formatCurrency(value: number | null | undefined, decimals?: number, currency = 'USD'): string {
   if (value == null) return 'N/A';
   const absVal = Math.abs(value);
-  const d = decimals !== undefined ? decimals : (absVal > 0 && absVal < 1 ? 6 : 2);
+  const d = decimals !== undefined ? decimals : (absVal > 0 && absVal < 0.01 ? 6 : 2);
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency + ' ';
   return `${symbol}${value.toFixed(d)}`;
 }

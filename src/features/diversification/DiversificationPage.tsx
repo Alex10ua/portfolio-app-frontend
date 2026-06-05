@@ -20,10 +20,10 @@ function toPieData(data?: Record<string, number>): PieEntry[] {
 function PieCard({ title, data }: { title: string; data: PieEntry[] }) {
   const total = data.reduce((s, d) => s + d.amount, 0);
   return (
-    <div className="bg-white dark:bg-slate-900 shadow-sm rounded-lg border border-slate-100 dark:border-slate-800 p-6">
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
-        <span className="text-sm font-medium text-slate-500 dark:text-slate-400">{formatCurrency(total)}</span>
+        <div className="text-[14px] font-semibold text-slate-900 dark:text-white">{title}</div>
+        <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">{formatCurrency(total)}</span>
       </div>
       <AppPieChart data={data} />
     </div>
@@ -50,8 +50,7 @@ export default function DiversificationPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white sm:text-3xl">Portfolio Diversification</h1>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {cards.map((c) => (
           <PieCard key={c.title} title={c.title} data={c.data} />
         ))}

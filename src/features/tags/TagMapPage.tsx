@@ -626,7 +626,7 @@ function TickersPanel({ tags, selected, holdingMap, totalPortfolioValue, dark }:
 
 export default function TagMapPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const { data: tagData = [], isLoading: tagsLoading } = useAllTags();
+  const { data: tagData = [], isLoading: tagsLoading } = useAllTags(portfolioId!);
   const { data: holdings = [], isLoading: holdingsLoading } = useHoldings(portfolioId!);
   const dark = useIsDark();
   const [selected, setSelected] = useState<string | null>(null);

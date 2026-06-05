@@ -4,6 +4,7 @@ import { useTickerTags, useTagNames, useSetTickerTags } from '../../hooks/useTag
 import { tagColor } from '../../lib/tagColors';
 
 interface TagEditorProps {
+  portfolioId: string;
   ticker: string;
 }
 
@@ -11,9 +12,9 @@ function normalizeTag(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32);
 }
 
-export default function TagEditor({ ticker }: TagEditorProps) {
-  const { data: tickerTagsData } = useTickerTags(ticker);
-  const { data: allTagNames = [] } = useTagNames();
+export default function TagEditor({ portfolioId, ticker }: TagEditorProps) {
+  const { data: tickerTagsData } = useTickerTags(portfolioId, ticker);
+  const { data: allTagNames = [] } = useTagNames(portfolioId);
   const { mutate: setTags, isPending } = useSetTickerTags();
 
   const [localTags, setLocalTags] = useState<string[]>([]);
@@ -37,13 +38,13 @@ export default function TagEditor({ ticker }: TagEditorProps) {
     setLocalTags(next);
     setInput('');
     setShowSuggestions(false);
-    setTags({ ticker, tags: next });
+    setTags({ portfolioId, ticker, tags: next });
   }
 
   function removeTag(tag: string) {
     const next = localTags.filter(t => t !== tag);
     setLocalTags(next);
-    setTags({ ticker, tags: next });
+    setTags({ portfolioId, ticker, tags: next });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {

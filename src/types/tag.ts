@@ -1,6 +1,7 @@
 export interface TickerTags {
   id: string;
   username: string;
+  portfolioId: string;
   ticker: string;
   tags: string[];
   updatedAt: string;

@@ -134,7 +134,7 @@ export default function HoldingDetailDialog({ holding, open, onClose, portfolioI
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
           Tags
         </p>
-        <TagEditor ticker={holding.ticker} />
+        <TagEditor portfolioId={portfolioId} ticker={holding.ticker} />
       </div>
     </Dialog>
   );

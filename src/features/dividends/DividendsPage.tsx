@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { TrendingUp, CalendarDays, Clock, BarChart2, BarChart as BarChartIcon } from 'lucide-react';
 import { useDividends } from '../../hooks/useDividends';
+import { useHoldings } from '../../hooks/useHoldings';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -10,6 +11,7 @@ import AppBarChart from '../../components/charts/BarChart';
 export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
+  const { data: holdings } = useHoldings(portfolioId!);
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading dividends" message={(error as Error).message} />;
@@ -81,6 +83,13 @@ export default function DividendsPage() {
     .map(([ticker, amount]) => ({ ticker, amount: parseFloat(Number(amount).toFixed(2)) }))
     .sort((a, b) => b.amount - a.amount);
 
+  // Split payers into currently-held vs sold-off tickers
+  const heldTickers = new Set(
+    (holdings ?? []).filter((h) => (h.shareAmount ?? 0) > 0).map((h) => h.ticker),
+  );
+  const byStockCurrent = byStock.filter((s) => heldTickers.has(s.ticker));
+  const byStockSold = byStock.filter((s) => !heldTickers.has(s.ticker));
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* KPI projection row */}
@@ -123,12 +132,22 @@ export default function DividendsPage() {
           </div>
         )}
 
-        {byStock.length > 0 && (
+        {byStockCurrent.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm lg:col-span-2">
-            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker</div>
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers — Current Holdings</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker (still held)</div>
             <div className="h-72">
-              <AppBarChart data={byStock} xKey="ticker" color="#3B82F6" />
+              <AppBarChart data={byStockCurrent} xKey="ticker" color="#3B82F6" />
+            </div>
+          </div>
+        )}
+
+        {byStockSold.length > 0 && (
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm lg:col-span-2">
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers — Sold Holdings</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker (no longer held)</div>
+            <div className="h-72">
+              <AppBarChart data={byStockSold} xKey="ticker" color="#94A3B8" />
             </div>
           </div>
         )}

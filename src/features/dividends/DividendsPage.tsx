@@ -35,6 +35,10 @@ export default function DividendsPage() {
     );
   }
 
+  const displayCurrency = data?.displayCurrency ?? 'USD';
+  const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', CHF: 'CHF ', JPY: '¥' };
+  const sym = CURRENCY_SYMBOLS[displayCurrency] ?? `${displayCurrency} `;
+
   const monthly = yearly / 12;
   const daily = yearly / 365;
   const hourly = daily / 24;
@@ -94,10 +98,10 @@ export default function DividendsPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       {/* KPI projection row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Yearly Projection" value={`$${yearly.toFixed(2)}`}   icon={TrendingUp}  accent="#4F46E5" />
-        <StatCard label="Monthly Average"   value={`$${monthly.toFixed(2)}`}  icon={CalendarDays} accent="#14B8A6" sub="Projected" />
-        <StatCard label="Daily Average"     value={`$${daily.toFixed(2)}`}    icon={BarChart2}    accent="#10B981" sub="Calendar daily" />
-        <StatCard label="Hourly Average"    value={`$${hourly.toFixed(4)}`}   icon={Clock}        accent="#8B5CF6" sub="While you sleep" />
+        <StatCard label="Yearly Projection" value={`${sym}${yearly.toFixed(2)}`}   icon={TrendingUp}  accent="#4F46E5" />
+        <StatCard label="Monthly Average"   value={`${sym}${monthly.toFixed(2)}`}  icon={CalendarDays} accent="#14B8A6" sub="Projected" />
+        <StatCard label="Daily Average"     value={`${sym}${daily.toFixed(2)}`}    icon={BarChart2}    accent="#10B981" sub="Calendar daily" />
+        <StatCard label="Hourly Average"    value={`${sym}${hourly.toFixed(4)}`}   icon={Clock}        accent="#8B5CF6" sub="While you sleep" />
       </div>
 
       {/* Charts */}
@@ -107,7 +111,7 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Year</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All-time history</div>
             <div className="h-64">
-              <AppBarChart data={byYear} xKey="year" color="#4F46E5" />
+              <AppBarChart data={byYear} xKey="year" color="#4F46E5" currencySymbol={sym} />
             </div>
           </div>
         )}
@@ -117,7 +121,7 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Quarter</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All quarters</div>
             <div className="h-64">
-              <AppBarChart data={byQuarter} xKey="yearQuarter" color="#14B8A6" />
+              <AppBarChart data={byQuarter} xKey="yearQuarter" color="#14B8A6" currencySymbol={sym} />
             </div>
           </div>
         )}
@@ -127,7 +131,7 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Month</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">Monthly breakdown</div>
             <div className="h-64">
-              <AppBarChart data={byMonth} xKey="month" color="#4F46E5" />
+              <AppBarChart data={byMonth} xKey="month" color="#4F46E5" currencySymbol={sym} />
             </div>
           </div>
         )}
@@ -137,7 +141,7 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers — Current Holdings</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker (still held)</div>
             <div className="h-72">
-              <AppBarChart data={byStockCurrent} xKey="ticker" color="#3B82F6" />
+              <AppBarChart data={byStockCurrent} xKey="ticker" color="#3B82F6" currencySymbol={sym} />
             </div>
           </div>
         )}
@@ -147,7 +151,7 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Top Dividend Payers — Sold Holdings</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All time, by ticker (no longer held)</div>
             <div className="h-72">
-              <AppBarChart data={byStockSold} xKey="ticker" color="#94A3B8" />
+              <AppBarChart data={byStockSold} xKey="ticker" color="#94A3B8" currencySymbol={sym} />
             </div>
           </div>
         )}

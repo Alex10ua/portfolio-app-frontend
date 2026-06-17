@@ -48,7 +48,8 @@ export function usePortfolioValues(portfolios: Portfolio[]) {
       holdings.map((h) => h.currency).filter((c): c is string => !!c)
     )];
     const isMulti = uniqueCurrencies.length > 1;
-    const displayCurrency = isMulti ? 'EUR' : (uniqueCurrencies[0] ?? 'EUR');
+    // Multi-currency portfolio → display in USD; mono-currency → that currency.
+    const displayCurrency = isMulti ? 'USD' : (uniqueCurrencies[0] ?? 'USD');
 
     const toEur = (native: number, fxRate?: number) =>
       isMulti && fxRate && fxRate !== 0 ? native / fxRate : native;
@@ -89,7 +90,7 @@ export function usePortfolioValues(portfolios: Portfolio[]) {
   });
 
   const allCurrencies = [...new Set(items.map((item) => item.currency))];
-  const totalCurrency = allCurrencies.length === 1 ? allCurrencies[0] : 'EUR';
+  const totalCurrency = allCurrencies.length === 1 ? allCurrencies[0] : 'USD';
 
   const total     = items.reduce((s, it) => s + it.value,  0);
   const totalCost = items.reduce((s, it) => s + it.cost,   0);

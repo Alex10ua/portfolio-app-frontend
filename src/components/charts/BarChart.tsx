@@ -16,6 +16,7 @@ interface AppBarChartProps {
   xKey: string;
   yKey?: string;
   color?: string;
+  currencySymbol?: string;
   yFormatter?: (v: number) => string;
   tooltipContent?: TooltipProps<number, string>['content'];
 }
@@ -25,9 +26,11 @@ export default function AppBarChart({
   xKey,
   yKey = 'amount',
   color = '#6366f1',
-  yFormatter = (v) => `$${v}`,
+  currencySymbol = '$',
+  yFormatter,
   tooltipContent,
 }: AppBarChartProps) {
+  const fmtY = yFormatter ?? ((v: number) => `${currencySymbol}${v}`);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
   useEffect(() => {
@@ -51,16 +54,16 @@ export default function AppBarChart({
           axisLine={false}
           tickLine={false}
           tick={{ fontSize: 12, fill: '#94a3b8' }}
-          tickFormatter={yFormatter}
+          tickFormatter={fmtY}
         />
         <Tooltip
           content={tooltipContent}
           contentStyle={tooltipStyle}
           cursor={{ fill: isDark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.05)' }}
-          formatter={(value: number) => [`$${value.toFixed(2)}`]}
+          formatter={(value: number) => [`${currencySymbol}${value.toFixed(2)}`]}
         />
         <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }} />
-        <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} name="Amount ($)" />
+        <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} name={`Amount (${currencySymbol})`} />
       </BarChart>
     </ResponsiveContainer>
   );

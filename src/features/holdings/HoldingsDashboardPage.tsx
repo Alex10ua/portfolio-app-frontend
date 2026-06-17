@@ -4,7 +4,9 @@ import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
   TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
+import { getFxRates } from '../../api/fxRates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -63,6 +65,7 @@ export default function HoldingsDashboardPage() {
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
   const { data: cashBalance } = useCashBalance(pid);
+  const { data: fxRates = {} } = useQuery({ queryKey: ['fxRates'], queryFn: getFxRates });
 
   const [createOpen, setCreateOpen]   = useState(false);
   const [importOpen, setImportOpen]   = useState(false);
@@ -146,14 +149,17 @@ export default function HoldingsDashboardPage() {
     if (!holdings?.length) return { baseCurrency: '', stats: null };
     const uniqueCurrencies = [...new Set(holdings.map((h) => h.currency).filter((c): c is string => !!c))];
     const isMulti = uniqueCurrencies.length > 1;
-    const base = isMulti ? 'EUR' : (uniqueCurrencies[0] ?? '');
+    // Multi-currency portfolio → display in USD; mono-currency → that currency.
+    const base = isMulti ? 'USD' : (uniqueCurrencies[0] ?? '');
+    // toBase converts native → EUR (fx = rateVsEur); displayRate then EUR → USD.
     const toBase = (v: number, fx?: number) => isMulti && fx && fx !== 0 ? v / fx : v;
-    const totalValue  = holdings.reduce((s, h) => s + toBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0);
-    const totalCost   = holdings.reduce((s, h) => s + toBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0);
-    const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.fxRate), 0);
+    const displayRate = isMulti ? (fxRates['USD'] ?? 1) : 1;
+    const totalValue  = holdings.reduce((s, h) => s + toBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0) * displayRate;
+    const totalCost   = holdings.reduce((s, h) => s + toBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0) * displayRate;
+    const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.fxRate), 0) * displayRate;
     const avgYield    = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
     return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield } };
-  }, [holdings]);
+  }, [holdings, fxRates]);
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
 

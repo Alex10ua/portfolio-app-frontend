@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
-  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
+  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote, GripVertical,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
@@ -33,6 +33,7 @@ const DEFAULT_COLUMNS: Column[] = [
   { key: 'shareAmount',         label: 'Shares',       visible: true  },
   { key: 'costPerShare',        label: 'Cost/Share',   visible: true  },
   { key: 'currentShareValue',   label: 'Total Value',  visible: true  },
+  { key: 'portfolioPercent',    label: '% of Portfolio', visible: true },
   { key: 'dividend',            label: 'Dividends',    visible: true  },
   { key: 'dividendYield',       label: 'Yield',        visible: true  },
   { key: 'dividendYieldOnCost', label: 'Yield on Cost',visible: true  },
@@ -41,11 +42,20 @@ const DEFAULT_COLUMNS: Column[] = [
 ];
 
 function mergeColumns(saved: Column[]): Column[] {
-  const savedMap = new Map(saved.map((c) => [c.key, c]));
-  return DEFAULT_COLUMNS.map((def) =>
-    savedMap.has(def.key) ? { ...def, visible: savedMap.get(def.key)!.visible } : def,
-  );
+  const defaults = new Map(DEFAULT_COLUMNS.map((c) => [c.key, c]));
+  // Saved order wins; drop keys that no longer exist, take labels from defaults.
+  const merged = saved
+    .filter((c) => defaults.has(c.key))
+    .map((c) => ({ ...defaults.get(c.key)!, visible: c.visible }));
+  // Insert columns added since the config was saved at their default position.
+  DEFAULT_COLUMNS.forEach((def, i) => {
+    if (!merged.some((c) => c.key === def.key)) merged.splice(Math.min(i, merged.length), 0, def);
+  });
+  return merged;
 }
+
+// Single source for the "Total Value" figure — used by the column, sorting, and % of Portfolio.
+const holdingTotalValue = (h: Holding) => (h.currentShareValue ?? 0) * h.shareAmount;
 
 const ASSET_CHIP_COLORS: Record<string, string> = {
   STOCK:    'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
@@ -96,6 +106,20 @@ export default function HoldingsDashboardPage() {
     else { setOrderBy(key); setOrder('asc'); }
   };
 
+  const [dragKey, setDragKey] = useState<string | null>(null);
+
+  const moveColumn = (fromKey: string, toKey: string) => {
+    setColumns((prev) => {
+      const from = prev.findIndex((c) => c.key === fromKey);
+      const to = prev.findIndex((c) => c.key === toKey);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
+
   const toggleColumn = (key: string) => {
     setColumns((prev) => {
       const visibleCount = prev.filter((c) => c.visible).length;
@@ -122,16 +146,29 @@ export default function HoldingsDashboardPage() {
     }, {});
   }, [holdings]);
 
+  // % of portfolio = this row's Total Value / sum of all rows' Total Values,
+  // using raw native-currency values exactly as shown in the Total Value column.
+  // Denominator = all holdings, not the filtered view.
+  const portfolioPercents = useMemo(() => {
+    if (!holdings?.length) return {} as Record<string, number>;
+    const total = holdings.reduce((s, h) => s + holdingTotalValue(h), 0);
+    if (total === 0) return {} as Record<string, number>;
+    return Object.fromEntries(holdings.map((h) => [h.ticker, (holdingTotalValue(h) / total) * 100]));
+  }, [holdings]);
+
   const sortedHoldings = useMemo(() => {
     return [...filteredHoldings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
       if (orderBy === 'currentShareValue') {
-        valA = (a.currentShareValue ?? 0) * (a.shareAmount ?? 0);
-        valB = (b.currentShareValue ?? 0) * (b.shareAmount ?? 0);
+        valA = holdingTotalValue(a);
+        valB = holdingTotalValue(b);
       } else if (orderBy === 'dividend') {
         valA = (a.dividend ?? 0) * (a.shareAmount ?? 0);
         valB = (b.dividend ?? 0) * (b.shareAmount ?? 0);
+      } else if (orderBy === 'portfolioPercent') {
+        valA = portfolioPercents[a.ticker] ?? 0;
+        valB = portfolioPercents[b.ticker] ?? 0;
       } else {
         valA = (a as unknown as Record<string, unknown>)[orderBy] as number | string | null;
         valB = (b as unknown as Record<string, unknown>)[orderBy] as number | string | null;
@@ -143,7 +180,7 @@ export default function HoldingsDashboardPage() {
         return order === 'asc' ? valA - valB : valB - valA;
       return order === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
     });
-  }, [filteredHoldings, orderBy, order]);
+  }, [filteredHoldings, orderBy, order, portfolioPercents]);
 
   const { baseCurrency, stats } = useMemo(() => {
     if (!holdings?.length) return { baseCurrency: '', stats: null };
@@ -187,13 +224,18 @@ export default function HoldingsDashboardPage() {
       case 'costPerShare':
         return <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatCurrency(holding.costPerShare, undefined, holding.currency)}</span>;
       case 'currentShareValue': {
-        const total = (holding.currentShareValue ?? 0) * holding.shareAmount;
+        const total = holdingTotalValue(holding);
         return (
           <div>
             <div className="font-semibold tabular-nums">{formatCurrency(total, undefined, holding.currency)}</div>
             <div className="text-[11px] text-slate-400 tabular-nums">{formatCurrency(holding.currentShareValue, undefined, holding.currency)}/sh</div>
           </div>
         );
+      }
+      case 'portfolioPercent': {
+        const pct = portfolioPercents[holding.ticker];
+        if (pct == null) return <span className="text-slate-400 dark:text-slate-500">—</span>;
+        return <span className="font-semibold tabular-nums">{formatPercent(pct, 1)}</span>;
       }
       case 'dividend':
         return <span className="font-mono tabular-nums">{formatCurrency((holding.dividend ?? 0) * holding.shareAmount, undefined, holding.currency)}</span>;
@@ -427,20 +469,39 @@ export default function HoldingsDashboardPage() {
       <HoldingDetailDialog holding={detailHolding} open={detailHolding !== null} onClose={() => setDetailHolding(null)} portfolioId={pid} />
 
       <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">
-        <div className="space-y-2">
+        <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">Drag to reorder columns</div>
+        <div className="space-y-1">
           {columns.map((col) => {
             const isLastVisible = col.visible && visibleColumns.length === 1;
             return (
-              <label key={col.key} className={`flex items-center gap-3 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                <input
-                  type="checkbox"
-                  checked={col.visible}
-                  disabled={isLastVisible}
-                  onChange={() => toggleColumn(col.key)}
-                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
-                />
-                <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
-              </label>
+              <div
+                key={col.key}
+                draggable
+                onDragStart={() => setDragKey(col.key)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (dragKey && dragKey !== col.key) moveColumn(dragKey, col.key);
+                }}
+                onDrop={(e) => e.preventDefault()}
+                onDragEnd={() => setDragKey(null)}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 border transition-colors ${
+                  dragKey === col.key
+                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 opacity-70'
+                    : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/40'
+                }`}
+              >
+                <GripVertical className="h-4 w-4 text-slate-400 dark:text-slate-500 cursor-grab flex-shrink-0" />
+                <label className={`flex items-center gap-3 flex-1 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={col.visible}
+                    disabled={isLastVisible}
+                    onChange={() => toggleColumn(col.key)}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
+                </label>
+              </div>
             );
           })}
         </div>

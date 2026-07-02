@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Dialog from '../../components/ui/Dialog';
 import Spinner from '../../components/ui/Spinner';
 import TagEditor from '../../components/ui/TagEditor';
+import NoteEditor from '../../components/ui/NoteEditor';
 import { useMarketData } from '../../hooks/useMarketData';
 import { useCustomAsset, useUpdateCustomAssetPrice } from '../../hooks/useCustomAssets';
 import { formatCurrency } from '../../lib/formatters';
@@ -130,6 +131,12 @@ export default function HoldingDetailDialog({ holding, open, onClose, portfolioI
       ) : (
         <CustomAssetDetail portfolioId={portfolioId} ticker={holding.ticker} />
       )}
+      <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+          Notes
+        </p>
+        <NoteEditor portfolioId={portfolioId} ticker={holding.ticker} />
+      </div>
       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
           Tags

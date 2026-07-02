@@ -15,4 +15,5 @@ export interface Holding {
   dailyChange: number | null;
   currency?: string;   // native currency of the asset, e.g. "USD"
   fxRate?: number;     // rateVsEur: units of this currency per 1 EUR
+  sharesOutstanding?: number | null; // total shares outstanding (STOCK only); powers Ownership view
 }

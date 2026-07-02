@@ -93,13 +93,16 @@ export default function TransactionsPage() {
     setDeleteTarget(null);
   };
 
-  const reversed = transactions ? [...transactions].reverse() : [];
+  // Newest first — sort by date explicitly, backend order is not guaranteed
+  const sorted = transactions
+    ? [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
 
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div className="text-[13px] text-slate-500 dark:text-slate-400">
-          {isLoading ? 'Loading…' : `${reversed.length} transaction${reversed.length !== 1 ? 's' : ''} in ${selectedYear}`}
+          {isLoading ? 'Loading…' : `${sorted.length} transaction${sorted.length !== 1 ? 's' : ''} in ${selectedYear}`}
         </div>
         <select
           value={selectedYear}
@@ -113,11 +116,11 @@ export default function TransactionsPage() {
 
       {error && <ErrorAlert title="Error loading transactions" message={(error as Error).message} />}
 
-      {!error && !isLoading && reversed.length === 0 && (
+      {!error && !isLoading && sorted.length === 0 && (
         <EmptyState icon={ListFilter} title="No transactions" description={`No transactions found for ${selectedYear}.`} />
       )}
 
-      {(isLoading || reversed.length > 0) && (
+      {(isLoading || sorted.length > 0) && (
         <div className="flow-root">
           <div className="-mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
@@ -136,7 +139,7 @@ export default function TransactionsPage() {
                     {isLoading ? (
                       <SkeletonRow cols={8} />
                     ) : (
-                      reversed.map((t) => (
+                      sorted.map((t) => (
                         <tr key={t.transactionId} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                           <td className="whitespace-nowrap py-3.5 pl-5 pr-4 text-[13px]">
                             <div className="flex items-center gap-2.5">

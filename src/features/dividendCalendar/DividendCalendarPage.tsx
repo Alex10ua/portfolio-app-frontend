@@ -2,7 +2,6 @@ import { useParams } from 'react-router-dom';
 import StockLogo from '../../components/ui/StockLogo';
 import { CalendarDays } from 'lucide-react';
 import { useDividendCalendar } from '../../hooks/useDividendCalendar';
-import { useTheme } from '../../hooks/useTheme';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -20,19 +19,32 @@ function toTitleCase(s: string): string {
   return s.charAt(0) + s.slice(1).toLowerCase();
 }
 
-function heatmapColor(intensity: number, isDark: boolean): { background: string; border: string } {
-  const alpha = 0.08 + intensity * 0.82;
-  if (isDark) {
-    return {
-      background: `rgba(79, 70, 229, ${alpha})`,
-      border: `rgba(99, 90, 255, ${Math.min(alpha + 0.15, 1)})`,
-    };
-  } else {
-    return {
-      background: `rgba(79, 70, 229, ${alpha})`,
-      border: `rgba(67, 56, 202, ${Math.min(alpha + 0.1, 1)})`,
-    };
-  }
+// Vertical bar: fill height = month total relative to the best month
+// (100% = highest-paying month of the year, 0% = no income).
+function MonthBar({ total, maxMonthly, isCurrent, height, label }: {
+  total: number;
+  maxMonthly: number;
+  isCurrent: boolean;
+  height: number;
+  label: string;
+}) {
+  const pct = maxMonthly > 0 ? (total / maxMonthly) * 100 : 0;
+  // keep non-zero months visible even when tiny
+  const fillPct = total > 0 ? Math.max(pct, 4) : 0;
+  return (
+    <div
+      className={`relative w-full rounded-md bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 overflow-hidden ${
+        isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''
+      }`}
+      style={{ height }}
+      title={`${label}: $${total.toFixed(2)} (${Math.round(pct)}% of best month)`}
+    >
+      <div
+        className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all"
+        style={{ height: `${fillPct}%`, background: 'linear-gradient(180deg, #818CF8, #4F46E5)' }}
+      />
+    </div>
+  );
 }
 
 function DividendCard({ div }: { div: DividendCalendarEntry }) {
@@ -53,7 +65,6 @@ function DividendCard({ div }: { div: DividendCalendarEntry }) {
 
 export default function DividendCalendarPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const { dark } = useTheme();
   const { data, isLoading, error } = useDividendCalendar(portfolioId!);
 
   if (isLoading) return <FullPageSpinner />;
@@ -83,12 +94,12 @@ export default function DividendCalendarPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      {/* 12-month income heatmap */}
+      {/* 12-month income bars */}
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-0.5">Monthly Income</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400">Projected heatmap</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400">Bar height = % of best month</div>
           </div>
           {annualTotal > 0 && (
             <div className="text-right shrink-0">
@@ -101,20 +112,10 @@ export default function DividendCalendarPage() {
         {/* Desktop: all 12 months in one row */}
         <div className="hidden sm:grid sm:grid-cols-12 gap-2">
           {monthlyTotals.map((total, i) => {
-            const intensity = maxMonthly > 0 ? total / maxMonthly : 0;
             const isCurrent = i === currentMonth;
-            const colors = heatmapColor(Math.max(0.08, intensity), dark);
             return (
               <div key={i} className="flex flex-col items-center gap-1">
-                <div
-                  className={`w-full rounded-md transition-all ${isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
-                  style={{
-                    height: '48px',
-                    background: colors.background,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                  title={`${MONTHS[i]}: $${total.toFixed(2)}`}
-                />
+                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={96} label={MONTHS[i]} />
                 <span className={`text-xs ${isCurrent ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {MONTHS[i]}
                 </span>
@@ -129,20 +130,10 @@ export default function DividendCalendarPage() {
         {/* Mobile: 2 rows of 6 */}
         <div className="grid grid-cols-6 gap-2 sm:hidden">
           {monthlyTotals.map((total, i) => {
-            const intensity = maxMonthly > 0 ? total / maxMonthly : 0;
             const isCurrent = i === currentMonth;
-            const colors = heatmapColor(Math.max(0.08, intensity), dark);
             return (
               <div key={i} className="flex flex-col items-center gap-1">
-                <div
-                  className={`w-full rounded-md transition-all ${isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''}`}
-                  style={{
-                    height: '40px',
-                    background: colors.background,
-                    border: `1px solid ${colors.border}`,
-                  }}
-                  title={`${MONTHS[i]}: $${total.toFixed(2)}`}
-                />
+                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={64} label={MONTHS[i]} />
                 <span className={`text-xs ${isCurrent ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {MONTHS[i]}
                 </span>

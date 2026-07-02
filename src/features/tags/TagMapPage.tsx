@@ -167,22 +167,39 @@ function useGraphLayout(tags: TagGroup[]) {
 // ---------- SVG graph ----------
 
 interface ViewTransform { x: number; y: number; s: number; }
+interface NodePos { x: number; y: number; }
 
-function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, onHover }: {
+function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap, onSelect, onHover }: {
   tags: TagGroup[];
   nodes: GraphNode[];
   linked: GraphEdge[];
   selected: string | null;
   hovered: string | null;
   dark: boolean;
+  holdingMap: Map<string, Holding>;
   onSelect: (name: string | null) => void;
   onHover: (name: string | null) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const vtRef = useRef<ViewTransform>({ x: 0, y: 0, s: 1 });
   const [vt, setVtState] = useState<ViewTransform>({ x: 0, y: 0, s: 1 });
-  const [dragging, setDragging] = useState(false);
+  const [panning, setPanning] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
+
+  // node dragging
+  const [overrides, setOverrides] = useState<Record<string, NodePos>>({});
+  const [dragNodeId, setDragNodeId] = useState<string | null>(null);
+  const dragMoved = useRef(false);
+
+  // ticker hover: highlight + tooltip
+  const [hoverTicker, setHoverTicker] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{ ticker: string; x: number; y: number } | null>(null);
+
+  useEffect(() => { setOverrides({}); }, [nodes]);
+
+  const posOf = useCallback((n: GraphNode): NodePos =>
+    overrides[n.id] ?? { x: n.x, y: n.y }, [overrides]);
 
   function setVt(next: ViewTransform) {
     vtRef.current = next;
@@ -195,6 +212,12 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
       x: (clientX - rect.left) * (GW / rect.width),
       y: (clientY - rect.top) * (GH / rect.height),
     };
+  }
+
+  function graphCoords(clientX: number, clientY: number) {
+    const c = svgCoords(clientX, clientY);
+    const t = vtRef.current;
+    return { x: (c.x - t.x) / t.s, y: (c.y - t.y) / t.s };
   }
 
   // Attach non-passive wheel handler so preventDefault works
@@ -215,19 +238,41 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
   }, []);
 
   function onBgMouseDown(e: React.MouseEvent) {
-    setDragging(true);
+    setPanning(true);
     lastPos.current = svgCoords(e.clientX, e.clientY);
   }
 
-  function onMouseMove(e: React.MouseEvent) {
-    if (!dragging) return;
-    const curr = svgCoords(e.clientX, e.clientY);
-    const prev = vtRef.current;
-    setVt({ ...prev, x: prev.x + curr.x - lastPos.current.x, y: prev.y + curr.y - lastPos.current.y });
-    lastPos.current = curr;
+  function onNodeMouseDown(e: React.MouseEvent, n: GraphNode) {
+    e.stopPropagation();
+    dragMoved.current = false;
+    setDragNodeId(n.id);
+    setTooltip(null);
   }
 
-  function onMouseUp() { setDragging(false); }
+  function onMouseMove(e: React.MouseEvent) {
+    if (dragNodeId) {
+      dragMoved.current = true;
+      const g = graphCoords(e.clientX, e.clientY);
+      setOverrides(prev => ({ ...prev, [dragNodeId]: g }));
+      return;
+    }
+    if (panning) {
+      const curr = svgCoords(e.clientX, e.clientY);
+      const prev = vtRef.current;
+      setVt({ ...prev, x: prev.x + curr.x - lastPos.current.x, y: prev.y + curr.y - lastPos.current.y });
+      lastPos.current = curr;
+      return;
+    }
+    if (hoverTicker && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setTooltip({ ticker: hoverTicker, x: e.clientX - rect.left, y: e.clientY - rect.top });
+    }
+  }
+
+  function onMouseUp() {
+    setPanning(false);
+    setDragNodeId(null);
+  }
 
   function zoomBtn(factor: number) {
     const prev = vtRef.current;
@@ -239,15 +284,43 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
 
   const focus = hovered ?? selected;
 
+  // tags connected to hovered ticker
+  const hoverTickerTags = useMemo(() => {
+    if (!hoverTicker) return null;
+    return new Set(tags.filter(t => t.tickers.includes(hoverTicker)).map(t => t.name));
+  }, [hoverTicker, tags]);
+
   const isNodeActive = useCallback((n: GraphNode) => {
+    if (hoverTickerTags) {
+      if (n.type === 'ticker') return n.label === hoverTicker;
+      return hoverTickerTags.has(n.label);
+    }
     if (!focus) return true;
     if (n.type === 'tag' && n.label === focus) return true;
     if (n.type === 'ticker') return tags.find(x => x.name === focus)?.tickers.includes(n.label) ?? false;
     return false;
-  }, [focus, tags]);
+  }, [focus, tags, hoverTicker, hoverTickerTags]);
 
-  const isEdgeActive = useCallback((e: GraphEdge) =>
-    !focus || e.from === 'tag:' + focus, [focus]);
+  const isEdgeActive = useCallback((e: GraphEdge) => {
+    if (hoverTicker) return e.to === 'tk:' + hoverTicker;
+    return !focus || e.from === 'tag:' + focus;
+  }, [focus, hoverTicker]);
+
+  const anyFocus = focus != null || hoverTicker != null;
+
+  // curved edge path with slight perpendicular bow
+  const edgePath = useCallback((e: GraphEdge) => {
+    const p1 = posOf(e.a), p2 = posOf(e.b);
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+    const bow = Math.min(24, d * 0.12);
+    const mx = (p1.x + p2.x) / 2 - (dy / d) * bow;
+    const my = (p1.y + p2.y) / 2 + (dx / d) * bow;
+    return `M ${p1.x} ${p1.y} Q ${mx} ${my} ${p2.x} ${p2.y}`;
+  }, [posOf]);
+
+  const haloColors = useMemo(() =>
+    [...new Set(nodes.filter(n => n.type === 'tag').map(n => n.color))], [nodes]);
 
   const totalTickers = new Set(tags.flatMap(t => t.tickers)).size;
   const border = dark ? '#334155' : '#E2E8F0';
@@ -255,8 +328,14 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
   const text = dark ? '#F1F5F9' : '#0F172A';
   const surfaceBg = dark ? 'rgba(15,23,42,0.80)' : 'rgba(255,255,255,0.90)';
 
+  const tooltipHolding = tooltip ? holdingMap.get(tooltip.ticker) : undefined;
+  const tooltipTags = tooltip ? tags.filter(t => t.tickers.includes(tooltip.ticker)) : [];
+
+  // hide ticker labels when zoomed far out (unless highlighted)
+  const showTickerLabels = vt.s >= 0.7;
+
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       position: 'relative', width: '100%',
       background: dark
         ? 'radial-gradient(circle at 50% 45%, #0F172A 0%, #020617 80%)'
@@ -267,7 +346,11 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
         ref={svgRef}
         viewBox={`0 0 ${GW} ${GH}`}
         width="100%"
-        style={{ display: 'block', aspectRatio: `${GW} / ${GH}`, cursor: dragging ? 'grabbing' : 'grab', userSelect: 'none' }}
+        style={{
+          display: 'block', aspectRatio: `${GW} / ${GH}`,
+          cursor: dragNodeId ? 'grabbing' : panning ? 'grabbing' : 'grab',
+          userSelect: 'none',
+        }}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
@@ -276,6 +359,13 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
           <pattern id="grid-dot" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="0.6" fill={dark ? '#1E293B' : '#E2E8F0'} />
           </pattern>
+          {haloColors.map(c => (
+            <radialGradient key={c} id={`halo-${c.slice(1)}`}>
+              <stop offset="0%" stopColor={c} stopOpacity="0.35" />
+              <stop offset="70%" stopColor={c} stopOpacity="0.10" />
+              <stop offset="100%" stopColor={c} stopOpacity="0" />
+            </radialGradient>
+          ))}
         </defs>
 
         {/* background: handles pan mousedown, stays static */}
@@ -283,16 +373,21 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
 
         {/* all graph content inside pan+zoom transform */}
         <g transform={`translate(${vt.x}, ${vt.y}) scale(${vt.s})`}>
-          {/* edges */}
-          <g>
-            {linked.map((e, i) => (
-              <line key={i}
-                x1={e.a.x} y1={e.a.y} x2={e.b.x} y2={e.b.y}
-                stroke={isEdgeActive(e) ? e.color : (dark ? '#1E293B' : '#E2E8F0')}
-                strokeWidth={isEdgeActive(e) ? 1.4 / vt.s : 0.6 / vt.s}
-                opacity={isEdgeActive(e) ? 0.55 : (focus ? 0.15 : 0.35)}
-              />
-            ))}
+          {/* edges — curved, colored, dimmed when unfocused */}
+          <g fill="none">
+            {linked.map((e, i) => {
+              const active = isEdgeActive(e);
+              return (
+                <path key={i}
+                  d={edgePath(e)}
+                  stroke={active ? e.color : (dark ? '#1E293B' : '#E2E8F0')}
+                  strokeWidth={active ? 1.6 / vt.s : 0.6 / vt.s}
+                  strokeLinecap="round"
+                  opacity={active ? 0.6 : (anyFocus ? 0.12 : 0.35)}
+                  style={{ transition: 'opacity 200ms ease, stroke 200ms ease' }}
+                />
+              );
+            })}
           </g>
 
           {/* nodes */}
@@ -301,39 +396,98 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
               const active = isNodeActive(n);
               const isTag = n.type === 'tag';
               const isSel = isTag && n.label === selected;
+              const p = posOf(n);
+              const showLabel = isTag || showTickerLabels || active;
               return (
                 <g key={n.id}
-                  style={{ cursor: isTag ? 'pointer' : 'default' }}
-                  onClick={isTag ? () => onSelect(n.label === selected ? null : n.label) : undefined}
-                  onMouseDown={isTag ? (e) => e.stopPropagation() : undefined}
-                  onMouseEnter={isTag ? () => onHover(n.label) : undefined}
-                  onMouseLeave={isTag ? () => onHover(null) : undefined}
-                  opacity={active ? 1 : 0.22}
+                  style={{ cursor: isTag ? 'pointer' : 'grab', transition: 'opacity 200ms ease' }}
+                  onClick={isTag ? () => { if (!dragMoved.current) onSelect(n.label === selected ? null : n.label); } : undefined}
+                  onMouseDown={(e) => onNodeMouseDown(e, n)}
+                  onMouseEnter={isTag
+                    ? () => onHover(n.label)
+                    : () => setHoverTicker(n.label)}
+                  onMouseLeave={isTag
+                    ? () => onHover(null)
+                    : () => { setHoverTicker(null); setTooltip(null); }}
+                  opacity={active ? 1 : 0.18}
                 >
-                  {isSel && <circle cx={n.x} cy={n.y} r={n.r + 10} fill={n.color} opacity="0.18" />}
+                  {/* soft halo behind tag nodes */}
+                  {isTag && (
+                    <circle cx={p.x} cy={p.y} r={n.r * 2.1} fill={`url(#halo-${n.color.slice(1)})`} style={{ pointerEvents: 'none' }} />
+                  )}
+                  {isSel && (
+                    <circle cx={p.x} cy={p.y} r={n.r + 10} fill="none" stroke={n.color}
+                      strokeWidth={2 / vt.s} opacity="0.5" className="animate-pulse" />
+                  )}
                   <circle
-                    cx={n.x} cy={n.y} r={n.r}
+                    cx={p.x} cy={p.y} r={n.r}
                     fill={isTag ? n.color : (dark ? '#1E293B' : '#FFFFFF')}
                     stroke={isTag ? (isSel ? '#fff' : n.color) : n.color}
                     strokeWidth={isTag ? (isSel ? 2.5 / vt.s : 0) : 2 / vt.s}
                   />
-                  <text
-                    x={n.x} y={isTag ? n.y + n.r + 14 : n.y + n.r + 12}
-                    textAnchor="middle"
-                    fontFamily="Inter, system-ui, sans-serif"
-                    fontWeight={isTag ? 600 : 500}
-                    fontSize={isTag ? (n.r > 24 ? 13 : 12) : 10.5}
-                    fill={active ? text : (dark ? '#64748B' : '#94A3B8')}
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    {isTag ? '#' + n.label : n.label}
-                  </text>
+                  {showLabel && (
+                    <text
+                      x={p.x} y={isTag ? p.y + n.r + 14 : p.y + n.r + 12}
+                      textAnchor="middle"
+                      fontFamily="Inter, system-ui, sans-serif"
+                      fontWeight={isTag ? 600 : 500}
+                      fontSize={isTag ? (n.r > 24 ? 13 : 12) : 10.5}
+                      fill={active ? text : (dark ? '#64748B' : '#94A3B8')}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      {isTag ? '#' + n.label : n.label}
+                    </text>
+                  )}
                 </g>
               );
             })}
           </g>
         </g>
       </svg>
+
+      {/* ticker tooltip */}
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: Math.min(tooltip.x + 14, (containerRef.current?.clientWidth ?? GW) - 190),
+          top: tooltip.y + 14,
+          width: 176, pointerEvents: 'none', zIndex: 10,
+          background: surfaceBg, backdropFilter: 'blur(8px)',
+          border: `1px solid ${border}`, borderRadius: 8,
+          padding: '10px 12px', boxShadow: '0 4px 16px rgba(2,6,23,0.25)',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: text, fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
+            {tooltip.ticker}
+          </div>
+          {tooltipHolding ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: text, fontFeatureSettings: '"tnum"' }}>
+                {fmtEur(holdingValue(tooltipHolding))}
+              </span>
+              <span style={{
+                fontSize: 11, fontWeight: 600,
+                fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+                color: (tooltipHolding.totalProfitPercentage ?? 0) >= 0 ? '#10B981' : '#EF4444',
+              }}>
+                {fmtPct(tooltipHolding.totalProfitPercentage ?? null)}
+              </span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: textMuted, marginTop: 4 }}>Not in this portfolio</div>
+          )}
+          {tooltipTags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+              {tooltipTags.map(t => (
+                <span key={t.name} style={{
+                  fontSize: 10, fontWeight: 600, color: t.color,
+                  background: dark ? 'rgba(255,255,255,0.06)' : '#F8FAFC',
+                  border: `1px solid ${border}`, borderRadius: 999, padding: '1px 7px',
+                }}>#{t.name}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* legend — top left */}
       <div style={{
@@ -355,6 +509,9 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
           <span style={{ width: 8, height: 8, borderRadius: 999, border: `2px solid ${textMuted}`, background: dark ? '#1E293B' : '#fff', display: 'inline-block' }} />
           ticker
         </div>
+        <div style={{ marginTop: 2, color: dark ? '#64748B' : '#94A3B8' }}>
+          drag nodes · scroll to zoom
+        </div>
       </div>
 
       {/* zoom controls — top right */}
@@ -367,7 +524,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
         {([
           { label: '+', title: 'Zoom in',  action: () => zoomBtn(1.25) },
           { label: '−', title: 'Zoom out', action: () => zoomBtn(0.8) },
-          { label: '⊙', title: 'Reset',    action: () => setVt({ x: 0, y: 0, s: 1 }) },
+          { label: '⊙', title: 'Reset',    action: () => { setVt({ x: 0, y: 0, s: 1 }); setOverrides({}); } },
         ] as const).map((btn, i) => (
           <button key={btn.label} title={btn.title} onClick={btn.action} style={{
             width: 30, height: 30, border: 'none', background: 'transparent',
@@ -391,6 +548,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, onSelect, 
       }}>
         {tags.length} tags · {totalTickers} tickers
         {selected ? ` · #${selected} highlighted` : ''}
+        {hoverTicker ? ` · ${hoverTicker}` : ''}
         {' · '}{Math.round(vt.s * 100)}%
       </div>
     </div>
@@ -737,6 +895,7 @@ export default function TagMapPage() {
             <MindMapGraph
               tags={tags} nodes={nodes} linked={linked}
               selected={selected} hovered={hovered} dark={dark}
+              holdingMap={holdingMap}
               onSelect={setSelected} onHover={setHovered}
             />
           </div>

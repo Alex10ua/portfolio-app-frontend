@@ -8,6 +8,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  Cell,
   type TooltipProps,
 } from 'recharts';
 
@@ -19,6 +20,8 @@ interface AppBarChartProps {
   currencySymbol?: string;
   yFormatter?: (v: number) => string;
   tooltipContent?: TooltipProps<number, string>['content'];
+  /** Per-bar color override; falls back to `color` when it returns undefined */
+  getBarColor?: (entry: Record<string, unknown>, index: number) => string | undefined;
 }
 
 export default function AppBarChart({
@@ -29,6 +32,7 @@ export default function AppBarChart({
   currencySymbol = '$',
   yFormatter,
   tooltipContent,
+  getBarColor,
 }: AppBarChartProps) {
   const fmtY = yFormatter ?? ((v: number) => `${currencySymbol}${v}`);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -63,7 +67,12 @@ export default function AppBarChart({
           formatter={(value: number) => [`${currencySymbol}${value.toFixed(2)}`]}
         />
         <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }} />
-        <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} name={`Amount (${currencySymbol})`} />
+        <Bar dataKey={yKey} fill={color} radius={[4, 4, 0, 0]} name={`Amount (${currencySymbol})`}>
+          {getBarColor &&
+            data.map((entry, i) => (
+              <Cell key={i} fill={getBarColor(entry, i) ?? color} />
+            ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

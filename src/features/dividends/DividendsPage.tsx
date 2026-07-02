@@ -8,6 +8,27 @@ import EmptyState from '../../components/ui/EmptyState';
 import StatCard from '../../components/ui/StatCard';
 import AppBarChart from '../../components/charts/BarChart';
 
+// Fixed color per quarter number, same every year (Q1 2024 and Q1 2025 match).
+// Hues picked to sit well with the app palette in both light and dark theme.
+const QUARTER_COLORS: Record<string, string> = {
+  Q1: '#3B82F6', // blue
+  Q2: '#14B8A6', // teal
+  Q3: '#F59E0B', // amber
+  Q4: '#8B5CF6', // violet
+};
+
+const quarterOf = (yearQuarter: string) => yearQuarter.split(' ')[1] ?? '';
+
+// Fixed color per calendar month, same every year (Jan 24 and Jan 25 match).
+// Three shades of each quarter's hue, so months stay in their quarter's family.
+const MONTH_COLORS = [
+  '#93C5FD', '#3B82F6', '#1D4ED8', // Jan Feb Mar — blues   (Q1)
+  '#5EEAD4', '#14B8A6', '#0F766E', // Apr May Jun — teals   (Q2)
+  '#FCD34D', '#F59E0B', '#B45309', // Jul Aug Sep — ambers  (Q3)
+  '#C4B5FD', '#8B5CF6', '#6D28D9', // Oct Nov Dec — violets (Q4)
+];
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
@@ -73,10 +94,10 @@ export default function DividendsPage() {
     .map(([month, amount]) => {
       const d = new Date(month);
       const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), _date: d.getTime() };
+      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), m: d.getMonth(), _date: d.getTime() };
     })
     .sort((a, b) => a._date - b._date)
-    .map(({ month, amount }) => ({ month, amount }));
+    .map(({ month, amount, m }) => ({ month, amount, m }));
 
   // By stock — sorted descending by amount
   const tickerMap = tickerAmountArr.reduce<Record<string, number>>(
@@ -119,9 +140,25 @@ export default function DividendsPage() {
         {byQuarter.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Quarter</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All quarters</div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-[12px] text-slate-500 dark:text-slate-400">All quarters</div>
+              <div className="flex items-center gap-3">
+                {Object.entries(QUARTER_COLORS).map(([q, c]) => (
+                  <span key={q} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span className="w-2.5 h-2.5 rounded-sm" style={{ background: c }} />
+                    {q}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="h-64">
-              <AppBarChart data={byQuarter} xKey="yearQuarter" color="#14B8A6" currencySymbol={sym} />
+              <AppBarChart
+                data={byQuarter}
+                xKey="yearQuarter"
+                color="#14B8A6"
+                currencySymbol={sym}
+                getBarColor={(entry) => QUARTER_COLORS[quarterOf(String(entry.yearQuarter))]}
+              />
             </div>
           </div>
         )}
@@ -129,9 +166,25 @@ export default function DividendsPage() {
         {byMonth.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm lg:col-span-2">
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Month</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">Monthly breakdown</div>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <div className="text-[12px] text-slate-500 dark:text-slate-400">Monthly breakdown</div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {MONTH_LABELS.map((mL, i) => (
+                  <span key={mL} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span className="w-2 h-2 rounded-sm" style={{ background: MONTH_COLORS[i] }} />
+                    {mL}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="h-64">
-              <AppBarChart data={byMonth} xKey="month" color="#4F46E5" currencySymbol={sym} />
+              <AppBarChart
+                data={byMonth}
+                xKey="month"
+                color="#4F46E5"
+                currencySymbol={sym}
+                getBarColor={(entry) => MONTH_COLORS[Number(entry.m)]}
+              />
             </div>
           </div>
         )}

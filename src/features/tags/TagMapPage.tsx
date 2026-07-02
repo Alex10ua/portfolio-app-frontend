@@ -5,6 +5,8 @@ import { useAllTags } from '../../hooks/useTags';
 import { useHoldings } from '../../hooks/useHoldings';
 import { tagColor } from '../../lib/tagColors';
 import StatCard from '../../components/ui/StatCard';
+import Dialog from '../../components/ui/Dialog';
+import TagEditor from '../../components/ui/TagEditor';
 import type { TickerTags } from '../../types/tag';
 import type { Holding } from '../../types/holding';
 
@@ -198,6 +200,13 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
 
   useEffect(() => { setOverrides({}); }, [nodes]);
 
+  // Node mouseleave alone is unreliable: zoom/pan moves nodes out from under a
+  // static cursor without firing it, leaving a stale tooltip. Clear explicitly.
+  const clearHover = useCallback(() => {
+    setHoverTicker(null);
+    setTooltip(null);
+  }, []);
+
   const posOf = useCallback((n: GraphNode): NodePos =>
     overrides[n.id] ?? { x: n.x, y: n.y }, [overrides]);
 
@@ -226,6 +235,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
     if (!svg) return;
     const handler = (e: WheelEvent) => {
       e.preventDefault();
+      clearHover();
       const c = svgCoords(e.clientX, e.clientY);
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       const prev = vtRef.current;
@@ -235,10 +245,11 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
     };
     svg.addEventListener('wheel', handler, { passive: false });
     return () => svg.removeEventListener('wheel', handler);
-  }, []);
+  }, [clearHover]);
 
   function onBgMouseDown(e: React.MouseEvent) {
     setPanning(true);
+    clearHover();
     lastPos.current = svgCoords(e.clientX, e.clientY);
   }
 
@@ -275,6 +286,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
   }
 
   function zoomBtn(factor: number) {
+    clearHover();
     const prev = vtRef.current;
     const ns = Math.max(0.15, Math.min(6, prev.s * factor));
     const r = ns / prev.s;
@@ -353,7 +365,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
         }}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
+        onMouseLeave={() => { onMouseUp(); clearHover(); }}
       >
         <defs>
           <pattern id="grid-dot" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
@@ -408,7 +420,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
                     : () => setHoverTicker(n.label)}
                   onMouseLeave={isTag
                     ? () => onHover(null)
-                    : () => { setHoverTicker(null); setTooltip(null); }}
+                    : clearHover}
                   opacity={active ? 1 : 0.18}
                 >
                   {/* soft halo behind tag nodes */}
@@ -524,7 +536,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
         {([
           { label: '+', title: 'Zoom in',  action: () => zoomBtn(1.25) },
           { label: '−', title: 'Zoom out', action: () => zoomBtn(0.8) },
-          { label: '⊙', title: 'Reset',    action: () => { setVt({ x: 0, y: 0, s: 1 }); setOverrides({}); } },
+          { label: '⊙', title: 'Reset',    action: () => { setVt({ x: 0, y: 0, s: 1 }); setOverrides({}); clearHover(); } },
         ] as const).map((btn, i) => (
           <button key={btn.label} title={btn.title} onClick={btn.action} style={{
             width: 30, height: 30, border: 'none', background: 'transparent',
@@ -557,13 +569,14 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
 
 // ---------- tag rail ----------
 
-function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, dark }: {
+function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, onNewTag, dark }: {
   tags: TagGroup[];
   selected: string | null;
   filter: string;
   setFilter: (v: string) => void;
   onSelect: (name: string | null) => void;
   onHover: (name: string | null) => void;
+  onNewTag: () => void;
   dark: boolean;
 }) {
   const filtered = filter
@@ -653,7 +666,7 @@ function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, dark }:
       </div>
 
       <div style={{ padding: '10px 12px', borderTop: `1px solid ${border}` }}>
-        <button style={{
+        <button onClick={onNewTag} style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           padding: '7px 14px', borderRadius: 6, border: `1px solid ${border}`,
           background: 'transparent', color: textMuted, fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -780,6 +793,60 @@ function TickersPanel({ tags, selected, holdingMap, totalPortfolioValue, dark }:
   );
 }
 
+// ---------- new tag dialog ----------
+
+// Same tagging flow as the holding detail dialog on the Holdings dashboard:
+// pick a ticker, then edit its tags with the shared TagEditor (auto-saves per chip).
+function NewTagDialog({ open, onClose, portfolioId, holdings }: {
+  open: boolean;
+  onClose: () => void;
+  portfolioId: string;
+  holdings: Holding[];
+}) {
+  const [ticker, setTicker] = useState('');
+
+  useEffect(() => {
+    if (open) setTicker('');
+  }, [open]);
+
+  return (
+    <Dialog open={open} onClose={onClose} title="New Tag">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Ticker</label>
+          <select
+            value={ticker}
+            onChange={e => setTicker(e.target.value)}
+            className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">Select ticker…</option>
+            {holdings.map(h => (
+              <option key={h.ticker} value={h.ticker}>{h.ticker}</option>
+            ))}
+          </select>
+        </div>
+
+        {ticker && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Tags</label>
+            <TagEditor portfolioId={portfolioId} ticker={ticker} />
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+              Type a tag and press Enter — changes save automatically
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <button onClick={onClose}
+            className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover">
+            Done
+          </button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
 // ---------- page ----------
 
 export default function TagMapPage() {
@@ -790,6 +857,7 @@ export default function TagMapPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
+  const [newTagOpen, setNewTagOpen] = useState(false);
 
   const tags = useMemo(() => buildTagGroups(tagData), [tagData]);
   const { nodes, linked } = useGraphLayout(tags);
@@ -860,7 +928,8 @@ export default function TagMapPage() {
         {/* left rail */}
         <TagRail
           tags={tags} selected={selected} filter={filter}
-          setFilter={setFilter} onSelect={setSelected} onHover={setHovered} dark={dark}
+          setFilter={setFilter} onSelect={setSelected} onHover={setHovered}
+          onNewTag={() => setNewTagOpen(true)} dark={dark}
         />
 
         {/* center graph card */}
@@ -908,6 +977,13 @@ export default function TagMapPage() {
           dark={dark}
         />
       </div>
+
+      <NewTagDialog
+        open={newTagOpen}
+        onClose={() => setNewTagOpen(false)}
+        portfolioId={portfolioId!}
+        holdings={holdings}
+      />
     </div>
   );
 }

@@ -5,6 +5,8 @@ import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
 import StatCard from '../../components/ui/StatCard';
+import StockLogo from '../../components/ui/StockLogo';
+import type { AssetType } from '../../types/holding';
 
 // ---------- OWNERSHIP TIERS ----------
 // Classify a holding by the fraction of the company it represents.
@@ -41,6 +43,7 @@ function fmtShares(n: number): string {
 interface OwnRow {
   ticker: string;
   name: string | null;
+  assetType: AssetType | null;
   yours: number;
   out: number;
   frac: number;
@@ -97,7 +100,7 @@ export default function OwnershipPage() {
       const yours = h.shareAmount;
       const out = h.sharesOutstanding as number;
       const frac = yours / out;
-      return { ticker: h.ticker, name: h.name, yours, out, frac, N: out / yours, tier: tierFor(frac) };
+      return { ticker: h.ticker, name: h.name, assetType: h.assetType, yours, out, frac, N: out / yours, tier: tierFor(frac) };
     })
     .sort((a, b) => b.frac - a.frac);
 
@@ -174,12 +177,7 @@ export default function OwnershipPage() {
                     <td className="px-5 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
                         <span className="w-[18px] text-right text-[12px] font-semibold tabular-nums text-slate-400 dark:text-slate-500">{i + 1}</span>
-                        <span
-                          className="inline-flex items-center justify-center rounded-full text-white text-[12px] font-semibold flex-shrink-0"
-                          style={{ width: 28, height: 28, background: color }}
-                        >
-                          {r.ticker[0]}
-                        </span>
+                        <StockLogo ticker={r.ticker} name={r.name} assetType={r.assetType} size="sm" />
                         <div>
                           <div className="text-[13px] font-semibold text-slate-900 dark:text-white tabular-nums">{r.ticker}</div>
                           <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{r.name}</div>

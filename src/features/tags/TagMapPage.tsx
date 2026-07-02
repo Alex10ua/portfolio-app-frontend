@@ -175,7 +175,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
   tags: TagGroup[];
   nodes: GraphNode[];
   linked: GraphEdge[];
-  selected: string | null;
+  selected: string[];
   hovered: string | null;
   dark: boolean;
   holdingMap: Map<string, Holding>;
@@ -294,7 +294,11 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
     setVt({ s: ns, x: cx - (cx - prev.x) * r, y: cy - (cy - prev.y) * r });
   }
 
-  const focus = hovered ?? selected;
+  // hover previews a single tag; otherwise all selected tags are in focus
+  const focusSet = useMemo(() => {
+    if (hovered) return new Set([hovered]);
+    return selected.length > 0 ? new Set(selected) : null;
+  }, [hovered, selected]);
 
   // tags connected to hovered ticker
   const hoverTickerTags = useMemo(() => {
@@ -307,18 +311,17 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
       if (n.type === 'ticker') return n.label === hoverTicker;
       return hoverTickerTags.has(n.label);
     }
-    if (!focus) return true;
-    if (n.type === 'tag' && n.label === focus) return true;
-    if (n.type === 'ticker') return tags.find(x => x.name === focus)?.tickers.includes(n.label) ?? false;
-    return false;
-  }, [focus, tags, hoverTicker, hoverTickerTags]);
+    if (!focusSet) return true;
+    if (n.type === 'tag') return focusSet.has(n.label);
+    return tags.some(x => focusSet.has(x.name) && x.tickers.includes(n.label));
+  }, [focusSet, tags, hoverTicker, hoverTickerTags]);
 
   const isEdgeActive = useCallback((e: GraphEdge) => {
     if (hoverTicker) return e.to === 'tk:' + hoverTicker;
-    return !focus || e.from === 'tag:' + focus;
-  }, [focus, hoverTicker]);
+    return !focusSet || focusSet.has(e.from.slice('tag:'.length));
+  }, [focusSet, hoverTicker]);
 
-  const anyFocus = focus != null || hoverTicker != null;
+  const anyFocus = focusSet != null || hoverTicker != null;
 
   // curved edge path with slight perpendicular bow
   const edgePath = useCallback((e: GraphEdge) => {
@@ -407,13 +410,13 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
             {nodes.map(n => {
               const active = isNodeActive(n);
               const isTag = n.type === 'tag';
-              const isSel = isTag && n.label === selected;
+              const isSel = isTag && selected.includes(n.label);
               const p = posOf(n);
               const showLabel = isTag || showTickerLabels || active;
               return (
                 <g key={n.id}
                   style={{ cursor: isTag ? 'pointer' : 'grab', transition: 'opacity 200ms ease' }}
-                  onClick={isTag ? () => { if (!dragMoved.current) onSelect(n.label === selected ? null : n.label); } : undefined}
+                  onClick={isTag ? () => { if (!dragMoved.current) onSelect(n.label); } : undefined}
                   onMouseDown={(e) => onNodeMouseDown(e, n)}
                   onMouseEnter={isTag
                     ? () => onHover(n.label)
@@ -559,7 +562,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
         pointerEvents: 'none',
       }}>
         {tags.length} tags · {totalTickers} tickers
-        {selected ? ` · #${selected} highlighted` : ''}
+        {selected.length > 0 ? ` · ${selected.map(s => '#' + s).join(' ')} highlighted` : ''}
         {hoverTicker ? ` · ${hoverTicker}` : ''}
         {' · '}{Math.round(vt.s * 100)}%
       </div>
@@ -571,7 +574,7 @@ function MindMapGraph({ tags, nodes, linked, selected, hovered, dark, holdingMap
 
 function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, onNewTag, dark }: {
   tags: TagGroup[];
-  selected: string | null;
+  selected: string[];
   filter: string;
   setFilter: (v: string) => void;
   onSelect: (name: string | null) => void;
@@ -625,8 +628,8 @@ function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, onNewTa
           style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
             borderRadius: 6, cursor: 'pointer', marginBottom: 4,
-            background: !selected ? (dark ? 'rgba(79,70,229,0.18)' : '#EEF2FF') : 'transparent',
-            color: !selected ? '#4F46E5' : textMuted,
+            background: selected.length === 0 ? (dark ? 'rgba(79,70,229,0.18)' : '#EEF2FF') : 'transparent',
+            color: selected.length === 0 ? '#4F46E5' : textMuted,
           }}
         >
           <Globe size={14} />
@@ -637,10 +640,10 @@ function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, onNewTa
         </div>
 
         {filtered.map(tg => {
-          const active = selected === tg.name;
+          const active = selected.includes(tg.name);
           return (
             <div key={tg.name}
-              onClick={() => onSelect(active ? null : tg.name)}
+              onClick={() => onSelect(tg.name)}
               onMouseEnter={() => onHover(tg.name)}
               onMouseLeave={() => onHover(null)}
               style={{
@@ -682,13 +685,16 @@ function TagRail({ tags, selected, filter, setFilter, onSelect, onHover, onNewTa
 
 function TickersPanel({ tags, selected, holdingMap, totalPortfolioValue, dark }: {
   tags: TagGroup[];
-  selected: string | null;
+  selected: string[];
   holdingMap: Map<string, Holding>;
   totalPortfolioValue: number;
   dark: boolean;
 }) {
-  const tg = selected ? tags.find(x => x.name === selected) ?? null : null;
-  const tickers = tg ? tg.tickers : [...new Set(tags.flatMap(x => x.tickers))];
+  const selTags = tags.filter(x => selected.includes(x.name));
+  const tg = selTags.length === 1 ? selTags[0] : null;
+  const tickers = selTags.length > 0
+    ? [...new Set(selTags.flatMap(x => x.tickers))]
+    : [...new Set(tags.flatMap(x => x.tickers))];
 
   const tagValue = useMemo(() =>
     tickers.reduce((sum, tk) => {
@@ -720,15 +726,26 @@ function TickersPanel({ tags, selected, holdingMap, totalPortfolioValue, dark }:
             : <Network size={14} color={text} />
           }
           <span style={{ fontSize: 13, fontWeight: 600, color: text }}>
-            {tg ? `#${tg.name}` : 'All tickers'}
+            {tg ? `#${tg.name}` : selTags.length > 1 ? `${selTags.length} tags selected` : 'All tickers'}
           </span>
           <span style={{
             marginLeft: 'auto', fontSize: 11, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
             color: textMuted, background: badgeBg, padding: '2px 7px', borderRadius: 999, fontWeight: 600,
           }}>{tickers.length}</span>
         </div>
+        {selTags.length > 1 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+            {selTags.map(t => (
+              <span key={t.name} style={{
+                fontSize: 10, fontWeight: 600, color: t.color,
+                background: badgeBg, border: `1px solid ${border}`,
+                borderRadius: 999, padding: '1px 7px',
+              }}>#{t.name}</span>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 11, color: textMuted, marginBottom: 10 }}>
-          {tg ? `${tickers.length} ticker${tickers.length !== 1 ? 's' : ''} tagged` : 'Across every tag'}
+          {selTags.length > 0 ? `${tickers.length} ticker${tickers.length !== 1 ? 's' : ''} tagged` : 'Across every tag'}
         </div>
 
         {/* value + share stats */}
@@ -854,8 +871,14 @@ export default function TagMapPage() {
   const { data: tagData = [], isLoading: tagsLoading } = useAllTags(portfolioId!);
   const { data: holdings = [], isLoading: holdingsLoading } = useHoldings(portfolioId!);
   const dark = useIsDark();
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
+
+  // null clears the whole selection; a name toggles that tag in/out
+  const toggleSelected = useCallback((name: string | null) => {
+    if (name === null) { setSelected([]); return; }
+    setSelected(prev => prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name]);
+  }, []);
   const [filter, setFilter] = useState('');
   const [newTagOpen, setNewTagOpen] = useState(false);
 
@@ -928,7 +951,7 @@ export default function TagMapPage() {
         {/* left rail */}
         <TagRail
           tags={tags} selected={selected} filter={filter}
-          setFilter={setFilter} onSelect={setSelected} onHover={setHovered}
+          setFilter={setFilter} onSelect={toggleSelected} onHover={setHovered}
           onNewTag={() => setNewTagOpen(true)} dark={dark}
         />
 
@@ -945,16 +968,17 @@ export default function TagMapPage() {
           }}>
             <Network size={14} color={dark ? '#F1F5F9' : '#0F172A'} />
             <span style={{ fontSize: 13, fontWeight: 600, color: dark ? '#F1F5F9' : '#0F172A' }}>Connections</span>
-            {selected && (
-              <span style={{
+            {selected.map(s => (
+              <span key={s} style={{
                 fontSize: 11, fontFamily: 'JetBrains Mono, ui-monospace, monospace',
-                color: tagColor(selected),
+                color: tagColor(s),
                 background: dark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
                 padding: '2px 8px', borderRadius: 999, fontWeight: 600,
-              }}>#{selected}</span>
-            )}
-            {selected && (
-              <button onClick={() => setSelected(null)} style={{
+                cursor: 'pointer',
+              }} title="Remove from selection" onClick={() => toggleSelected(s)}>#{s}</span>
+            ))}
+            {selected.length > 0 && (
+              <button onClick={() => setSelected([])} style={{
                 marginLeft: 'auto', fontSize: 11, color: dark ? '#94A3B8' : '#475569',
                 background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline',
               }}>Clear</button>
@@ -965,7 +989,7 @@ export default function TagMapPage() {
               tags={tags} nodes={nodes} linked={linked}
               selected={selected} hovered={hovered} dark={dark}
               holdingMap={holdingMap}
-              onSelect={setSelected} onHover={setHovered}
+              onSelect={toggleSelected} onHover={setHovered}
             />
           </div>
         </div>

@@ -90,7 +90,9 @@ export default function OwnershipPage() {
   if (error) return <ErrorAlert title="Error loading ownership" message={(error as Error).message} />;
 
   const rows: OwnRow[] = (holdings ?? [])
-    .filter((h) => h.assetType === 'STOCK' && h.shareAmount > 0 && h.sharesOutstanding && h.sharesOutstanding > 0)
+    // STOCK → shares outstanding; CRYPTO → circulating supply. CUSTOM has no such
+    // figure (null) so it's naturally excluded by the sharesOutstanding check.
+    .filter((h) => h.shareAmount > 0 && h.sharesOutstanding && h.sharesOutstanding > 0)
     .map((h) => {
       const yours = h.shareAmount;
       const out = h.sharesOutstanding as number;
@@ -104,7 +106,7 @@ export default function OwnershipPage() {
       <EmptyState
         icon={Crown}
         title="No ownership data yet"
-        description="Add stock holdings (with shares-outstanding data) to see how much of each company you actually own."
+        description="Add stock or crypto holdings (with shares-outstanding / circulating-supply data) to see how much of each you actually own."
       />
     );
   }
@@ -122,7 +124,7 @@ export default function OwnershipPage() {
       <div>
         <h1 className="text-[20px] font-semibold text-slate-900 dark:text-white">Ownership</h1>
         <p className="text-[13px] text-slate-500 dark:text-slate-400">
-          How much of each company you actually own — ranked by stake
+          How much of each company or coin you actually own — ranked by stake
         </p>
       </div>
 
@@ -133,7 +135,7 @@ export default function OwnershipPage() {
         <StatCard icon={PieChart} label="Smallest stake" value={`1 in ${fmtN(smallest.N)}`}
           sub={`${smallest.ticker} · ${smallest.name ?? ''}`} accent={TIER_COLOR.Trace} />
         <StatCard icon={Coins} label="Shares held" value={fmtShares(totalShares)}
-          sub={`across ${rows.length} ${rows.length === 1 ? 'company' : 'companies'}`} accent="#4F46E5" />
+          sub={`across ${rows.length} ${rows.length === 1 ? 'position' : 'positions'}`} accent="#4F46E5" />
       </div>
 
       {/* table card */}

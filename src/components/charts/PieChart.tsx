@@ -1,4 +1,4 @@
-import { PieChart, Pie, Sector, ResponsiveContainer, Cell } from 'recharts';
+import { PieChart, Pie, ResponsiveContainer, Cell } from 'recharts';
 import { useState, useEffect } from 'react';
 
 interface PieDataItem {
@@ -17,38 +17,6 @@ const DEFAULT_COLORS = [
   '#06b6d4', '#84cc16', '#e11d48', '#0ea5e9', '#d946ef',
   '#22c55e', '#f43f5e', '#f472b6', '#fb923c', '#a3e635',
 ];
-
-function makeActiveShape(isDark: boolean) {
-  return function ActiveShape(props: Record<string, unknown>) {
-    const {
-      cx, cy, innerRadius, outerRadius, startAngle, endAngle,
-      fill, payload, percent, amount,
-    } = props as {
-      cx: number; cy: number; innerRadius: number; outerRadius: number;
-      startAngle: number; endAngle: number; fill: string;
-      payload: { name: string }; percent: number; amount: number;
-    };
-
-    const labelColor = isDark ? '#f1f5f9' : '#1e293b';
-    const subColor   = isDark ? '#94a3b8' : '#64748b';
-
-    return (
-      <g>
-        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 6} startAngle={startAngle} endAngle={endAngle} fill={fill} />
-        <Sector cx={cx} cy={cy} startAngle={startAngle} endAngle={endAngle} innerRadius={outerRadius + 10} outerRadius={outerRadius + 14} fill={fill} />
-        <text x={cx} y={cy - 14} textAnchor="middle" fill={labelColor} fontSize={12} fontWeight={600}>
-          {payload.name.length > 12 ? payload.name.slice(0, 12) + '…' : payload.name}
-        </text>
-        <text x={cx} y={cy + 6} textAnchor="middle" fill={fill} fontSize={14} fontWeight={700}>
-          {`$${typeof amount === 'number' ? amount.toFixed(2) : 'N/A'}`}
-        </text>
-        <text x={cx} y={cy + 22} textAnchor="middle" fill={subColor} fontSize={11}>
-          {`${(percent * 100).toFixed(1)}%`}
-        </text>
-      </g>
-    );
-  };
-}
 
 export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieChartProps) {
   const [activeIndex, setActiveIndex] = useState(0);
@@ -75,17 +43,18 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
 
   const total = data.reduce((s, d) => s + d.amount, 0);
   const safeIndex = Math.min(activeIndex, data.length - 1);
-  const activeShape = makeActiveShape(isDark);
+  const active = data[safeIndex];
+  const activeColor = colors[safeIndex % colors.length];
 
+  // Recharts 3 dropped external `activeIndex` control on <Pie>, so the active
+  // slice is emphasized via per-Cell opacity/stroke and the center label is a
+  // plain overlay — both driven by our own state, shared by pie & legend hover.
   return (
     <div className="flex flex-col lg:flex-row items-center gap-4">
-      <div className="w-full lg:flex-1 min-w-0" style={{ height: 280 }}>
+      <div className="relative w-full lg:flex-1 min-w-0" style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             <Pie
-              {...({ activeIndex: safeIndex } as any)}
-              activeShape={activeShape}
               data={data}
               cx="50%"
               cy="50%"
@@ -95,12 +64,32 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
               nameKey="name"
               onMouseEnter={(_, index) => setActiveIndex(index)}
             >
-              {data.map((item) => (
-                <Cell key={item.name} fill={colors[data.indexOf(item) % colors.length]} />
+              {data.map((item, i) => (
+                <Cell
+                  key={item.name}
+                  fill={colors[i % colors.length]}
+                  fillOpacity={i === safeIndex ? 1 : 0.4}
+                  stroke={i === safeIndex ? colors[i % colors.length] : 'none'}
+                  strokeWidth={i === safeIndex ? 2 : 0}
+                  style={{ transition: 'fill-opacity 150ms ease' }}
+                />
               ))}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
+
+        {/* center label for the active slice (fits inside innerRadius) */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+          <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100 max-w-[120px] truncate">
+            {active.name}
+          </span>
+          <span className="text-[14px] font-bold" style={{ color: activeColor }}>
+            ${active.amount.toFixed(2)}
+          </span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+            {((active.amount / total) * 100).toFixed(1)}%
+          </span>
+        </div>
       </div>
 
       {/* Legend */}

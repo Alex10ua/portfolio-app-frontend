@@ -106,6 +106,7 @@ export default function DividendsPage() {
   );
   const byStock = Object.entries(tickerMap)
     .map(([ticker, amount]) => ({ ticker, amount: parseFloat(Number(amount).toFixed(2)) }))
+    .filter((s) => s.amount > 0) // never paid dividends → not a payer, hide from charts
     .sort((a, b) => b.amount - a.amount);
 
   // Split payers into currently-held vs sold-off tickers

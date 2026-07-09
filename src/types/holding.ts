@@ -6,7 +6,10 @@ export interface Holding {
   name: string | null;
   shareAmount: number;
   costPerShare: number | null;
+  costBasis: number | null;           // backend-computed (BigDecimal): costPerShare × shares
   currentShareValue: number | null;
+  currentTotalValue: number | null;   // backend-computed (BigDecimal): price × shares
+  totalReceivedDividend: number | null;
   dividend: number | null;
   dividendYield: number | null;
   dividendYieldOnCost: number | null;

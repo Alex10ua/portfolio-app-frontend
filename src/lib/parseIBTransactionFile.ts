@@ -1,4 +1,3 @@
-import Papa from 'papaparse';
 import type { CreateTransactionPayload, Currency, TransactionType } from '../types/transaction';
 
 type Row = string[];
@@ -193,7 +192,8 @@ function parseIBRows(rawRows: Row[]): CreateTransactionPayload[] {
  * Tries to parse the file as an IB Activity Statement CSV.
  * Returns parsed transactions if the file is recognized as IB format, null otherwise.
  */
-export function tryParseIBActivityStatement(file: File): Promise<CreateTransactionPayload[] | null> {
+export async function tryParseIBActivityStatement(file: File): Promise<CreateTransactionPayload[] | null> {
+  const Papa = (await import('papaparse')).default; // code-split: only when importing
   return new Promise((resolve, reject) => {
     Papa.parse<Row>(file, {
       header: false,

@@ -55,7 +55,11 @@ function mergeColumns(saved: Column[]): Column[] {
 }
 
 // Single source for the "Total Value" figure — used by the column, sorting, and % of Portfolio.
-const holdingTotalValue = (h: Holding) => (h.currentShareValue ?? 0) * h.shareAmount;
+// Prefer the backend-computed BigDecimal value; fall back to a client calc only for legacy/null.
+const holdingTotalValue = (h: Holding) =>
+  h.currentTotalValue ?? (h.currentShareValue ?? 0) * h.shareAmount;
+const holdingCostBasis = (h: Holding) =>
+  h.costBasis ?? (h.costPerShare ?? 0) * h.shareAmount;
 
 const ASSET_CHIP_COLORS: Record<string, string> = {
   STOCK:    'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
@@ -98,8 +102,10 @@ export default function HoldingsDashboardPage() {
   }, [columns, pid]);
 
   useEffect(() => {
-    if (firstTradeYear) localStorage.setItem('firstTradeYear', String(firstTradeYear));
-  }, [firstTradeYear]);
+    if (firstTradeYear) {
+      try { localStorage.setItem(`firstTradeYear-${pid}`, String(firstTradeYear)); } catch { /* storage blocked */ }
+    }
+  }, [firstTradeYear, pid]);
 
   const handleSort = (key: string) => {
     if (orderBy === key) setOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
@@ -191,8 +197,8 @@ export default function HoldingsDashboardPage() {
     // toBase converts native → EUR (fx = rateVsEur); displayRate then EUR → USD.
     const toBase = (v: number, fx?: number) => isMulti && fx && fx !== 0 ? v / fx : v;
     const displayRate = isMulti ? (fxRates['USD'] ?? 1) : 1;
-    const totalValue  = holdings.reduce((s, h) => s + toBase((h.currentShareValue ?? 0) * h.shareAmount, h.fxRate), 0) * displayRate;
-    const totalCost   = holdings.reduce((s, h) => s + toBase((h.costPerShare ?? 0) * h.shareAmount, h.fxRate), 0) * displayRate;
+    const totalValue  = holdings.reduce((s, h) => s + toBase(holdingTotalValue(h), h.fxRate), 0) * displayRate;
+    const totalCost   = holdings.reduce((s, h) => s + toBase(holdingCostBasis(h), h.fxRate), 0) * displayRate;
     const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.fxRate), 0) * displayRate;
     const avgYield    = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
     return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield } };

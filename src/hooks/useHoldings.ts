@@ -42,8 +42,11 @@ export function useCreateTransaction(portfolioId: string) {
   return useMutation({
     mutationFn: (payload: CreateTransactionPayload) => createTransaction(portfolioId, payload),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
-      void qc.invalidateQueries({ queryKey: ['cashBalance', portfolioId] });
+      // A new transaction affects every derived view, not just holdings/cash.
+      // (partial key match also invalidates ['performance', portfolioId, period])
+      for (const key of ['holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance']) {
+        void qc.invalidateQueries({ queryKey: [key, portfolioId] });
+      }
     },
   });
 }

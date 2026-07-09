@@ -22,6 +22,8 @@ interface AppBarChartProps {
   tooltipContent?: TooltipProps<number, string>['content'];
   /** Per-bar color override; falls back to `color` when it returns undefined */
   getBarColor?: (entry: Record<string, unknown>, index: number) => string | undefined;
+  /** Fires with the hovered row (whole category band, same as the tooltip), null on leave */
+  onBarHover?: (entry: Record<string, unknown> | null) => void;
 }
 
 export default function AppBarChart({
@@ -33,6 +35,7 @@ export default function AppBarChart({
   yFormatter,
   tooltipContent,
   getBarColor,
+  onBarHover,
 }: AppBarChartProps) {
   const fmtY = yFormatter ?? ((v: number) => `${currencySymbol}${v}`);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -51,7 +54,20 @@ export default function AppBarChart({
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+      <BarChart
+        data={data}
+        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+        onMouseMove={
+          onBarHover
+            ? (state: { activeTooltipIndex?: number | string | null }) => {
+                const raw = state?.activeTooltipIndex;
+                const idx = raw == null ? -1 : Number(raw);
+                onBarHover(Number.isInteger(idx) && idx >= 0 && data[idx] ? data[idx] : null);
+              }
+            : undefined
+        }
+        onMouseLeave={onBarHover ? () => onBarHover(null) : undefined}
+      >
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#e2e8f0'} />
         <XAxis dataKey={xKey} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
         <YAxis

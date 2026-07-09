@@ -36,7 +36,7 @@ export default function TransactionsPage() {
   const pid = portfolioId!;
 
   const currentYear = new Date().getFullYear();
-  const cachedFirst = parseInt(localStorage.getItem('firstTradeYear') ?? String(currentYear), 10);
+  const cachedFirst = parseInt(localStorage.getItem(`firstTradeYear-${pid}`) ?? String(currentYear), 10);
 
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);

@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { CreateTransactionPayload } from '../types/transaction';
 
 export const NN_TICKERS = new Set([
@@ -150,6 +149,8 @@ export async function tryParseNNFile(file: File): Promise<NNParseResult | null> 
 
   const validSignature = await validateXlsxSignature(file);
   if (!validSignature) return null;
+
+  const XLSX = await import('xlsx'); // code-split: xlsx loads only when importing a file
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

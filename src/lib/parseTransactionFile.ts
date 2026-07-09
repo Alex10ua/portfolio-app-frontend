@@ -1,5 +1,3 @@
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
 import type { CreateTransactionPayload, Currency } from '../types/transaction';
 
 type RawRow = Record<string, string>;
@@ -41,7 +39,8 @@ function parseRows(rows: RawRow[]): CreateTransactionPayload[] {
   return results;
 }
 
-function parseCsv(file: File): Promise<CreateTransactionPayload[]> {
+async function parseCsv(file: File): Promise<CreateTransactionPayload[]> {
+  const Papa = (await import('papaparse')).default; // code-split: only when importing
   return new Promise((resolve, reject) => {
     Papa.parse<RawRow>(file, {
       header: true,
@@ -62,7 +61,8 @@ function parseCsv(file: File): Promise<CreateTransactionPayload[]> {
   });
 }
 
-function parseXlsx(file: File): Promise<CreateTransactionPayload[]> {
+async function parseXlsx(file: File): Promise<CreateTransactionPayload[]> {
+  const XLSX = await import('xlsx'); // code-split: only when importing
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {

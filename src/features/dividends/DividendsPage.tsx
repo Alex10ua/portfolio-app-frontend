@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { TrendingUp, CalendarDays, Clock, BarChart2, BarChart as BarChartIcon } from 'lucide-react';
 import { useDividends } from '../../hooks/useDividends';
@@ -19,6 +20,10 @@ const QUARTER_COLORS: Record<string, string> = {
 
 const quarterOf = (yearQuarter: string) => yearQuarter.split(' ')[1] ?? '';
 
+// Neutral fill for de-emphasized bars while a quarter is hovered.
+// Semi-transparent slate reads as "dimmed" on both light and dark card backgrounds.
+const DIMMED_BAR = 'rgba(148, 163, 184, 0.35)';
+
 // Fixed color per calendar month, same every year (Jan 24 and Jan 25 match).
 // Three shades of each quarter's hue, so months stay in their quarter's family.
 const MONTH_COLORS = [
@@ -33,6 +38,10 @@ export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
   const { data: holdings } = useHoldings(portfolioId!);
+  // Hovered quarter ("Q1".."Q4") — same quarter highlights across all years, rest dims
+  const [hoverQuarter, setHoverQuarter] = useState<string | null>(null);
+  // Hovered calendar month (0-11) — same month highlights across all years, rest dims
+  const [hoverMonth, setHoverMonth] = useState<number | null>(null);
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading dividends" message={(error as Error).message} />;
@@ -145,7 +154,14 @@ export default function DividendsPage() {
               <div className="text-[12px] text-slate-500 dark:text-slate-400">All quarters</div>
               <div className="flex items-center gap-3">
                 {Object.entries(QUARTER_COLORS).map(([q, c]) => (
-                  <span key={q} className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span
+                    key={q}
+                    onMouseEnter={() => setHoverQuarter(q)}
+                    onMouseLeave={() => setHoverQuarter(null)}
+                    className={`inline-flex items-center gap-1.5 text-[11px] font-semibold cursor-default transition-opacity ${
+                      hoverQuarter && hoverQuarter !== q ? 'opacity-40' : ''
+                    } text-slate-500 dark:text-slate-400`}
+                  >
                     <span className="w-2.5 h-2.5 rounded-sm" style={{ background: c }} />
                     {q}
                   </span>
@@ -158,7 +174,14 @@ export default function DividendsPage() {
                 xKey="yearQuarter"
                 color="#14B8A6"
                 currencySymbol={sym}
-                getBarColor={(entry) => QUARTER_COLORS[quarterOf(String(entry.yearQuarter))]}
+                getBarColor={(entry) => {
+                  const q = quarterOf(String(entry.yearQuarter));
+                  if (hoverQuarter && q !== hoverQuarter) return DIMMED_BAR;
+                  return QUARTER_COLORS[q];
+                }}
+                onBarHover={(entry) =>
+                  setHoverQuarter(entry ? quarterOf(String(entry.yearQuarter)) : null)
+                }
               />
             </div>
           </div>
@@ -171,7 +194,14 @@ export default function DividendsPage() {
               <div className="text-[12px] text-slate-500 dark:text-slate-400">Monthly breakdown</div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 {MONTH_LABELS.map((mL, i) => (
-                  <span key={mL} className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span
+                    key={mL}
+                    onMouseEnter={() => setHoverMonth(i)}
+                    onMouseLeave={() => setHoverMonth(null)}
+                    className={`inline-flex items-center gap-1 text-[10.5px] font-semibold cursor-default transition-opacity ${
+                      hoverMonth != null && hoverMonth !== i ? 'opacity-40' : ''
+                    } text-slate-500 dark:text-slate-400`}
+                  >
                     <span className="w-2 h-2 rounded-sm" style={{ background: MONTH_COLORS[i] }} />
                     {mL}
                   </span>
@@ -184,7 +214,12 @@ export default function DividendsPage() {
                 xKey="month"
                 color="#4F46E5"
                 currencySymbol={sym}
-                getBarColor={(entry) => MONTH_COLORS[Number(entry.m)]}
+                getBarColor={(entry) => {
+                  const m = Number(entry.m);
+                  if (hoverMonth != null && m !== hoverMonth) return DIMMED_BAR;
+                  return MONTH_COLORS[m];
+                }}
+                onBarHover={(entry) => setHoverMonth(entry ? Number(entry.m) : null)}
               />
             </div>
           </div>

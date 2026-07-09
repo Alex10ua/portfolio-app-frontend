@@ -2,6 +2,8 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: '$',
   EUR: '€',
   GBP: '£',
+  GBp: 'p ', // pence (minor unit) — provider price/dividend currency, see CLAUDE.md
+  GBx: 'p ',
   CHF: 'CHF ',
   PLN: 'zł',
   CZK: 'Kč',

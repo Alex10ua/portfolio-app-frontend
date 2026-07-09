@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import type { CreateTransactionPayload } from '../types/transaction';
 
 const COL_DATE   = 'Dátum pripísania';
@@ -130,9 +129,11 @@ function parseRows(jsonRows: Record<string, unknown>[]): VUBParseResult {
   return { transactions, skippedZeroCount, fingerprints, fundPrices, fundPriceHistory, yearsPresent };
 }
 
-export function tryParseVUBFile(file: File): Promise<VUBParseResult | null> {
+export async function tryParseVUBFile(file: File): Promise<VUBParseResult | null> {
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext !== 'xlsx' && ext !== 'xls') return Promise.resolve(null);
+  if (ext !== 'xlsx' && ext !== 'xls') return null;
+
+  const XLSX = await import('xlsx'); // code-split: xlsx loads only when importing a file
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

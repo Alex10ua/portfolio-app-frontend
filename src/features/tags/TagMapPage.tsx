@@ -75,7 +75,9 @@ function buildTagGroups(data: TickerTags[]): TagGroup[] {
 // ---------- holding value helpers ----------
 
 function holdingValue(h: Holding): number {
-  return (h.shareAmount * (h.currentShareValue ?? 0)) / (h.fxRate ?? 1);
+  // Prefer the backend-computed native total (BigDecimal); convert native → EUR via fxRate.
+  const native = h.currentTotalValue ?? h.shareAmount * (h.currentShareValue ?? 0);
+  return native / (h.fxRate ?? 1);
 }
 
 function fmtEur(n: number): string {

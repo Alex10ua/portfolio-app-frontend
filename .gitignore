@@ -10,6 +10,7 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
@@ -24,3 +25,9 @@ yarn-error.log*
 
 images
 *.txt
+dist/index.html
+
+# local broker statements — personal data, never commit
+TransakcieReport.xlsx
+*.csv
+VUB_Generali_dss__obraty_na_dochodkovom_ucte.xlsx

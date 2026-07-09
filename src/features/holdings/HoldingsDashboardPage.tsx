@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
   TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote, GripVertical,
+  Wallet, Pencil, Trash2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
+import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
 import { getFxRates } from '../../api/fxRates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -79,10 +81,15 @@ export default function HoldingsDashboardPage() {
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
   const { data: cashBalance } = useCashBalance(pid);
+  const { data: manualCash } = useCashHoldings(pid);
+  const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
+  const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
   const { data: fxRates = {} } = useQuery({ queryKey: ['fxRates'], queryFn: getFxRates });
 
   const [createOpen, setCreateOpen]   = useState(false);
   const [importOpen, setImportOpen]   = useState(false);
+  // null = closed; isEdit locks the currency field to the existing position
+  const [cashDialog, setCashDialog]   = useState<{ currency: string; amount: string; isEdit?: boolean } | null>(null);
   const [configOpen, setConfigOpen]   = useState(false);
   const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
   const [orderBy, setOrderBy]         = useState<string>('ticker');
@@ -204,6 +211,27 @@ export default function HoldingsDashboardPage() {
     return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield } };
   }, [holdings, fxRates]);
 
+  // Manual cash converted to the portfolio's display currency.
+  // fxRates = currency → rateVsEur, so native → base is amount × rate(base) / rate(native).
+  const cashInBase = useMemo(() => {
+    if (!manualCash?.length) return 0;
+    const rateOf = (c: string) => {
+      const r = fxRates[c];
+      return r && r !== 0 ? r : 1;
+    };
+    const baseRate = baseCurrency ? rateOf(baseCurrency) : 1;
+    return manualCash.reduce((s, c) => s + (c.amount ?? 0) * (baseRate / rateOf(c.currency)), 0);
+  }, [manualCash, fxRates, baseCurrency]);
+
+  const submitCashDialog = async () => {
+    if (!cashDialog) return;
+    const currency = cashDialog.currency.trim().toUpperCase();
+    const amount = Number(cashDialog.amount);
+    if (!/^[A-Z]{3}$/.test(currency) || !Number.isFinite(amount)) return;
+    await saveCash({ currency, amount });
+    setCashDialog(null);
+  };
+
   const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
 
   const renderCell = (holding: Holding, col: Column): React.ReactNode => {
@@ -316,12 +344,45 @@ export default function HoldingsDashboardPage() {
       {/* KPI stat cards */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatCard
-            label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
-            value={formatCurrency(stats.totalValue, undefined, baseCurrency)}
-            icon={TrendingUp}
-            accent="#4F46E5"
-          />
+          <div className="relative group">
+            <StatCard
+              label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
+              value={formatCurrency(stats.totalValue + cashInBase, undefined, baseCurrency)}
+              icon={TrendingUp}
+              accent="#4F46E5"
+              sub={cashInBase !== 0 ? 'incl. cash' : undefined}
+            />
+            {cashInBase !== 0 && (
+              <div className="absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-lg">
+                <div className="flex items-center justify-between text-[13px] mb-1.5">
+                  <span className="text-slate-500 dark:text-slate-400">Portfolio value</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(stats.totalValue, undefined, baseCurrency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="text-slate-500 dark:text-slate-400">Cash</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(cashInBase, undefined, baseCurrency)}
+                  </span>
+                </div>
+                {(manualCash ?? []).map((c) => (
+                  <div key={c.currency} className="flex items-center justify-between text-[12px] pl-3 mt-0.5">
+                    <span className="text-slate-400 dark:text-slate-500">{c.currency}</span>
+                    <span className="tabular-nums text-slate-500 dark:text-slate-400">
+                      {c.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(stats.totalValue + cashInBase, undefined, baseCurrency)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
           <StatCard
             label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`}
             value={formatCurrency(stats.totalCost, undefined, baseCurrency)}
@@ -342,6 +403,61 @@ export default function HoldingsDashboardPage() {
           />
         </div>
       )}
+
+      {/* Manual cash holdings */}
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Cash Holdings</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400">Updated manually — counted in Total Value, not in charts</div>
+          </div>
+          <button
+            onClick={() => setCashDialog({ currency: '', amount: '' })}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Cash
+          </button>
+        </div>
+        {(manualCash ?? []).length === 0 ? (
+          <div className="text-[13px] text-slate-400 dark:text-slate-500">No cash positions yet.</div>
+        ) : (
+          <div className="flex flex-wrap gap-5">
+            {(manualCash ?? []).map((c) => (
+              <div key={c.currency} className="flex items-center gap-3 min-w-[170px] group/cash">
+                <div
+                  className="flex items-center justify-center rounded-lg flex-shrink-0"
+                  style={{ width: 32, height: 32, background: '#4F46E51A' }}
+                >
+                  <Wallet className="h-4 w-4" style={{ color: '#4F46E5' }} />
+                </div>
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">{c.currency}</div>
+                  <div className="text-[16px] font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {c.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 opacity-0 group-hover/cash:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => setCashDialog({ currency: c.currency, amount: String(c.amount), isEdit: true })}
+                    className="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+                    title="Edit amount"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => void removeCash(c.currency)}
+                    className="p-1 rounded text-slate-400 hover:text-red-500"
+                    title="Remove"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Cash position */}
       {cashBalance && Object.keys(cashBalance).length > 0 && (
@@ -472,6 +588,64 @@ export default function HoldingsDashboardPage() {
         portfolioId={pid}
       />
       <ImportTransactionsModal open={importOpen} onClose={() => setImportOpen(false)} portfolioId={pid} />
+
+      <Dialog
+        open={cashDialog !== null}
+        onClose={() => setCashDialog(null)}
+        title={cashDialog?.isEdit ? `Edit Cash — ${cashDialog.currency}` : 'Add Cash'}
+        maxWidth="sm"
+      >
+        {cashDialog && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); void submitCashDialog(); }}
+            className="space-y-4"
+          >
+            <div>
+              <label className="block text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Currency</label>
+              <input
+                type="text"
+                value={cashDialog.currency}
+                onChange={(e) => setCashDialog({ ...cashDialog, currency: e.target.value.toUpperCase() })}
+                placeholder="USD"
+                maxLength={3}
+                pattern="[A-Za-z]{3}"
+                required
+                disabled={cashDialog.isEdit}
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-[14px] text-slate-900 dark:text-white uppercase disabled:opacity-60"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-1">Amount</label>
+              <input
+                type="number"
+                step="0.01"
+                value={cashDialog.amount}
+                onChange={(e) => setCashDialog({ ...cashDialog, amount: e.target.value })}
+                placeholder="0.00"
+                required
+                autoFocus
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-[14px] text-slate-900 dark:text-white tabular-nums"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCashDialog(null)}
+                className="rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingCash}
+                className="rounded-md bg-primary px-3 py-2 text-[13px] font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
+              >
+                {savingCash ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Dialog>
       <HoldingDetailDialog holding={detailHolding} open={detailHolding !== null} onClose={() => setDetailHolding(null)} portfolioId={pid} />
 
       <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">

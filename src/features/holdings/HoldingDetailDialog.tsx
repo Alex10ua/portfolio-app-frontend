@@ -75,7 +75,7 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
         <DetailRow label="Country" value={data?.country} />
         <DetailRow label="Currency" value={data?.currency} />
         <DetailRow label="Unit" value={data?.unit} />
-        <DetailRow label="Current Price" value={formatCurrency(data?.priceNow)} />
+        <DetailRow label="Current Price" value={formatCurrency(data?.priceNow, undefined, data?.currency || 'USD')} />
       </div>
 
       {recentHistory.length > 0 && (
@@ -90,7 +90,7 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
                 className="flex justify-between px-3 py-1.5 text-xs border-b border-slate-100 dark:border-slate-700 last:border-0"
               >
                 <span className="text-slate-500 dark:text-slate-400">{entry.date}</span>
-                <span className="font-medium text-slate-800 dark:text-slate-200">{formatCurrency(entry.price)}</span>
+                <span className="font-medium text-slate-800 dark:text-slate-200">{formatCurrency(entry.price, undefined, data?.currency || 'USD')}</span>
               </div>
             ))}
           </div>

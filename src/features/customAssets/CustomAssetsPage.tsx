@@ -69,7 +69,7 @@ export default function CustomAssetsPage() {
 
               <div className="flex items-baseline justify-between">
                 <span className="text-xl font-bold text-slate-900 dark:text-white">
-                  {asset.priceNow != null ? formatCurrency(asset.priceNow) : '—'}
+                  {asset.priceNow != null ? formatCurrency(asset.priceNow, undefined, asset.currency || 'USD') : '—'}
                 </span>
                 <span className="text-xs text-slate-400">{asset.currency} / {asset.unit}</span>
               </div>

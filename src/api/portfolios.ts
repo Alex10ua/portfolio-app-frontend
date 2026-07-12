@@ -15,3 +15,7 @@ export async function updatePortfolio(portfolioId: string, payload: CreatePortfo
   const response = await apiClient.put<Portfolio>(`${portfolioId}/updatePortfolio`, payload);
   return response.data;
 }
+
+export async function deletePortfolio(portfolioId: string): Promise<void> {
+  await apiClient.delete(`${portfolioId}/deletePortfolio`);
+}

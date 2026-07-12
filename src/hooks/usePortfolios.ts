@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPortfolios, createPortfolio, updatePortfolio } from '../api/portfolios';
+import { getPortfolios, createPortfolio, updatePortfolio, deletePortfolio } from '../api/portfolios';
 import type { CreatePortfolioPayload } from '../types/portfolio';
 
 export function usePortfolios() {
@@ -26,6 +26,17 @@ export function useUpdatePortfolio() {
       updatePortfolio(portfolioId, payload),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['portfolios'] });
+    },
+  });
+}
+
+export function useDeletePortfolio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (portfolioId: string) => deletePortfolio(portfolioId),
+    onSuccess: () => {
+      // portfolio and all its derived data are gone — drop everything cached
+      void qc.invalidateQueries();
     },
   });
 }

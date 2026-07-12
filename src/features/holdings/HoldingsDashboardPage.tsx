@@ -6,7 +6,7 @@ import {
   Wallet, Pencil, Trash2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
+import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
 import { getFxRates } from '../../api/fxRates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
@@ -82,6 +82,7 @@ export default function HoldingsDashboardPage() {
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
   const { data: cashBalance } = useCashBalance(pid);
   const { data: manualCash } = useCashHoldings(pid);
+  const { data: valueHistory } = usePortfolioHistory(pid);
   const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
   const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
   const { data: fxRates = {} } = useQuery({ queryKey: ['fxRates'], queryFn: getFxRates });
@@ -90,6 +91,9 @@ export default function HoldingsDashboardPage() {
   const [importOpen, setImportOpen]   = useState(false);
   // null = closed; isEdit locks the currency field to the existing position
   const [cashDialog, setCashDialog]   = useState<{ currency: string; amount: string; isEdit?: boolean } | null>(null);
+  // Chart start month ('YYYY-MM'); falls back to the first data point when unset/stale
+  const [chartStart, setChartStart]   = useState<string>(() => localStorage.getItem(`chartStart-${pid}`) ?? '');
+  const [chartConfigOpen, setChartConfigOpen] = useState(false);
   const [configOpen, setConfigOpen]   = useState(false);
   const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
   const [orderBy, setOrderBy]         = useState<string>('ticker');
@@ -222,6 +226,26 @@ export default function HoldingsDashboardPage() {
     const baseRate = baseCurrency ? rateOf(baseCurrency) : 1;
     return manualCash.reduce((s, c) => s + (c.amount ?? 0) * (baseRate / rateOf(c.currency)), 0);
   }, [manualCash, fxRates, baseCurrency]);
+
+  // Distinct months of the value chart, ascending — options for the start-month select
+  const chartMonths = useMemo(() => {
+    const months = [...new Set((valueHistory ?? []).map((p) => p.date.slice(0, 7)))];
+    months.sort();
+    return months;
+  }, [valueHistory]);
+
+  // Saved month may predate a data change or belong to another portfolio state — clamp to range
+  const effectiveChartStart = chartMonths.includes(chartStart) ? chartStart : chartMonths[0];
+
+  const changeChartStart = (month: string) => {
+    setChartStart(month);
+    try { localStorage.setItem(`chartStart-${pid}`, month); } catch { /* storage blocked */ }
+  };
+
+  const monthLabel = (m: string) => {
+    const [y, mo] = m.split('-');
+    return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
 
   const submitCashDialog = async () => {
     if (!cashDialog) return;
@@ -492,10 +516,47 @@ export default function HoldingsDashboardPage() {
       {/* Portfolio value chart */}
       {holdings && holdings.length > 0 && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
-          <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value Over Time</div>
-          <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All currencies converted to base</div>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value Over Time</div>
+              <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All currencies converted to base</div>
+            </div>
+            {chartMonths.length > 1 && (
+              <div className="relative">
+                <button
+                  onClick={() => setChartConfigOpen((o) => !o)}
+                  title="Chart settings"
+                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+                {chartConfigOpen && (
+                  <>
+                    {/* click-away layer */}
+                    <div className="fixed inset-0 z-20" onClick={() => setChartConfigOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1.5 z-30 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-lg">
+                      <label className="block text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
+                        From
+                      </label>
+                      <select
+                        value={effectiveChartStart}
+                        onChange={(e) => changeChartStart(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200"
+                      >
+                        {chartMonths.map((m, i) => (
+                          <option key={m} value={m}>
+                            {i === 0 ? `${monthLabel(m)} (start)` : monthLabel(m)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           <div className="h-56">
-            <PortfolioValueChart portfolioId={pid} />
+            <PortfolioValueChart portfolioId={pid} startMonth={effectiveChartStart} />
           </div>
         </div>
       )}

@@ -4,6 +4,8 @@ import Spinner from '../../components/ui/Spinner';
 
 interface Props {
   portfolioId: string;
+  /** Month key 'YYYY-MM' — points before it are hidden. Omit for full range. */
+  startMonth?: string;
 }
 
 function formatMonthLabel(dateStr: string): string {
@@ -12,7 +14,7 @@ function formatMonthLabel(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-export default function PortfolioValueChart({ portfolioId }: Props) {
+export default function PortfolioValueChart({ portfolioId, startMonth }: Props) {
   const { data, isLoading } = usePortfolioHistory(portfolioId);
 
   if (isLoading) {
@@ -25,10 +27,12 @@ export default function PortfolioValueChart({ portfolioId }: Props) {
 
   if (!data || data.length === 0) return null;
 
-  const chartData = data.map((p) => ({
-    date: formatMonthLabel(p.date),
-    portfolioValue: p.portfolioValue,
-  }));
+  const chartData = data
+    .filter((p) => !startMonth || p.date.slice(0, 7) >= startMonth)
+    .map((p) => ({
+      date: formatMonthLabel(p.date),
+      portfolioValue: p.portfolioValue,
+    }));
 
   return (
     <StackedAreaChart

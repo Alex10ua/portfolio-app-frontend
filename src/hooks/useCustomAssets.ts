@@ -59,8 +59,8 @@ export function useDeleteCustomAsset(portfolioId: string) {
 export function useUpdateCustomAssetPrice(portfolioId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ ticker, price }: { ticker: string; price: number }) =>
-      updateCustomAssetPrice(portfolioId, ticker, price),
+    mutationFn: ({ ticker, price, date }: { ticker: string; price: number; date?: string }) =>
+      updateCustomAssetPrice(portfolioId, ticker, price, date),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['customAssets', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });

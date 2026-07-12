@@ -45,7 +45,9 @@ function StockDetail({ ticker }: { ticker: string }) {
 function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticker: string }) {
   const { data, isLoading } = useCustomAsset(portfolioId, ticker);
   const { mutateAsync: updatePrice, isPending } = useUpdateCustomAssetPrice(portfolioId);
+  const today = new Date().toISOString().slice(0, 10);
   const [newPrice, setNewPrice] = useState('');
+  const [priceDate, setPriceDate] = useState(today);
   const [saved, setSaved] = useState(false);
 
   if (isLoading) {
@@ -55,9 +57,10 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(newPrice);
-    if (isNaN(price) || price <= 0) return;
-    await updatePrice({ ticker, price });
+    if (isNaN(price) || price <= 0 || !priceDate) return;
+    await updatePrice({ ticker, price, date: priceDate });
     setNewPrice('');
+    setPriceDate(today);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -98,23 +101,35 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
         <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
           Update Price
         </p>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            step="any"
-            min="0"
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value)}
-            placeholder="New price..."
-            className="flex-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              type="number"
+              step="any"
+              min="0"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              placeholder="New price..."
+              className="flex-1 min-w-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <input
+              type="date"
+              value={priceDate}
+              max={today}
+              onChange={(e) => setPriceDate(e.target.value)}
+              className="w-[150px] shrink-0 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
           <button
             type="submit"
-            disabled={isPending || !newPrice}
-            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isPending || !newPrice || !priceDate}
+            className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? <Spinner size="sm" /> : saved ? 'Saved!' : 'Save'}
           </button>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Past date updates price history only; today also updates the current price.
+          </p>
         </div>
       </form>
     </div>

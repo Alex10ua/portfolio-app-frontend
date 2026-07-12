@@ -25,8 +25,8 @@ export async function deleteCustomAsset(portfolioId: string, ticker: string): Pr
   await apiClient.delete(`${portfolioId}/custom-assets/${ticker}`);
 }
 
-export async function updateCustomAssetPrice(portfolioId: string, ticker: string, price: number): Promise<CustomAsset> {
-  const response = await apiClient.put<CustomAsset>(`${portfolioId}/custom-assets/${ticker}/price`, { price });
+export async function updateCustomAssetPrice(portfolioId: string, ticker: string, price: number, date?: string): Promise<CustomAsset> {
+  const response = await apiClient.put<CustomAsset>(`${portfolioId}/custom-assets/${ticker}/price`, { price, date });
   return response.data;
 }
 

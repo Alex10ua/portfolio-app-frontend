@@ -383,7 +383,7 @@ export default function HoldingsDashboardPage() {
       {/* KPI stat cards */}
       {stats && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="relative group">
+          <div className="relative group h-full">
             <StatCard
               label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
               value={formatCurrency(stats.totalValue + cashInBase, undefined, baseCurrency)}
@@ -428,7 +428,7 @@ export default function HoldingsDashboardPage() {
             icon={DollarSign}
             accent="#14B8A6"
           />
-          <div className="relative group">
+          <div className="relative group h-full">
             <StatCard
               label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
               value={formatCurrency(stats.totalProfit + realizedInBase, undefined, baseCurrency)}

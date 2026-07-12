@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, ChevronRight, TrendingUp, FolderOpen } from 'lucide-react';
+import { Plus, ChevronRight, TrendingUp, FolderOpen, Pencil } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { usePortfolios, useCreatePortfolio } from '../../hooks/usePortfolios';
+import { usePortfolios, useCreatePortfolio, useUpdatePortfolio } from '../../hooks/usePortfolios';
+import type { Portfolio } from '../../types/portfolio';
 import { usePortfolioValues } from '../../hooks/usePortfolioValues';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
 import Dialog from '../../components/ui/Dialog';
@@ -35,11 +36,19 @@ function AllocBar({ segments }: { segments: { weight: number; color: string; lab
 
 export default function PortfolioListPage() {
   const [open, setOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<Portfolio | null>(null);
   const { data: portfolios = [], isLoading, error } = usePortfolios();
   const { mutateAsync: createPortfolio, isPending } = useCreatePortfolio();
+  const { mutateAsync: renamePortfolio, isPending: renaming } = useUpdatePortfolio();
   const { items, total, totalCost, totalCurrency, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { portfolioName: '', description: '' },
+  });
+
+  // Separate form instance so the rename dialog doesn't clobber the create form state
+  const renameForm = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { portfolioName: '', description: '' },
   });
@@ -48,6 +57,20 @@ export default function PortfolioListPage() {
     await createPortfolio(data);
     reset();
     setOpen(false);
+  };
+
+  const openRename = (portfolio: Portfolio) => {
+    renameForm.reset({
+      portfolioName: portfolio.portfolioName,
+      description: portfolio.description ?? '',
+    });
+    setRenameTarget(portfolio);
+  };
+
+  const onRenameSubmit = async (data: FormValues) => {
+    if (!renameTarget) return;
+    await renamePortfolio({ portfolioId: String(renameTarget.portfolioId), payload: data });
+    setRenameTarget(null);
   };
 
   if (isLoading) return <FullPageSpinner />;
@@ -185,6 +208,14 @@ export default function PortfolioListPage() {
                       </div>
                     )}
                   </div>
+                  <button
+                    type="button"
+                    title="Rename portfolio"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRename(portfolio); }}
+                    className="p-1.5 rounded-md text-slate-400 opacity-0 group-hover:opacity-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex-shrink-0"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                   <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition-colors flex-shrink-0" />
                 </div>
 
@@ -272,6 +303,45 @@ export default function PortfolioListPage() {
             <button type="submit" disabled={isPending}
               className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50 transition-colors">
               {isPending ? 'Creating…' : 'Create Portfolio'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Rename portfolio dialog */}
+      <Dialog
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={`Rename Portfolio — ${renameTarget?.portfolioName ?? ''}`}
+      >
+        <form onSubmit={renameForm.handleSubmit(onRenameSubmit)} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Portfolio Name</label>
+            <input
+              autoFocus
+              {...renameForm.register('portfolioName')}
+              className="block w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            {renameForm.formState.errors.portfolioName && (
+              <p className="mt-1 text-xs text-red-600">{renameForm.formState.errors.portfolioName.message}</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+            <input
+              {...renameForm.register('description')}
+              className="block w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              placeholder="Optional"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={() => setRenameTarget(null)}
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={renaming}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:opacity-50 transition-colors">
+              {renaming ? 'Saving…' : 'Save'}
             </button>
           </div>
         </form>

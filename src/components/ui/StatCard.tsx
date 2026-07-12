@@ -19,7 +19,7 @@ export default function StatCard({
   const dir = trendUp ?? (trend ? !trend.startsWith('-') : undefined);
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+    <div className="h-full bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
       <div className="flex items-start justify-between mb-4">
         <div
           className="flex items-center justify-center rounded-lg flex-shrink-0"

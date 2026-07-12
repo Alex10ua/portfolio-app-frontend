@@ -10,3 +10,8 @@ export async function createPortfolio(payload: CreatePortfolioPayload): Promise<
   const response = await apiClient.post<Portfolio>('createPortfolio', payload);
   return response.data;
 }
+
+export async function updatePortfolio(portfolioId: string, payload: CreatePortfolioPayload): Promise<Portfolio> {
+  const response = await apiClient.put<Portfolio>(`${portfolioId}/updatePortfolio`, payload);
+  return response.data;
+}

@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
+import { useRealizedPnL } from '../../hooks/usePerformance';
 import { getFxRates } from '../../api/fxRates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -83,6 +84,7 @@ export default function HoldingsDashboardPage() {
   const { data: cashBalance } = useCashBalance(pid);
   const { data: manualCash } = useCashHoldings(pid);
   const { data: valueHistory } = usePortfolioHistory(pid);
+  const { data: realizedByCcy } = useRealizedPnL(pid);
   const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
   const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
   const { data: fxRates = {} } = useQuery({ queryKey: ['fxRates'], queryFn: getFxRates });
@@ -247,6 +249,19 @@ export default function HoldingsDashboardPage() {
     return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
+  // Realized P&L (per currency from backend) converted to the display currency —
+  // keeps profit from fully-sold positions visible after their holding is deleted
+  const realizedInBase = useMemo(() => {
+    if (!realizedByCcy) return 0;
+    const rateOf = (c: string) => {
+      const r = fxRates[c];
+      return r && r !== 0 ? r : 1;
+    };
+    const baseRate = baseCurrency ? rateOf(baseCurrency) : 1;
+    return Object.entries(realizedByCcy).reduce(
+      (s, [ccy, amt]) => s + (amt ?? 0) * (baseRate / rateOf(ccy)), 0);
+  }, [realizedByCcy, fxRates, baseCurrency]);
+
   const submitCashDialog = async () => {
     if (!cashDialog) return;
     const currency = cashDialog.currency.trim().toUpperCase();
@@ -272,7 +287,7 @@ export default function HoldingsDashboardPage() {
                 {holding.ticker}
               </div>
               {holding.name && holding.assetType === 'CUSTOM' && (
-                <div className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px]">{holding.name}</div>
+                <div title={holding.name ?? undefined} className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px]">{holding.name}</div>
               )}
             </div>
           </div>
@@ -413,12 +428,37 @@ export default function HoldingsDashboardPage() {
             icon={DollarSign}
             accent="#14B8A6"
           />
-          <StatCard
-            label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
-            value={formatCurrency(stats.totalProfit, undefined, baseCurrency)}
-            icon={BarChart2}
-            accent={stats.totalProfit >= 0 ? '#10B981' : '#EF4444'}
-          />
+          <div className="relative group">
+            <StatCard
+              label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
+              value={formatCurrency(stats.totalProfit + realizedInBase, undefined, baseCurrency)}
+              icon={BarChart2}
+              accent={stats.totalProfit + realizedInBase >= 0 ? '#10B981' : '#EF4444'}
+              sub={realizedInBase !== 0 ? 'incl. realized' : undefined}
+            />
+            {realizedInBase !== 0 && (
+              <div className="absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-lg">
+                <div className="flex items-center justify-between text-[13px] mb-1.5">
+                  <span className="text-slate-500 dark:text-slate-400">Unrealized</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(stats.totalProfit, undefined, baseCurrency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="text-slate-500 dark:text-slate-400">Realized</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(realizedInBase, undefined, baseCurrency)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
+                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
+                    {formatCurrency(stats.totalProfit + realizedInBase, undefined, baseCurrency)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
           <StatCard
             label="Avg Yield"
             value={formatPercent(stats.avgYield)}

@@ -10,6 +10,10 @@ export function useTransactions(portfolioId: string, year: number) {
   });
 }
 
+// Editing/removing a transaction changes every derived view (holdings recalc
+// server-side, cash, realized P&L) — mirror useCreateTransaction's invalidation.
+const DERIVED_KEYS = ['holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance'];
+
 export function useUpdateTransaction(portfolioId: string, year: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -17,6 +21,9 @@ export function useUpdateTransaction(portfolioId: string, year: number) {
       updateTransaction(portfolioId, transactionId, payload),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId, year] });
+      for (const key of DERIVED_KEYS) {
+        void qc.invalidateQueries({ queryKey: [key, portfolioId] });
+      }
     },
   });
 }
@@ -27,6 +34,9 @@ export function useDeleteTransaction(portfolioId: string, year: number) {
     mutationFn: (transactionId: number) => deleteTransaction(portfolioId, transactionId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId, year] });
+      for (const key of DERIVED_KEYS) {
+        void qc.invalidateQueries({ queryKey: [key, portfolioId] });
+      }
     },
   });
 }

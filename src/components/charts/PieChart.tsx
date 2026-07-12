@@ -80,7 +80,7 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
 
         {/* center label for the active slice (fits inside innerRadius) */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-          <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100 max-w-[120px] truncate">
+          <span title={active.name} className="text-[12px] font-semibold text-slate-800 dark:text-slate-100 max-w-[120px] truncate">
             {active.name}
           </span>
           <span className="text-[14px] font-bold" style={{ color: activeColor }}>
@@ -105,7 +105,7 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
             onMouseEnter={() => setActiveIndex(i)}
           >
             <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0" style={{ background: colors[i % colors.length] }} />
-            <span className={`truncate ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{item.name}</span>
+            <span title={item.name} className={`truncate ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{item.name}</span>
             <span className={`ml-auto shrink-0 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
               {((item.amount / total) * 100).toFixed(1)}%
             </span>

@@ -351,7 +351,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <FileIcon className="h-5 w-5 text-slate-400 dark:text-slate-500 shrink-0" />
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-indigo-600 dark:text-indigo-400">{imp.filename ?? imp.name}</p>
+                            <p title={imp.filename ?? imp.name} className="truncate text-sm font-medium text-indigo-600 dark:text-indigo-400">{imp.filename ?? imp.name}</p>
                             <p className="text-xs text-slate-500 dark:text-slate-400">
                               {imp.uploadedAt && new Date(imp.uploadedAt).toLocaleString()}
                               {imp.transactionCount != null && ` · ${imp.transactionCount} transactions`}

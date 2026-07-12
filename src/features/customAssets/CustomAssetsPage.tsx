@@ -59,7 +59,7 @@ export default function CustomAssetsPage() {
               className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-semibold text-slate-900 dark:text-white truncate">{asset.name}</p>
+                  <p title={asset.name} className="font-semibold text-slate-900 dark:text-white truncate">{asset.name}</p>
                   <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{asset.ticker}</p>
                 </div>
                 <span className="shrink-0 inline-flex items-center rounded-md bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300 ring-1 ring-inset ring-indigo-600/20">

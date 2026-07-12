@@ -113,7 +113,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                     }
                   >
                     <Avatar letter={letter} color={color} size={22} />
-                    <span className="flex-1 truncate">{portfolio.portfolioName}</span>
+                    <span title={portfolio.portfolioName} className="flex-1 truncate">{portfolio.portfolioName}</span>
                   </NavLink>
 
                   {/* Contextual sub-nav under active portfolio */}

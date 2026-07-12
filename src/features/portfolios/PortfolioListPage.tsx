@@ -176,7 +176,7 @@ export default function PortfolioListPage() {
                     {letter}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-semibold text-slate-900 dark:text-white truncate">
+                    <div title={portfolio.portfolioName} className="text-[14px] font-semibold text-slate-900 dark:text-white truncate">
                       {portfolio.portfolioName}
                     </div>
                     {item && (

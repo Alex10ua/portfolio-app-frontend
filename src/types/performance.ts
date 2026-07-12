@@ -1,5 +1,8 @@
 export type PerformancePeriod = '1W' | '1M' | '3M' | 'YTD' | '1Y' | 'ALL';
 
+// currency code → realized P&L in that currency (major units)
+export type RealizedPnLByCurrency = Record<string, number>;
+
 export interface PerformancePoint {
   date: string;
   portfolioValue: number;

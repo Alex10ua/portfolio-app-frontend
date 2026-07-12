@@ -71,9 +71,9 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
 
       {/* Title */}
       <div className="flex-1 min-w-0">
-        <h1 className="text-[18px] font-semibold text-slate-900 dark:text-white leading-tight truncate">{title}</h1>
+        <h1 title={title} className="text-[18px] font-semibold text-slate-900 dark:text-white leading-tight truncate">{title}</h1>
         {subtitle && (
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-none mt-0.5 truncate">{subtitle}</p>
+          <p title={subtitle} className="text-[12px] text-slate-500 dark:text-slate-400 leading-none mt-0.5 truncate">{subtitle}</p>
         )}
       </div>
 

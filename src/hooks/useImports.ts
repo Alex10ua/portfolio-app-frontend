@@ -25,6 +25,7 @@ export function useSubmitImportBatch(portfolioId: string, onSuccess?: () => void
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['imports', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['performance', portfolioId] });
       onSuccess?.();
     },
   });
@@ -38,6 +39,7 @@ export function useDeleteImport(portfolioId: string, onSuccess?: () => void) {
       void qc.invalidateQueries({ queryKey: ['imports', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['performance', portfolioId] });
       onSuccess?.();
     },
   });

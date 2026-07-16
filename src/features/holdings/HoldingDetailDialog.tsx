@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { AlertTriangle, LogOut } from 'lucide-react';
 import Dialog from '../../components/ui/Dialog';
 import Spinner from '../../components/ui/Spinner';
 import TagEditor from '../../components/ui/TagEditor';
 import NoteEditor from '../../components/ui/NoteEditor';
 import { useMarketData } from '../../hooks/useMarketData';
 import { useCustomAsset, useUpdateCustomAssetPrice } from '../../hooks/useCustomAssets';
+import { useCreateTransaction } from '../../hooks/useHoldings';
 import { formatCurrency } from '../../lib/formatters';
 import type { Holding } from '../../types/holding';
+import type { Currency } from '../../types/transaction';
 
 interface HoldingDetailDialogProps {
   holding: Holding | null;
@@ -136,6 +139,128 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
   );
 }
 
+function ClosePositionSection({ holding, portfolioId, onClosed }: {
+  holding: Holding;
+  portfolioId: string;
+  onClosed: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [confirming, setConfirming] = useState(false);
+  const [sellPrice, setSellPrice] = useState('');
+  const [sellDate, setSellDate] = useState(today);
+  const [error, setError] = useState<string | null>(null);
+  const { mutateAsync: createTransaction, isPending } = useCreateTransaction(portfolioId);
+
+  const currency = holding.currency ?? 'USD';
+  const priceNum = Number(sellPrice);
+  const priceValid = sellPrice !== '' && Number.isFinite(priceNum) && priceNum >= 0;
+  const total = priceValid ? priceNum * holding.shareAmount : null;
+
+  const openConfirm = () => {
+    // prefill with the current market price; user can override
+    setSellPrice(holding.currentShareValue != null ? String(holding.currentShareValue) : '');
+    setSellDate(today);
+    setError(null);
+    setConfirming(true);
+  };
+
+  const closePosition = async () => {
+    if (!priceValid || !sellDate) return;
+    setError(null);
+    try {
+      await createTransaction({
+        ticker: holding.ticker,
+        transactionType: 'SELL',
+        assetType: holding.assetType ?? undefined,
+        quantity: holding.shareAmount,
+        price: priceNum,
+        commission: 0,
+        date: sellDate,
+        currency: currency as Currency,
+        name: holding.name ?? undefined,
+      });
+      onClosed();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={openConfirm}
+          disabled={holding.shareAmount <= 0}
+          className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-red-200 dark:border-red-800 px-3 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Close Position
+        </button>
+      ) : (
+        <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-700 dark:text-red-300">
+              Sell <strong>all {holding.shareAmount}</strong> {holding.shareAmount === 1 ? 'share' : 'shares'} of{' '}
+              <strong>{holding.ticker}</strong>
+              {total != null && <> for ≈ <strong>{formatCurrency(total, undefined, currency)}</strong></>}?
+              A SELL transaction will be created and the position will disappear from the table.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1 min-w-0">
+              <label className="block text-[11px] font-semibold text-red-700 dark:text-red-300 mb-1">
+                Sell price ({currency})
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                autoFocus
+                value={sellPrice}
+                onChange={(e) => setSellPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+            <div className="w-[150px] shrink-0">
+              <label className="block text-[11px] font-semibold text-red-700 dark:text-red-300 mb-1">
+                Date
+              </label>
+              <input
+                type="date"
+                value={sellDate}
+                max={today}
+                onChange={(e) => setSellDate(e.target.value)}
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void closePosition()}
+              disabled={isPending || !priceValid || !sellDate}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isPending ? 'Closing…' : 'Sell All & Close'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HoldingDetailDialog({ holding, open, onClose, portfolioId }: HoldingDetailDialogProps) {
   if (!holding) return null;
 
@@ -158,6 +283,7 @@ export default function HoldingDetailDialog({ holding, open, onClose, portfolioI
         </p>
         <TagEditor portfolioId={portfolioId} ticker={holding.ticker} />
       </div>
+      <ClosePositionSection holding={holding} portfolioId={portfolioId} onClosed={onClose} />
     </Dialog>
   );
 }

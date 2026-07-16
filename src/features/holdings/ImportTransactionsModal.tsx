@@ -36,6 +36,8 @@ interface ParsedPreview {
   vubFundPriceHistory?: Map<string, { date: string; price: number }[]>;
   vubYearsPresent?: Set<number>;
   vubSkippedZeroCount?: number;
+  /** Rows already present in the DB (NN/VUB fingerprint match) — skipped on confirm */
+  duplicateCount?: number;
 }
 
 const selectClass = 'block rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
@@ -75,6 +77,36 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
   const { mutateAsync: deleteImport } = useDeleteImport(portfolioId);
   const { data: detailData } = useImportDetail(portfolioId, detailImportId);
 
+  /**
+   * Counts file rows whose fingerprint already exists in the DB. Best-effort
+   * preview info only — the confirm handlers recompute this authoritatively.
+   */
+  async function countExistingDuplicates(
+    rows: CreateTransactionPayload[],
+    yearsPresent: Set<number>,
+    kind: 'nn' | 'vub',
+  ): Promise<number | undefined> {
+    try {
+      const txArrays = await Promise.all([...yearsPresent].map((y) => getTransactions(portfolioId, y)));
+      const existing = new Set<string>();
+      for (const tx of txArrays.flat()) {
+        if (kind === 'nn' ? NN_TICKERS.has(tx.ticker) : tx.ticker.startsWith('VUB-DDS-')) {
+          existing.add(kind === 'nn'
+            ? buildNNFingerprint(tx.date, tx.ticker, tx.quantity, tx.price)
+            : buildVUBFingerprint(tx.date, tx.ticker, tx.quantity, tx.price));
+        }
+      }
+      return rows.filter((row) => {
+        const fp = kind === 'nn'
+          ? buildNNFingerprint(row.date, row.ticker, Number(row.quantity), Number(row.price))
+          : buildVUBFingerprint(row.date, row.ticker, Number(row.quantity), Number(row.price));
+        return existing.has(fp);
+      }).length;
+    } catch {
+      return undefined; // notice simply not shown; confirm still dedups
+    }
+  }
+
   async function handleFile(file: File) {
     setParseError(null);
     setNNConfirmError(null);
@@ -89,6 +121,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
       // Try NN Slovensko 3rd pillar format
       const nnResult = await tryParseNNFile(file);
       if (nnResult !== null) {
+        const duplicateCount = await countExistingDuplicates(nnResult.transactions, nnResult.yearsPresent, 'nn');
         setPreview({
           filename: file.name,
           rows: nnResult.transactions,
@@ -98,6 +131,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           nnFundPriceHistory: nnResult.fundPriceHistory,
           nnYearsPresent: nnResult.yearsPresent,
           nnSkippedZeroCount: nnResult.skippedZeroCount,
+          duplicateCount,
         });
         setView('preview');
         return;
@@ -105,6 +139,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
       // Try VUB Generali DDS 2nd pillar format
       const vubResult = await tryParseVUBFile(file);
       if (vubResult !== null) {
+        const duplicateCount = await countExistingDuplicates(vubResult.transactions, vubResult.yearsPresent, 'vub');
         setPreview({
           filename: file.name,
           rows: vubResult.transactions,
@@ -114,6 +149,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           vubFundPriceHistory: vubResult.fundPriceHistory,
           vubYearsPresent: vubResult.yearsPresent,
           vubSkippedZeroCount: vubResult.skippedZeroCount,
+          duplicateCount,
         });
         setView('preview');
         return;
@@ -465,6 +501,20 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
 
             {nnConfirmError && <ErrorAlert message={nnConfirmError} />}
             {vubConfirmError && <ErrorAlert message={vubConfirmError} />}
+
+            {/* Duplicate notice — rows already in the DB are skipped on confirm */}
+            {(preview.isNN || preview.isVUB) && (preview.duplicateCount ?? 0) > 0 && (
+              <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                {preview.duplicateCount === preview.rows.length ? (
+                  <>All {preview.rows.length} transactions are already imported — confirming will add nothing new.</>
+                ) : (
+                  <>
+                    {preview.duplicateCount} of {preview.rows.length} transactions already imported — they will be
+                    skipped; {preview.rows.length - (preview.duplicateCount ?? 0)} new will be added.
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Preview table */}
             <div className="overflow-auto max-h-80 rounded-md border border-slate-200 dark:border-slate-700">

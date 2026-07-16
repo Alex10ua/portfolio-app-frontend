@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Trash2, RefreshCw, Clock } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Clock, Pencil } from 'lucide-react';
 import {
   useCustomAssets,
   useCreateCustomAsset,
   useDeleteCustomAsset,
+  useUpdateCustomAsset,
   useUpdateCustomAssetPrice,
 } from '../../hooks/useCustomAssets';
 import CreateCustomAssetDialog from './CreateCustomAssetDialog';
@@ -23,6 +24,7 @@ export default function CustomAssetsPage() {
   const { mutateAsync: create, isPending: creating } = useCreateCustomAsset(pid);
   const { mutateAsync: remove } = useDeleteCustomAsset(pid);
   const { mutateAsync: updatePrice, isPending: updatingPrice } = useUpdateCustomAssetPrice(pid);
+  const { mutateAsync: updateAsset, isPending: updatingAsset } = useUpdateCustomAsset(pid);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomAsset | null>(null);
@@ -30,6 +32,37 @@ export default function CustomAssetsPage() {
   const [newPrice, setNewPrice] = useState('');
   const today = new Date().toISOString().slice(0, 10);
   const [priceDate, setPriceDate] = useState(today);
+  // Edit dialog — every field editable except ticker (it's the FK to transactions/holdings)
+  const [editTarget, setEditTarget] = useState<CustomAsset | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', assetType: '', description: '', country: '', currency: '', unit: '' });
+
+  const openEdit = (asset: CustomAsset) => {
+    setEditForm({
+      name: asset.name ?? '',
+      assetType: asset.assetType ?? '',
+      description: asset.description ?? '',
+      country: asset.country ?? '',
+      currency: asset.currency ?? '',
+      unit: asset.unit ?? '',
+    });
+    setEditTarget(asset);
+  };
+
+  const submitEdit = async () => {
+    if (!editTarget || !editForm.name.trim() || !editForm.currency.trim()) return;
+    await updateAsset({
+      ticker: editTarget.ticker,
+      payload: {
+        name: editForm.name.trim(),
+        assetType: editForm.assetType.trim() || undefined,
+        description: editForm.description,
+        country: editForm.country,
+        currency: editForm.currency.trim().toUpperCase(),
+        unit: editForm.unit.trim() || undefined,
+      },
+    });
+    setEditTarget(null);
+  };
 
 
   if (isLoading) return <FullPageSpinner />;
@@ -109,6 +142,13 @@ export default function CustomAssetsPage() {
                   Update Price
                 </button>
                 <button
+                  onClick={() => openEdit(asset)}
+                  title="Edit asset"
+                  className="inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
                   onClick={() => setDeleteTarget(asset)}
                   className="inline-flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                 >
@@ -130,6 +170,96 @@ export default function CustomAssetsPage() {
         }}
         isPending={creating}
       />
+
+      {/* Edit asset dialog — everything except ticker */}
+      <Dialog
+        open={Boolean(editTarget)}
+        onClose={() => setEditTarget(null)}
+        title={`Edit Asset — ${editTarget?.ticker ?? ''}`}
+      >
+        <form onSubmit={(e) => { e.preventDefault(); void submitEdit(); }} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ticker</label>
+            <input
+              value={editTarget?.ticker ?? ''}
+              disabled
+              className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-mono cursor-not-allowed"
+            />
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Ticker cannot change — transactions and holdings reference it.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+              <input
+                autoFocus
+                required
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
+              <input
+                value={editForm.assetType}
+                onChange={(e) => setEditForm({ ...editForm, assetType: e.target.value })}
+                placeholder="e.g. COIN, SKIN, WINE"
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Country</label>
+              <input
+                value={editForm.country}
+                onChange={(e) => setEditForm({ ...editForm, country: e.target.value })}
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+              <input
+                required
+                maxLength={3}
+                pattern="[A-Za-z]{3}"
+                value={editForm.currency}
+                onChange={(e) => setEditForm({ ...editForm, currency: e.target.value.toUpperCase() })}
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 uppercase focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unit</label>
+              <input
+                value={editForm.unit}
+                onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })}
+                placeholder="pcs, oz, bottle…"
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
+              <textarea
+                rows={2}
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className="block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setEditTarget(null)}
+              className="rounded-md px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={updatingAsset || !editForm.name.trim() || !/^[A-Z]{3}$/.test(editForm.currency)}
+              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {updatingAsset ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Dialog>
 
       {/* Update price dialog */}
       <Dialog

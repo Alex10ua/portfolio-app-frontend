@@ -81,6 +81,17 @@ function CustomAssetDetail({ portfolioId, ticker }: { portfolioId: string; ticke
         <DetailRow label="Current Price" value={formatCurrency(data?.priceNow, undefined, data?.currency || 'USD')} />
       </div>
 
+      {data?.description?.trim() && (
+        <div>
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">
+            Description
+          </p>
+          <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+            {data.description.trim()}
+          </p>
+        </div>
+      )}
+
       {recentHistory.length > 0 && (
         <div>
           <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">

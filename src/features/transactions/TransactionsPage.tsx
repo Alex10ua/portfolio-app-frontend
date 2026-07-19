@@ -14,12 +14,10 @@ import Dialog from '../../components/ui/Dialog';
 import { formatDate, formatCurrency } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { Transaction, TransactionType, Currency } from '../../types/transaction';
-import type { AssetType } from '../../types/holding';
 
 const editSchema = z.object({
   ticker: z.string().min(1),
   transactionType: z.enum(['BUY', 'SELL', 'TAX', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL']),
-  assetType: z.enum(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO', 'CUSTOM']),
   quantity: z.string().min(1),
   price: z.string().min(1),
   commission: z.string(),
@@ -60,7 +58,6 @@ export default function TransactionsPage() {
     reset({
       ticker: t.ticker,
       transactionType: t.transactionType,
-      assetType: t.assetType,
       quantity: String(t.quantity),
       price: String(t.price),
       commission: String(t.commission ?? 0),
@@ -76,7 +73,8 @@ export default function TransactionsPage() {
       payload: {
         ...data,
         transactionType: data.transactionType as TransactionType,
-        assetType: data.assetType as AssetType,
+        // backend never persists assetType on update (fixed per ticker) — pass through unchanged
+        assetType: editTarget.assetType,
         currency: data.currency as Currency,
         quantity: parseFloat(data.quantity),
         price: parseFloat(data.price),
@@ -193,19 +191,11 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
-              <select {...register('transactionType')} className={selectClass}>
-                {(['BUY', 'SELL', 'TAX', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL'] as TransactionType[]).map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Asset Class</label>
-              <select {...register('assetType')} className={selectClass}>
-                {(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO'] as AssetType[]).map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
+            <select {...register('transactionType')} className={selectClass}>
+              {(['BUY', 'SELL', 'TAX', 'DIVIDEND', 'DEPOSIT', 'WITHDRAWAL'] as TransactionType[]).map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

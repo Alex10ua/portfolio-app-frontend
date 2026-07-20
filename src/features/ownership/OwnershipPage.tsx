@@ -196,7 +196,7 @@ export default function OwnershipPage() {
                           <OwnershipBar frac={r.frac} minLog={minLog} maxLog={maxLog} color={color} />
                         </div>
                         <span
-                          className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap"
+                          className="shrink-0 w-[72px] text-center text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap"
                           style={{ color, background: `${color}1F` }}
                         >
                           {r.tier}

@@ -1,7 +1,8 @@
 export interface User {
-  id: number;
   username: string;
-  email: string;
+  email: string | null;
+  displayName: string | null;
+  createdAt: string | null;
 }
 
 export interface LoginPayload {

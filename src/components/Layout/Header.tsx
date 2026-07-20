@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useLocation, useMatch } from 'react-router-dom';
-import { Menu, Plus, Bell, Sun, Moon } from 'lucide-react';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { Menu, Plus, Bell, Sun, Moon, UserCircle, LogOut } from 'lucide-react';
+import { Menu as HMenu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { useForm } from 'react-hook-form';
 import { useTheme } from '../../hooks/useTheme';
+import { useAuth } from '../../context/AuthContext';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCreatePortfolio } from '../../hooks/usePortfolios';
@@ -28,6 +30,7 @@ function usePageTitle(): { title: string; subtitle: string } {
   const name = portfolio?.portfolioName ?? 'Portfolio';
 
   const path = location.pathname;
+  if (path === '/profile') return { title: 'Profile', subtitle: 'Account settings' };
   if (!portfolioId || path === '/') return { title: 'All Portfolios', subtitle: `${portfolios.length} portfolio${portfolios.length !== 1 ? 's' : ''}` };
   if (path.endsWith('/transactions'))    return { title: 'Transactions',       subtitle: name };
   if (path.endsWith('/dividends'))       return { title: 'Dividends',          subtitle: name };
@@ -41,8 +44,11 @@ function usePageTitle(): { title: string; subtitle: string } {
 export default function Header({ setSidebarOpen }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const { dark, toggle } = useTheme();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { mutateAsync: createPortfolio, isPending } = useCreatePortfolio();
   const { title, subtitle } = usePageTitle();
+  const initial = (user?.displayName ?? user?.username ?? '?').charAt(0).toUpperCase();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -112,13 +118,43 @@ export default function Header({ setSidebarOpen }: HeaderProps) {
           <span className="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900" />
         </div>
 
-        {/* Avatar */}
-        <div
-          className="flex items-center justify-center rounded-full text-white font-semibold text-sm flex-shrink-0"
-          style={{ width: 32, height: 32, background: '#8B5CF6' }}
-        >
-          A
-        </div>
+        {/* Avatar + profile menu */}
+        <HMenu as="div" className="relative">
+          <MenuButton
+            title={user?.displayName ?? user?.username}
+            className="flex items-center justify-center rounded-full text-white font-semibold text-sm flex-shrink-0 hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-600 transition-shadow"
+            style={{ width: 32, height: 32, background: '#8B5CF6' }}
+          >
+            {initial}
+          </MenuButton>
+          <MenuItems
+            anchor="bottom end"
+            className="z-50 mt-1.5 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg p-1 focus:outline-none"
+          >
+            <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 mb-1">
+              <p className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">{user?.displayName ?? user?.username}</p>
+              {user?.email && <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>}
+            </div>
+            <MenuItem>
+              <button
+                onClick={() => navigate('/profile')}
+                className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-[13px] text-slate-700 dark:text-slate-200 data-[focus]:bg-slate-100 dark:data-[focus]:bg-slate-700"
+              >
+                <UserCircle className="h-4 w-4 text-slate-400" />
+                Profile
+              </button>
+            </MenuItem>
+            <MenuItem>
+              <button
+                onClick={() => { void logout().then(() => navigate('/login')); }}
+                className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-[13px] text-red-600 dark:text-red-400 data-[focus]:bg-red-50 dark:data-[focus]:bg-red-900/20"
+              >
+                <LogOut className="h-4 w-4" />
+                Log out
+              </button>
+            </MenuItem>
+          </MenuItems>
+        </HMenu>
       </div>
 
       <Dialog open={open} onClose={handleClose} title="Create New Portfolio">

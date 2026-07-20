@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsContext';
 import PrivateRoute from './components/Layout/PrivateRoute';
 import Layout from './components/Layout/Layout';
 import { FullPageSpinner } from './components/ui/Spinner';
@@ -19,10 +20,12 @@ const CustomAssetsPage = lazy(() => import('./features/customAssets/CustomAssets
 const PerformancePage = lazy(() => import('./features/performance/PerformancePage'));
 const TagMapPage = lazy(() => import('./features/tags/TagMapPage'));
 const OwnershipPage = lazy(() => import('./features/ownership/OwnershipPage'));
+const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
 
 export default function App() {
   return (
     <AuthProvider>
+      <SettingsProvider>
       <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -31,6 +34,7 @@ export default function App() {
           <Route element={<PrivateRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<PortfolioListPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/:portfolioId" element={<HoldingsDashboardPage />} />
               <Route path="/:portfolioId/transactions" element={<TransactionsPage />} />
               <Route path="/:portfolioId/dividends" element={<DividendsPage />} />
@@ -44,6 +48,7 @@ export default function App() {
           </Route>
         </Routes>
       </Suspense>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

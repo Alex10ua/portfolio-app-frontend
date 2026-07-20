@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
 import { useRealizedPnL } from '../../hooks/usePerformance';
+import { useSettings } from '../../context/SettingsContext';
 import { getFxRates } from '../../api/fxRates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -110,8 +111,29 @@ export default function HoldingsDashboardPage() {
     return DEFAULT_COLUMNS;
   });
 
+  // Server-backed settings: localStorage paints instantly, then the server copy
+  // (source of truth, synced across devices) is applied once — unless the user
+  // already touched the config this visit (dirtyRef guards their edits).
+  const { settingsLoaded, getPortfolioSettings, updatePortfolioSettings } = useSettings();
+  const settingsDirtyRef = useRef(false);
+  useEffect(() => {
+    if (!settingsLoaded || settingsDirtyRef.current) return;
+    const server = getPortfolioSettings(pid);
+    if (!server) return;
+    if (server.tableConfig) {
+      const merged = mergeColumns(server.tableConfig as Column[]);
+      setColumns((prev) => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
+    }
+    if (server.chartStartMonth) {
+      setChartStart((prev) => prev === server.chartStartMonth ? prev : server.chartStartMonth!);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoaded, pid]);
+
   useEffect(() => {
     localStorage.setItem(`tableConfig-${pid}`, JSON.stringify(columns));
+    updatePortfolioSettings(pid, { tableConfig: columns });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, pid]);
 
   useEffect(() => {
@@ -128,6 +150,7 @@ export default function HoldingsDashboardPage() {
   const [dragKey, setDragKey] = useState<string | null>(null);
 
   const moveColumn = (fromKey: string, toKey: string) => {
+    settingsDirtyRef.current = true;
     setColumns((prev) => {
       const from = prev.findIndex((c) => c.key === fromKey);
       const to = prev.findIndex((c) => c.key === toKey);
@@ -140,6 +163,7 @@ export default function HoldingsDashboardPage() {
   };
 
   const toggleColumn = (key: string) => {
+    settingsDirtyRef.current = true;
     setColumns((prev) => {
       const visibleCount = prev.filter((c) => c.visible).length;
       return prev.map((c) => {
@@ -240,8 +264,10 @@ export default function HoldingsDashboardPage() {
   const effectiveChartStart = chartMonths.includes(chartStart) ? chartStart : chartMonths[0];
 
   const changeChartStart = (month: string) => {
+    settingsDirtyRef.current = true;
     setChartStart(month);
     try { localStorage.setItem(`chartStart-${pid}`, month); } catch { /* storage blocked */ }
+    updatePortfolioSettings(pid, { chartStartMonth: month });
   };
 
   const monthLabel = (m: string) => {

@@ -1,16 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useSettings } from '../context/SettingsContext';
 
+/** Thin wrapper over SettingsContext — theme is server-synced per user. */
 export function useTheme() {
-  const [dark, setDark] = useState<boolean>(() => {
-    const stored = localStorage.getItem('theme');
-    if (stored) return stored === 'dark';
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-  }, [dark]);
-
-  return { dark, toggle: () => setDark((d) => !d) };
+  const { theme, setTheme } = useSettings();
+  const dark = theme === 'dark';
+  return { dark, toggle: () => setTheme(dark ? 'light' : 'dark') };
 }

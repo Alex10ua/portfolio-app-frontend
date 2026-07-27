@@ -44,7 +44,11 @@ export default function StockLogo({ ticker, name, assetType, size = 'md' }: Prop
   }
 
   const local = `/images/${ticker}_icon.png`;
-  const remote = `https://assets.parqet.com/logos/symbol/${ticker}?format=svg`;
+  // Parqet serves crypto under a separate path from stocks — /logos/symbol/
+  // 404s for coin tickers like ETH/BTC, /logos/crypto/ is where they live.
+  const remote = assetType === 'CRYPTO'
+    ? `https://assets.parqet.com/logos/crypto/${ticker}?format=svg`
+    : `https://assets.parqet.com/logos/symbol/${ticker}?format=svg`;
   const [src, setSrc] = useState(local);
   const [failed, setFailed] = useState(false);
 

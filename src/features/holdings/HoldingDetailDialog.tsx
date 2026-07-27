@@ -4,12 +4,15 @@ import Dialog from '../../components/ui/Dialog';
 import Spinner from '../../components/ui/Spinner';
 import TagEditor from '../../components/ui/TagEditor';
 import NoteEditor from '../../components/ui/NoteEditor';
+import StackedAreaChart from '../../components/charts/AreaChart';
 import { useMarketData } from '../../hooks/useMarketData';
 import { useCustomAsset, useUpdateCustomAssetPrice } from '../../hooks/useCustomAssets';
 import { useCreateTransaction } from '../../hooks/useHoldings';
+import { useFundamentals, useRefreshFundamentals } from '../../hooks/useFundamentals';
 import { formatCurrency } from '../../lib/formatters';
 import type { Holding } from '../../types/holding';
 import type { Currency } from '../../types/transaction';
+import type { FundamentalEntry } from '../../types/fundamentals';
 
 interface HoldingDetailDialogProps {
   holding: Holding | null;
@@ -23,6 +26,113 @@ function DetailRow({ label, value }: { label: string; value: string | number | n
     <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800 last:border-0">
       <span className="text-sm text-slate-500 dark:text-slate-400">{label}</span>
       <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{value ?? '—'}</span>
+    </div>
+  );
+}
+
+const FUNDAMENTAL_LABELS: { key: string; label: string; unit: 'currency' | 'perShare' }[] = [
+  { key: 'assets', label: 'Total Assets', unit: 'currency' },
+  { key: 'liabilities', label: 'Total Liabilities', unit: 'currency' },
+  { key: 'stockholdersEquity', label: "Stockholders' Equity", unit: 'currency' },
+  { key: 'operatingIncome', label: 'Operating Income', unit: 'currency' },
+  { key: 'epsDiluted', label: 'EPS (Diluted)', unit: 'perShare' },
+  { key: 'cash', label: 'Cash & Equivalents', unit: 'currency' },
+  { key: 'longTermDebt', label: 'Long-Term Debt', unit: 'currency' },
+  { key: 'researchAndDevelopment', label: 'R&D Expense', unit: 'currency' },
+  { key: 'buybackSpend', label: 'Buybacks (Spend)', unit: 'currency' },
+  { key: 'dividendPerShare', label: 'Dividend / Share', unit: 'perShare' },
+];
+
+// SEC filers in our curated concept set report in USD (10-K/10-Q domestic
+// filings) — foreign-currency reporters wouldn't have a CIK match anyway.
+const formatCompactUsd = (value: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(value);
+
+function mergeRevenueIncome(revenue?: FundamentalEntry[], netIncome?: FundamentalEntry[]) {
+  const byDate = new Map<string, { date: string; revenue?: number; netIncome?: number }>();
+  for (const e of revenue ?? []) byDate.set(e.date, { ...byDate.get(e.date), date: e.date, revenue: e.value });
+  for (const e of netIncome ?? []) byDate.set(e.date, { ...byDate.get(e.date), date: e.date, netIncome: e.value });
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function FundamentalsPanel({ ticker }: { ticker: string }) {
+  const { data, isLoading } = useFundamentals(ticker);
+  const { mutateAsync: refresh, isPending: refreshing } = useRefreshFundamentals(ticker);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRefresh = async () => {
+    setError(null);
+    try {
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  if (isLoading) {
+    return <div className="flex justify-center py-4"><Spinner /></div>;
+  }
+
+  const concepts = data?.concepts ?? {};
+  const hasData = Object.keys(concepts).length > 0;
+  const chartData = mergeRevenueIncome(concepts.revenue, concepts.netIncome);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+          Fundamentals (SEC EDGAR)
+        </p>
+        <button
+          onClick={() => void handleRefresh()}
+          disabled={refreshing}
+          className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50 disabled:no-underline"
+        >
+          {refreshing ? 'Loading…' : hasData ? 'Refresh' : 'Load from SEC'}
+        </button>
+      </div>
+
+      {error && <p className="text-xs text-red-600 dark:text-red-400 mb-2">{error}</p>}
+
+      {!hasData && !refreshing && !error && (
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          No fundamentals loaded yet. US-listed stocks only (SEC EDGAR filings).
+        </p>
+      )}
+
+      {hasData && (
+        <>
+          {chartData.length > 1 && (
+            <div className="h-40 mb-3">
+              <StackedAreaChart
+                data={chartData}
+                xAxisKey="date"
+                areas={[{ dataKey: 'revenue', name: 'Revenue' }, { dataKey: 'netIncome', name: 'Net Income' }]}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-x-4">
+            {FUNDAMENTAL_LABELS.map(({ key, label, unit }) => {
+              const series = concepts[key];
+              if (!series?.length) return null;
+              const latest = series[series.length - 1];
+              return (
+                <div key={key} className="flex justify-between text-xs py-1 border-b border-slate-50 dark:border-slate-800/60">
+                  <span className="text-slate-500 dark:text-slate-400">{label}</span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+                    {unit === 'perShare' ? formatCurrency(latest.value) : formatCompactUsd(latest.value)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {data?.updatedAt && (
+            <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500">
+              Updated {new Date(data.updatedAt).toLocaleDateString()}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -276,9 +386,12 @@ export default function HoldingDetailDialog({ holding, open, onClose, portfolioI
   if (!holding) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} title={holding.ticker} maxWidth="sm">
-      {holding.assetType === 'STOCK' ? (
-        <StockDetail ticker={holding.ticker} />
+    <Dialog open={open} onClose={onClose} title={holding.ticker} maxWidth="lg">
+      {holding.assetType === 'STOCK' || holding.assetType === 'CRYPTO' ? (
+        <>
+          <StockDetail ticker={holding.ticker} />
+          {holding.assetType === 'STOCK' && <FundamentalsPanel ticker={holding.ticker} />}
+        </>
       ) : (
         <CustomAssetDetail portfolioId={portfolioId} ticker={holding.ticker} />
       )}

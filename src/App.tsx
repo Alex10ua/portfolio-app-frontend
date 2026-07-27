@@ -20,6 +20,7 @@ const CustomAssetsPage = lazy(() => import('./features/customAssets/CustomAssets
 const PerformancePage = lazy(() => import('./features/performance/PerformancePage'));
 const TagMapPage = lazy(() => import('./features/tags/TagMapPage'));
 const OwnershipPage = lazy(() => import('./features/ownership/OwnershipPage'));
+const StockValuationPage = lazy(() => import('./features/valuation/StockValuationPage'));
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
 
 export default function App() {
@@ -44,6 +45,7 @@ export default function App() {
               <Route path="/:portfolioId/performance" element={<PerformancePage />} />
               <Route path="/:portfolioId/tags" element={<TagMapPage />} />
               <Route path="/:portfolioId/ownership" element={<OwnershipPage />} />
+              <Route path="/:portfolioId/valuation" element={<StockValuationPage />} />
             </Route>
           </Route>
         </Routes>

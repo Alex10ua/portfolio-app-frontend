@@ -4,7 +4,7 @@ import { Menu as HMenu, MenuButton, MenuItems, MenuItem } from '@headlessui/reac
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { ChevronDown, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Minus, Plus, Calculator as CalculatorIcon } from 'lucide-react';
 import { useHoldings } from '../../hooks/useHoldings';
 import { useFundamentals } from '../../hooks/useFundamentals';
 import { FullPageSpinner } from '../../components/ui/Spinner';
@@ -14,10 +14,9 @@ import EmptyState from '../../components/ui/EmptyState';
 import StockLogo from '../../components/ui/StockLogo';
 import StackedAreaChart from '../../components/charts/AreaChart';
 import { useTheme } from '../../hooks/useTheme';
-import { formatCurrency, formatPercent } from '../../lib/formatters';
+import { formatCompactCurrency, formatCurrency, formatPercent } from '../../lib/formatters';
 import type { Holding } from '../../types/holding';
 import type { FundamentalEntry } from '../../types/fundamentals';
-import { Calculator as CalculatorIcon } from 'lucide-react';
 
 // ---------- DCF MODEL ----------
 // All assumptions (starting FCF/share, growth, exit P/FCF, target return) are
@@ -63,9 +62,14 @@ function loadAssumptions(ticker: string): Assumptions {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed?.metrics) {
+        // per-metric deep merge so entries saved under an older schema pick up
+        // defaults for any field added later
+        const metrics = Object.fromEntries(
+          METRICS.map((m) => [m.key, { ...DEFAULT_ASSUMPTIONS.metrics[m.key], ...(parsed.metrics[m.key] ?? {}) }]),
+        ) as Record<MetricKey, MetricAssumptions>;
         return {
           targetReturn: parsed.targetReturn ?? DEFAULT_ASSUMPTIONS.targetReturn,
-          metrics: { ...DEFAULT_ASSUMPTIONS.metrics, ...parsed.metrics },
+          metrics,
         };
       }
     }
@@ -101,6 +105,43 @@ function buildProjection(start: number, growth: number, div0: number) {
 
 function pnlTextColor(value: number) {
   return value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+}
+
+// ---------- STARTING-VALUE INPUT ----------
+// Text state is kept locally so partial entries like "0." survive the keystroke —
+// echoing each keystroke through Number() (value={n || ''}) ate the "0." prefix
+// and made values under 1 impossible to type.
+function StartValueInput({ value, onCommit }: { value: number; onCommit: (v: number) => void }) {
+  const [text, setText] = useState(value > 0 ? String(value) : '');
+
+  // Sync in externally-changed values (ticker/metric switch, async EPS prefill)
+  // without clobbering in-progress typing: skip when the text already parses to
+  // the committed value.
+  useEffect(() => {
+    const parsed = Number(text);
+    if ((Number.isFinite(parsed) ? parsed : 0) !== value) {
+      setText(value > 0 ? String(value) : '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const handleChange = (raw: string) => {
+    setText(raw);
+    const parsed = Number(raw);
+    onCommit(Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+  };
+
+  return (
+    <input
+      type="number"
+      step="any"
+      min="0"
+      value={text}
+      onChange={(e) => handleChange(e.target.value)}
+      placeholder="e.g. 4.62"
+      className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    />
+  );
 }
 
 // ---------- STEPPER ----------
@@ -267,7 +308,9 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
     const epsSeries = fundamentals?.concepts?.epsDiluted;
     if (!epsSeries?.length) return;
     const latest = [...epsSeries].filter((e) => e.form?.startsWith('10-K')).sort((a, b) => a.date.localeCompare(b.date)).pop();
-    if (!latest) return;
+    // negative/zero EPS (loss-making company) is useless as a multiple base —
+    // prefilling it would persist junk and re-trigger on every visit
+    if (!latest || latest.value <= 0) return;
     setAssumptions((prev) => {
       if (prev.metrics.net.start > 0) return prev;
       const next = { ...prev, metrics: { ...prev.metrics, net: { ...prev.metrics.net, start: latest.value } } };
@@ -375,14 +418,9 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
           <label className="block text-[13px] font-semibold text-slate-900 dark:text-white mb-2">
             Starting {metricMeta.startLabel} ({currency})
           </label>
-          <input
-            type="number"
-            step="any"
-            min="0"
-            value={active.start || ''}
-            onChange={(e) => updateMetric(metric, { start: Math.max(0, Number(e.target.value) || 0) })}
-            placeholder="e.g. 4.62"
-            className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          <StartValueInput
+            value={active.start}
+            onCommit={(v) => updateMetric(metric, { start: v })}
           />
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1.5">
             {metric === 'net'
@@ -443,9 +481,6 @@ function buildFinancialTable(concepts: Record<string, FundamentalEntry[]>) {
   };
 }
 
-const formatCompactUsd = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(value);
-
 function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string }) {
   const { data, isLoading } = useFundamentals(ticker);
 
@@ -471,6 +506,7 @@ function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string
               data={revenueIncome}
               xAxisKey="date"
               areas={[{ dataKey: 'revenue', name: 'Revenue' }, { dataKey: 'netIncome', name: 'Net Income' }]}
+              yFormatter={(v) => formatCompactCurrency(v)}
             />
           </div>
         ) : (
@@ -503,7 +539,7 @@ function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string
                   <td className="px-4.5 py-2 text-[13px] text-slate-700 dark:text-slate-300">{r.label}</td>
                   {r.values.map((v, i) => (
                     <td key={i} className="px-3 py-2 text-right text-[13px] font-medium text-slate-900 dark:text-white tabular-nums">
-                      {v == null ? '—' : r.unit === 'perShare' ? formatCurrency(v, 2, currency) : formatCompactUsd(v)}
+                      {v == null ? '—' : r.unit === 'perShare' ? formatCurrency(v, 2, currency) : formatCompactCurrency(v)}
                     </td>
                   ))}
                 </tr>
@@ -530,6 +566,12 @@ export default function StockValuationPage() {
     () => (holdings ?? []).filter((h) => h.assetType === 'STOCK'),
     [holdings],
   );
+
+  // The route keeps this component mounted when only :portfolioId changes, so a
+  // ticker chosen in the previous portfolio would silently leak into the new one.
+  useEffect(() => {
+    setTicker(null);
+  }, [pid]);
 
   useEffect(() => {
     if (!ticker && stockHoldings.length > 0) setTicker(stockHoldings[0].ticker);

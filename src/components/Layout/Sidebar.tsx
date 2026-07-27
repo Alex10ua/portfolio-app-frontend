@@ -1,7 +1,7 @@
 import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ReceiptText, DollarSign, CalendarDays,
-  PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X, Network, Crown, Calculator,
+  PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X, Network, Crown, Calculator as CalculatorIcon
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -41,16 +41,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   };
 
   const subNav = [
-    { name: 'Dashboard',          href: `/${portfolioId}`,                       icon: LayoutDashboard, exact: true },
-    { name: 'Transactions',       href: `/${portfolioId}/transactions`,           icon: ReceiptText,     exact: false },
-    { name: 'Custom Assets',      href: `/${portfolioId}/custom-assets`,          icon: Boxes,           exact: false },
-    { name: 'Dividends',          href: `/${portfolioId}/dividends`,              icon: DollarSign,      exact: false },
-    { name: 'Dividend Calendar',  href: `/${portfolioId}/dividend-calendar`,      icon: CalendarDays,    exact: false },
-    { name: 'Ownership',          href: `/${portfolioId}/ownership`,              icon: Crown,           exact: false },
-    { name: 'Stock Valuation',    href: `/${portfolioId}/valuation`,              icon: Calculator,      exact: false },
-    { name: 'Diversification',    href: `/${portfolioId}/diversification`,        icon: PieChart,        exact: false },
-    { name: 'Performance',        href: `/${portfolioId}/performance`,            icon: TrendingUp,      exact: false },
-    { name: 'Tag Mind Map',       href: `/${portfolioId}/tags`,                   icon: Network,         exact: false },
+    { name: 'Dashboard', href: `/${portfolioId}`, icon: LayoutDashboard, exact: true },
+    { name: 'Transactions', href: `/${portfolioId}/transactions`, icon: ReceiptText, exact: false },
+    { name: 'Custom Assets', href: `/${portfolioId}/custom-assets`, icon: Boxes, exact: false },
+    { name: 'Dividends', href: `/${portfolioId}/dividends`, icon: DollarSign, exact: false },
+    { name: 'Dividend Calendar', href: `/${portfolioId}/dividend-calendar`, icon: CalendarDays, exact: false },
+    { name: 'Ownership', href: `/${portfolioId}/ownership`, icon: Crown, exact: false },
+    { name: 'Stock Valuation', href: `/${portfolioId}/valuation`, icon: CalculatorIcon, exact: false },
+    { name: 'Diversification', href: `/${portfolioId}/diversification`, icon: PieChart, exact: false },
+    { name: 'Performance', href: `/${portfolioId}/performance`, icon: TrendingUp, exact: false },
+    { name: 'Tag Mind Map', href: `/${portfolioId}/tags`, icon: Network, exact: false },
   ];
 
   const SidebarContent = () => (
@@ -76,10 +76,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
           end
           onClick={() => setMobileOpen(false)}
           className={({ isActive }) =>
-            `flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors mb-0.5 ${
-              isActive
-                ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
-                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
+            `flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium transition-colors mb-0.5 ${isActive
+              ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
+              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
             }`
           }
         >
@@ -106,10 +105,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                     end
                     onClick={() => setMobileOpen(false)}
                     className={() =>
-                      `flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors mb-0.5 ${
-                        isActive
-                          ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
-                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
+                      `flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition-colors mb-0.5 ${isActive
+                        ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
                       }`
                     }
                   >
@@ -127,10 +125,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
                           end={item.exact}
                           onClick={() => setMobileOpen(false)}
                           className={({ isActive: subActive }) =>
-                            `flex items-center gap-2 rounded-md pl-9 pr-3 py-[6px] text-[12px] transition-colors mb-px ${
-                              subActive
-                                ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
-                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
+                            `flex items-center gap-2 rounded-md pl-9 pr-3 py-[6px] text-[12px] transition-colors mb-px ${subActive
+                              ? 'bg-primary-50 dark:bg-indigo-500/20 text-primary dark:text-indigo-400 font-semibold'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
                             }`
                           }
                         >
@@ -163,7 +160,9 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   return (
     <>
       {/* Desktop */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-60 lg:flex-col">
+      {/* lg:left-0 is explicit on purpose — `fixed` with left:auto falls back to
+          the element's static position, which only happens to be 0 here */}
+      <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:flex lg:w-60 lg:flex-col">
         <SidebarContent />
       </div>
 

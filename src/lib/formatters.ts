@@ -17,6 +17,17 @@ export function formatCurrency(value: number | null | undefined, decimals?: numb
   return `${symbol}${value.toFixed(d)}`;
 }
 
+/** "$416.2B" style — for axis ticks/tooltips on filing-scale money values. */
+export function formatCompactCurrency(value: number | null | undefined, currency = 'USD'): string {
+  if (value == null) return 'N/A';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function formatPercent(value: number | null | undefined, decimals = 2): string {
   if (value == null) return 'N/A';
   return `${value.toFixed(decimals)}%`;

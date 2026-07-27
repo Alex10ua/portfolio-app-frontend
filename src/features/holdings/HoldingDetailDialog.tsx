@@ -9,7 +9,7 @@ import { useMarketData } from '../../hooks/useMarketData';
 import { useCustomAsset, useUpdateCustomAssetPrice } from '../../hooks/useCustomAssets';
 import { useCreateTransaction } from '../../hooks/useHoldings';
 import { useFundamentals, useRefreshFundamentals } from '../../hooks/useFundamentals';
-import { formatCurrency } from '../../lib/formatters';
+import { formatCompactCurrency, formatCurrency } from '../../lib/formatters';
 import type { Holding } from '../../types/holding';
 import type { Currency } from '../../types/transaction';
 import type { FundamentalEntry } from '../../types/fundamentals';
@@ -42,11 +42,6 @@ const FUNDAMENTAL_LABELS: { key: string; label: string; unit: 'currency' | 'perS
   { key: 'buybackSpend', label: 'Buybacks (Spend)', unit: 'currency' },
   { key: 'dividendPerShare', label: 'Dividend / Share', unit: 'perShare' },
 ];
-
-// SEC filers in our curated concept set report in USD (10-K/10-Q domestic
-// filings) — foreign-currency reporters wouldn't have a CIK match anyway.
-const formatCompactUsd = (value: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(value);
 
 function mergeRevenueIncome(revenue?: FundamentalEntry[], netIncome?: FundamentalEntry[]) {
   const byDate = new Map<string, { date: string; revenue?: number; netIncome?: number }>();
@@ -108,6 +103,7 @@ function FundamentalsPanel({ ticker }: { ticker: string }) {
                 data={chartData}
                 xAxisKey="date"
                 areas={[{ dataKey: 'revenue', name: 'Revenue' }, { dataKey: 'netIncome', name: 'Net Income' }]}
+                yFormatter={(v) => formatCompactCurrency(v)}
               />
             </div>
           )}
@@ -120,7 +116,7 @@ function FundamentalsPanel({ ticker }: { ticker: string }) {
                 <div key={key} className="flex justify-between text-xs py-1 border-b border-slate-50 dark:border-slate-800/60">
                   <span className="text-slate-500 dark:text-slate-400">{label}</span>
                   <span className="font-medium text-slate-900 dark:text-slate-100 tabular-nums">
-                    {unit === 'perShare' ? formatCurrency(latest.value) : formatCompactUsd(latest.value)}
+                    {unit === 'perShare' ? formatCurrency(latest.value) : formatCompactCurrency(latest.value)}
                   </span>
                 </div>
               );

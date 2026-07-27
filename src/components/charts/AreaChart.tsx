@@ -20,6 +20,8 @@ interface StackedAreaChartProps {
   xAxisKey: string;
   areas: AreaDef[];
   colors?: string[];
+  /** Formats Y-axis ticks and tooltip values; default `$${v}` breaks down on billion-scale values */
+  yFormatter?: (v: number) => string;
 }
 
 const DEFAULT_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#3b82f6'];
@@ -29,7 +31,9 @@ export default function StackedAreaChart({
   xAxisKey,
   areas,
   colors = DEFAULT_COLORS,
+  yFormatter,
 }: StackedAreaChartProps) {
+  const fmtY = yFormatter ?? ((v: number) => `$${v}`);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
   useEffect(() => {
@@ -57,10 +61,10 @@ export default function StackedAreaChart({
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#e2e8f0'} />
         <XAxis dataKey={xAxisKey} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={(v) => `$${v}`} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} tickFormatter={fmtY} />
         <Tooltip
           contentStyle={tooltipStyle}
-          formatter={(value: number) => [`$${value.toFixed(2)}`]}
+          formatter={(value: number) => [yFormatter ? yFormatter(value) : `$${value.toFixed(2)}`]}
         />
         <Legend wrapperStyle={{ paddingTop: 16, fontSize: 13, color: isDark ? '#94a3b8' : '#64748b' }} />
         {areas.map((area, i) => (

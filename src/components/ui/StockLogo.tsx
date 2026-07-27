@@ -33,6 +33,16 @@ function textAvatar(ticker: string, name?: string | null): string {
 export default function StockLogo({ ticker, name, assetType, size = 'md' }: Props) {
   const { outer, img, text } = sizeMap[size];
 
+  const local = `/images/${ticker}_icon.png`;
+  // Parqet serves crypto under a separate path from stocks — /logos/symbol/
+  // 404s for coin tickers like ETH/BTC, /logos/crypto/ is where they live.
+  const remote = assetType === 'CRYPTO'
+    ? `https://assets.parqet.com/logos/crypto/${ticker}?format=svg`
+    : `https://assets.parqet.com/logos/symbol/${ticker}?format=svg`;
+  // Hooks must run unconditionally — keep them above the CUSTOM early return
+  const [src, setSrc] = useState(local);
+  const [failed, setFailed] = useState(false);
+
   // Custom assets: skip image fetch, show text avatar immediately
   if (assetType === 'CUSTOM') {
     const colorClass = CUSTOM_COLORS[name?.toUpperCase() ?? ''] ?? DEFAULT_CUSTOM_COLOR;
@@ -42,15 +52,6 @@ export default function StockLogo({ ticker, name, assetType, size = 'md' }: Prop
       </div>
     );
   }
-
-  const local = `/images/${ticker}_icon.png`;
-  // Parqet serves crypto under a separate path from stocks — /logos/symbol/
-  // 404s for coin tickers like ETH/BTC, /logos/crypto/ is where they live.
-  const remote = assetType === 'CRYPTO'
-    ? `https://assets.parqet.com/logos/crypto/${ticker}?format=svg`
-    : `https://assets.parqet.com/logos/symbol/${ticker}?format=svg`;
-  const [src, setSrc] = useState(local);
-  const [failed, setFailed] = useState(false);
 
   const handleError = () => {
     if (src === local) {

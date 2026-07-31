@@ -4,9 +4,14 @@ export interface TableColumnConfig {
   visible: boolean;
 }
 
+export type ChartRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
+
 export interface PortfolioSettings {
   tableConfig?: TableColumnConfig[];
-  chartStartMonth?: string; // 'YYYY-MM'
+  chartRange?: ChartRange;  // value-chart window; default YTD
+  sortBy?: string;          // holdings-table column key
+  sortOrder?: 'asc' | 'desc';
+  assetFilter?: string;     // 'ALL' or an AssetType
 }
 
 export interface UserSettings {

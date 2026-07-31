@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
-  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote, GripVertical,
+  TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
   Wallet, Pencil, Trash2,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -20,42 +20,38 @@ import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
 import HoldingDetailDialog from './HoldingDetailDialog';
 import PortfolioValueChart from './PortfolioValueChart';
+import PortfolioSettingsDialog from './PortfolioSettingsDialog';
+import { DEFAULT_COLUMNS, mergeColumns, type Column } from './holdingsColumns';
+import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
 import { formatCurrency, formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { AssetType, Holding } from '../../types/holding';
+import type { ChartRange } from '../../types/settings';
 
 type SortOrder = 'asc' | 'desc';
 
-interface Column {
-  key: string;
-  label: string;
-  visible: boolean;
-}
+const CHART_RANGES: ChartRange[] = ['1M', '3M', '6M', 'YTD', '1Y', 'ALL'];
+const RANGE_MONTHS: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
 
-const DEFAULT_COLUMNS: Column[] = [
-  { key: 'ticker',              label: 'Holding',      visible: true  },
-  { key: 'shareAmount',         label: 'Shares',       visible: true  },
-  { key: 'costPerShare',        label: 'Cost/Share',   visible: true  },
-  { key: 'currentShareValue',   label: 'Total Value',  visible: true  },
-  { key: 'portfolioPercent',    label: '% of Portfolio', visible: true },
-  { key: 'dividend',            label: 'Dividends',    visible: true  },
-  { key: 'dividendYield',       label: 'Yield',        visible: true  },
-  { key: 'dividendYieldOnCost', label: 'Yield on Cost',visible: true  },
-  { key: 'totalProfit',         label: 'Total P&L',    visible: true  },
-  { key: 'dailyChange',         label: 'Daily Change', visible: true  },
-];
+const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-function mergeColumns(saved: Column[]): Column[] {
-  const defaults = new Map(DEFAULT_COLUMNS.map((c) => [c.key, c]));
-  // Saved order wins; drop keys that no longer exist, take labels from defaults.
-  const merged = saved
-    .filter((c) => defaults.has(c.key))
-    .map((c) => ({ ...defaults.get(c.key)!, visible: c.visible }));
-  // Insert columns added since the config was saved at their default position.
-  DEFAULT_COLUMNS.forEach((def, i) => {
-    if (!merged.some((c) => c.key === def.key)) merged.splice(Math.min(i, merged.length), 0, def);
-  });
-  return merged;
+/**
+ * Start month ('YYYY-MM') for a range, clamped to the months the chart actually
+ * has: a window reaching before the first point starts at the first point, and a
+ * window starting after the last point falls back to it so the chart is never empty.
+ */
+function rangeStartMonth(range: ChartRange, months: string[]): string {
+  if (months.length === 0) return '';
+  const first = months[0];
+  if (range === 'ALL') return first;
+  const d = new Date();
+  d.setDate(1);
+  if (range === 'YTD') d.setMonth(0);
+  else d.setMonth(d.getMonth() - RANGE_MONTHS[range]);
+  const key = monthKey(d);
+  const last = months[months.length - 1];
+  if (key <= first) return first;
+  return key > last ? last : key;
 }
 
 // Single source for the "Total Value" figure — used by the column, sorting, and % of Portfolio.
@@ -94,22 +90,19 @@ export default function HoldingsDashboardPage() {
   const [importOpen, setImportOpen]   = useState(false);
   // null = closed; isEdit locks the currency field to the existing position
   const [cashDialog, setCashDialog]   = useState<{ currency: string; amount: string; isEdit?: boolean } | null>(null);
-  // Chart start month ('YYYY-MM'); falls back to the first data point when unset/stale
-  const [chartStart, setChartStart]   = useState<string>(() => localStorage.getItem(`chartStart-${pid}`) ?? '');
-  const [chartConfigOpen, setChartConfigOpen] = useState(false);
-  const [configOpen, setConfigOpen]   = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
-  const [orderBy, setOrderBy]         = useState<string>('ticker');
-  const [order, setOrder]             = useState<SortOrder>('asc');
-  const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>('ALL');
 
-  const [columns, setColumns] = useState<Column[]>(() => {
-    const saved = localStorage.getItem(`tableConfig-${pid}`);
-    if (saved) {
-      try { return mergeColumns(JSON.parse(saved) as Column[]); } catch { /* ignore */ }
-    }
-    return DEFAULT_COLUMNS;
-  });
+  // Per-portfolio UI settings seeded from the localStorage mirror (instant paint);
+  // the server copy is applied once it loads. The component is remounted per
+  // portfolio (PortfolioScope in App.tsx), so these initializers re-run on switch.
+  const [localSettings] = useState(() => readLocalPortfolioSettings(pid));
+  const [chartRange, setChartRange]   = useState<ChartRange>(localSettings.chartRange ?? 'YTD');
+  const [orderBy, setOrderBy]         = useState<string>(localSettings.sortBy ?? 'ticker');
+  const [order, setOrder]             = useState<SortOrder>(localSettings.sortOrder ?? 'asc');
+  const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>((localSettings.assetFilter as AssetType | 'ALL') ?? 'ALL');
+  const [columns, setColumns] = useState<Column[]>(() =>
+    localSettings.tableConfig ? mergeColumns(localSettings.tableConfig as Column[]) : DEFAULT_COLUMNS);
 
   // Server-backed settings: localStorage paints instantly, then the server copy
   // (source of truth, synced across devices) is applied once — unless the user
@@ -124,14 +117,16 @@ export default function HoldingsDashboardPage() {
       const merged = mergeColumns(server.tableConfig as Column[]);
       setColumns((prev) => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
     }
-    if (server.chartStartMonth) {
-      setChartStart((prev) => prev === server.chartStartMonth ? prev : server.chartStartMonth!);
+    if (server.chartRange) setChartRange((prev) => prev === server.chartRange ? prev : server.chartRange!);
+    if (server.sortBy) setOrderBy((prev) => prev === server.sortBy ? prev : server.sortBy!);
+    if (server.sortOrder) setOrder((prev) => prev === server.sortOrder ? prev : server.sortOrder!);
+    if (server.assetFilter) {
+      setAssetFilter((prev) => prev === server.assetFilter ? prev : server.assetFilter as AssetType | 'ALL');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded, pid]);
 
   useEffect(() => {
-    localStorage.setItem(`tableConfig-${pid}`, JSON.stringify(columns));
     updatePortfolioSettings(pid, { tableConfig: columns });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, pid]);
@@ -142,12 +137,33 @@ export default function HoldingsDashboardPage() {
     }
   }, [firstTradeYear, pid]);
 
-  const handleSort = (key: string) => {
-    if (orderBy === key) setOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-    else { setOrderBy(key); setOrder('asc'); }
+  const applySort = (key: string, dir: SortOrder) => {
+    settingsDirtyRef.current = true;
+    setOrderBy(key);
+    setOrder(dir);
+    updatePortfolioSettings(pid, { sortBy: key, sortOrder: dir });
   };
 
-  const [dragKey, setDragKey] = useState<string | null>(null);
+  const handleSort = (key: string) =>
+    applySort(key, orderBy === key && order === 'asc' ? 'desc' : 'asc');
+
+  const changeAssetFilter = (filter: AssetType | 'ALL') => {
+    settingsDirtyRef.current = true;
+    setAssetFilter(filter);
+    updatePortfolioSettings(pid, { assetFilter: filter });
+  };
+
+  const resetSettings = () => {
+    settingsDirtyRef.current = true;
+    setColumns(DEFAULT_COLUMNS);   // persisted by the columns effect
+    setChartRange('YTD');
+    setOrderBy('ticker');
+    setOrder('asc');
+    setAssetFilter('ALL');
+    updatePortfolioSettings(pid, {
+      chartRange: 'YTD', sortBy: 'ticker', sortOrder: 'asc', assetFilter: 'ALL',
+    });
+  };
 
   const moveColumn = (fromKey: string, toKey: string) => {
     settingsDirtyRef.current = true;
@@ -260,19 +276,12 @@ export default function HoldingsDashboardPage() {
     return months;
   }, [valueHistory]);
 
-  // Saved month may predate a data change or belong to another portfolio state — clamp to range
-  const effectiveChartStart = chartMonths.includes(chartStart) ? chartStart : chartMonths[0];
+  const effectiveChartStart = rangeStartMonth(chartRange, chartMonths);
 
-  const changeChartStart = (month: string) => {
+  const changeChartRange = (range: ChartRange) => {
     settingsDirtyRef.current = true;
-    setChartStart(month);
-    try { localStorage.setItem(`chartStart-${pid}`, month); } catch { /* storage blocked */ }
-    updatePortfolioSettings(pid, { chartStartMonth: month });
-  };
-
-  const monthLabel = (m: string) => {
-    const [y, mo] = m.split('-');
-    return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    setChartRange(range);
+    updatePortfolioSettings(pid, { chartRange: range });
   };
 
   // Realized P&L (per currency from backend) converted to the display currency —
@@ -383,11 +392,12 @@ export default function HoldingsDashboardPage() {
         </button>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => setConfigOpen(true)}
+            onClick={() => setSettingsOpen(true)}
+            title="Portfolio settings"
             className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
           >
             <Settings className="h-3.5 w-3.5 text-slate-400" />
-            Columns
+            Settings
           </button>
           <button
             onClick={() => setImportOpen(true)}
@@ -588,36 +598,20 @@ export default function HoldingsDashboardPage() {
               <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All currencies converted to base</div>
             </div>
             {chartMonths.length > 1 && (
-              <div className="relative">
-                <button
-                  onClick={() => setChartConfigOpen((o) => !o)}
-                  title="Chart settings"
-                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-                {chartConfigOpen && (
-                  <>
-                    {/* click-away layer */}
-                    <div className="fixed inset-0 z-20" onClick={() => setChartConfigOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1.5 z-30 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-lg">
-                      <label className="block text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
-                        From
-                      </label>
-                      <select
-                        value={effectiveChartStart}
-                        onChange={(e) => changeChartStart(e.target.value)}
-                        className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-[12px] font-semibold text-slate-700 dark:text-slate-200"
-                      >
-                        {chartMonths.map((m, i) => (
-                          <option key={m} value={m}>
-                            {i === 0 ? `${monthLabel(m)} (start)` : monthLabel(m)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </>
-                )}
+              <div className="inline-flex items-center bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
+                {CHART_RANGES.map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => changeChartRange(range)}
+                    className={`px-2.5 py-1 rounded text-[12px] font-semibold transition-colors ${
+                      chartRange === range
+                        ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-indigo-400'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {range}
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -650,7 +644,7 @@ export default function HoldingsDashboardPage() {
                   return (
                     <button
                       key={type}
-                      onClick={() => setAssetFilter(type)}
+                      onClick={() => changeAssetFilter(type)}
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition-colors ${
                         isActive
                           ? 'bg-primary text-white'
@@ -775,50 +769,20 @@ export default function HoldingsDashboardPage() {
       </Dialog>
       <HoldingDetailDialog holding={detailHolding} open={detailHolding !== null} onClose={() => setDetailHolding(null)} portfolioId={pid} />
 
-      <Dialog open={configOpen} onClose={() => setConfigOpen(false)} title="Column Configuration">
-        <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-2">Drag to reorder columns</div>
-        <div className="space-y-1">
-          {columns.map((col) => {
-            const isLastVisible = col.visible && visibleColumns.length === 1;
-            return (
-              <div
-                key={col.key}
-                draggable
-                onDragStart={() => setDragKey(col.key)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (dragKey && dragKey !== col.key) moveColumn(dragKey, col.key);
-                }}
-                onDrop={(e) => e.preventDefault()}
-                onDragEnd={() => setDragKey(null)}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 border transition-colors ${
-                  dragKey === col.key
-                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 opacity-70'
-                    : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-700/40'
-                }`}
-              >
-                <GripVertical className="h-4 w-4 text-slate-400 dark:text-slate-500 cursor-grab flex-shrink-0" />
-                <label className={`flex items-center gap-3 flex-1 cursor-pointer ${isLastVisible ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                  <input
-                    type="checkbox"
-                    checked={col.visible}
-                    disabled={isLastVisible}
-                    onChange={() => toggleColumn(col.key)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed"
-                  />
-                  <span className="text-sm text-slate-700 dark:text-slate-300">{col.label}</span>
-                </label>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex justify-end mt-4">
-          <button onClick={() => setConfigOpen(false)}
-            className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-hover">
-            Done
-          </button>
-        </div>
-      </Dialog>
+      <PortfolioSettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        columns={columns}
+        onToggleColumn={toggleColumn}
+        onMoveColumn={moveColumn}
+        sortBy={orderBy}
+        sortOrder={order}
+        onSortChange={applySort}
+        assetFilter={assetFilter}
+        assetTypes={Object.keys(assetFilterCounts)}
+        onAssetFilterChange={changeAssetFilter}
+        onReset={resetSettings}
+      />
     </div>
   );
 }

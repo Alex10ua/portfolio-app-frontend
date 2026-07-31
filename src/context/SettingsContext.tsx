@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getSettings, saveSettings } from '../api/users';
+import { writeLocalPortfolioSettings } from '../lib/portfolioSettingsStore';
 import type { UserSettings, PortfolioSettings } from '../types/settings';
 
 type Theme = 'light' | 'dark';
@@ -68,14 +69,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           portfolioSettings: s.portfolioSettings ?? {},
         };
         setSettings(normalized);
+        settingsRef.current = normalized;
         lastAckedRef.current = JSON.stringify(normalized);
         if (normalized.theme) setThemeState(normalized.theme);
         // converge the localStorage cache to server truth
         for (const [pid, ps] of Object.entries(normalized.portfolioSettings)) {
-          try {
-            if (ps.tableConfig) localStorage.setItem(`tableConfig-${pid}`, JSON.stringify(ps.tableConfig));
-            if (ps.chartStartMonth) localStorage.setItem(`chartStart-${pid}`, ps.chartStartMonth);
-          } catch { /* storage blocked */ }
+          writeLocalPortfolioSettings(pid, ps);
         }
         setSettingsLoaded(true);
       })
@@ -104,27 +103,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }, 800);
   };
 
+  // settingsRef is advanced synchronously so several patches in one tick
+  // (e.g. two mount effects) merge instead of the last one winning.
+  const commit = (next: UserSettings) => {
+    settingsRef.current = next;
+    setSettings(next);
+    schedulePush();
+  };
+
   const setTheme = (t: Theme) => {
     setThemeState(t);
-    setSettings((prev) => ({ ...prev, theme: t }));
-    schedulePush();
+    commit({ ...settingsRef.current, theme: t });
   };
 
   const getPortfolioSettings = (pid: string) => settings.portfolioSettings[pid];
 
   const updatePortfolioSettings = (pid: string, patch: Partial<PortfolioSettings>) => {
-    setSettings((prev) => ({
-      ...prev,
-      portfolioSettings: {
-        ...prev.portfolioSettings,
-        [pid]: { ...prev.portfolioSettings[pid], ...patch },
-      },
-    }));
-    try {
-      if (patch.tableConfig) localStorage.setItem(`tableConfig-${pid}`, JSON.stringify(patch.tableConfig));
-      if (patch.chartStartMonth) localStorage.setItem(`chartStart-${pid}`, patch.chartStartMonth);
-    } catch { /* storage blocked */ }
-    schedulePush();
+    const merged = { ...settingsRef.current.portfolioSettings[pid], ...patch };
+    commit({
+      ...settingsRef.current,
+      portfolioSettings: { ...settingsRef.current.portfolioSettings, [pid]: merged },
+    });
+    writeLocalPortfolioSettings(pid, merged);
   };
 
   return (

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Outlet, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 import PrivateRoute from './components/Layout/PrivateRoute';
@@ -21,7 +21,18 @@ const PerformancePage = lazy(() => import('./features/performance/PerformancePag
 const TagMapPage = lazy(() => import('./features/tags/TagMapPage'));
 const OwnershipPage = lazy(() => import('./features/ownership/OwnershipPage'));
 const StockValuationPage = lazy(() => import('./features/valuation/StockValuationPage'));
+const StatisticsPage = lazy(() => import('./features/statistics/StatisticsPage'));
+const HistoricalPage = lazy(() => import('./features/historical/HistoricalPage'));
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
+
+// Portfolio pages keep per-portfolio UI state (column config, chart start, sort,
+// filter) seeded from that portfolio's settings on mount. Keying the outlet by
+// portfolioId remounts them on a portfolio switch — without it React reuses the
+// instance and the previous portfolio's settings get written onto the new one.
+function PortfolioScope() {
+  const { portfolioId } = useParams<{ portfolioId: string }>();
+  return <Outlet key={portfolioId} />;
+}
 
 export default function App() {
   return (
@@ -36,16 +47,20 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<PortfolioListPage />} />
               <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/:portfolioId" element={<HoldingsDashboardPage />} />
-              <Route path="/:portfolioId/transactions" element={<TransactionsPage />} />
-              <Route path="/:portfolioId/dividends" element={<DividendsPage />} />
-              <Route path="/:portfolioId/diversification" element={<DiversificationPage />} />
-              <Route path="/:portfolioId/dividend-calendar" element={<DividendCalendarPage />} />
-              <Route path="/:portfolioId/custom-assets" element={<CustomAssetsPage />} />
-              <Route path="/:portfolioId/performance" element={<PerformancePage />} />
-              <Route path="/:portfolioId/tags" element={<TagMapPage />} />
-              <Route path="/:portfolioId/ownership" element={<OwnershipPage />} />
-              <Route path="/:portfolioId/valuation" element={<StockValuationPage />} />
+              <Route path="/:portfolioId" element={<PortfolioScope />}>
+                <Route index element={<HoldingsDashboardPage />} />
+                <Route path="transactions" element={<TransactionsPage />} />
+                <Route path="dividends" element={<DividendsPage />} />
+                <Route path="diversification" element={<DiversificationPage />} />
+                <Route path="dividend-calendar" element={<DividendCalendarPage />} />
+                <Route path="custom-assets" element={<CustomAssetsPage />} />
+                <Route path="performance" element={<PerformancePage />} />
+                <Route path="tags" element={<TagMapPage />} />
+                <Route path="ownership" element={<OwnershipPage />} />
+                <Route path="valuation" element={<StockValuationPage />} />
+                <Route path="statistics" element={<StatisticsPage />} />
+                <Route path="historical" element={<HistoricalPage />} />
+              </Route>
             </Route>
           </Route>
         </Routes>

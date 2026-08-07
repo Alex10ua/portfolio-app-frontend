@@ -5,12 +5,12 @@ import {
   TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
   Wallet, Pencil, Trash2,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
 import { useRealizedPnL } from '../../hooks/usePerformance';
 import { useSettings } from '../../context/SettingsContext';
-import { getFxRates } from '../../api/fxRates';
+import { useFxRates } from '../../hooks/useFxRates';
+import { convert, formatMoney, normalizeCurrency } from '../../lib/currency';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -23,10 +23,10 @@ import PortfolioValueChart from './PortfolioValueChart';
 import PortfolioSettingsDialog from './PortfolioSettingsDialog';
 import { DEFAULT_COLUMNS, mergeColumns, type Column } from './holdingsColumns';
 import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
-import { formatCurrency, formatPercent } from '../../lib/formatters';
+import { formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { AssetType, Holding } from '../../types/holding';
-import type { ChartRange } from '../../types/settings';
+import type { ChartRange, CurrencyDisplay } from '../../types/settings';
 
 type SortOrder = 'asc' | 'desc';
 
@@ -84,7 +84,7 @@ export default function HoldingsDashboardPage() {
   const { data: realizedByCcy } = useRealizedPnL(pid);
   const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
   const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
-  const { data: fxRates = {} } = useQuery({ queryKey: ['fxRates'], queryFn: getFxRates });
+  const fxRates = useFxRates();
 
   const [createOpen, setCreateOpen]   = useState(false);
   const [importOpen, setImportOpen]   = useState(false);
@@ -103,6 +103,9 @@ export default function HoldingsDashboardPage() {
   const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>((localSettings.assetFilter as AssetType | 'ALL') ?? 'ALL');
   const [columns, setColumns] = useState<Column[]>(() =>
     localSettings.tableConfig ? mergeColumns(localSettings.tableConfig as Column[]) : DEFAULT_COLUMNS);
+  // undefined = auto-detect from the holdings (single currency, else USD)
+  const [currencyPref, setCurrencyPref] = useState<string | undefined>(localSettings.baseCurrency);
+  const [currencyDisplay, setCurrencyDisplay] = useState<CurrencyDisplay>(localSettings.currencyDisplay ?? 'Symbol');
 
   // Server-backed settings: localStorage paints instantly, then the server copy
   // (source of truth, synced across devices) is applied once — unless the user
@@ -122,6 +125,10 @@ export default function HoldingsDashboardPage() {
     if (server.sortOrder) setOrder((prev) => prev === server.sortOrder ? prev : server.sortOrder!);
     if (server.assetFilter) {
       setAssetFilter((prev) => prev === server.assetFilter ? prev : server.assetFilter as AssetType | 'ALL');
+    }
+    if (server.baseCurrency) setCurrencyPref((prev) => prev === server.baseCurrency ? prev : server.baseCurrency);
+    if (server.currencyDisplay) {
+      setCurrencyDisplay((prev) => prev === server.currencyDisplay ? prev : server.currencyDisplay!);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded, pid]);
@@ -153,6 +160,18 @@ export default function HoldingsDashboardPage() {
     updatePortfolioSettings(pid, { assetFilter: filter });
   };
 
+  const changeBaseCurrency = (code: string) => {
+    settingsDirtyRef.current = true;
+    setCurrencyPref(code);
+    updatePortfolioSettings(pid, { baseCurrency: code });
+  };
+
+  const changeCurrencyDisplay = (display: CurrencyDisplay) => {
+    settingsDirtyRef.current = true;
+    setCurrencyDisplay(display);
+    updatePortfolioSettings(pid, { currencyDisplay: display });
+  };
+
   const resetSettings = () => {
     settingsDirtyRef.current = true;
     setColumns(DEFAULT_COLUMNS);   // persisted by the columns effect
@@ -160,8 +179,11 @@ export default function HoldingsDashboardPage() {
     setOrderBy('ticker');
     setOrder('asc');
     setAssetFilter('ALL');
+    setCurrencyPref(undefined);    // back to auto-detect
+    setCurrencyDisplay('Symbol');
     updatePortfolioSettings(pid, {
       chartRange: 'YTD', sortBy: 'ticker', sortOrder: 'asc', assetFilter: 'ALL',
+      baseCurrency: undefined, currencyDisplay: 'Symbol',
     });
   };
 
@@ -205,26 +227,51 @@ export default function HoldingsDashboardPage() {
     }, {});
   }, [holdings]);
 
-  // % of portfolio = this row's Total Value / sum of all rows' Total Values,
-  // using raw native-currency values exactly as shown in the Total Value column.
+  // Currencies the portfolio actually holds — the picker lists them first and
+  // they are the candidates for the auto-detected base.
+  const heldCurrencies = useMemo(
+    () => [...new Set((holdings ?? []).map((h) => h.currency).filter((c): c is string => !!c))],
+    [holdings]);
+
+  // An explicit setting wins. Otherwise: single-currency portfolio → that
+  // currency, mixed → USD (the long-standing default).
+  const baseCurrency = currencyPref
+    ?? (heldCurrencies.length === 1 ? normalizeCurrency(heldCurrencies[0])
+      : heldCurrencies.length ? 'USD' : '');
+
+  /** Native amount → the portfolio's base currency, using the rates held client-side. */
+  const toBase = useMemo(
+    () => (value: number | null | undefined, from?: string | null) =>
+      convert(Number(value) || 0, from ?? baseCurrency, baseCurrency, fxRates),
+    [baseCurrency, fxRates]);
+
+  const money = useMemo(
+    () => (value: number | null | undefined, currency = baseCurrency, decimals?: number) =>
+      formatMoney(value, currency, currencyDisplay, decimals),
+    [baseCurrency, currencyDisplay]);
+
+  // % of portfolio = this row's Total Value / sum of all rows' Total Values, both
+  // converted to the base currency so a mixed-currency portfolio still adds to 100%.
   // Denominator = all holdings, not the filtered view.
   const portfolioPercents = useMemo(() => {
     if (!holdings?.length) return {} as Record<string, number>;
-    const total = holdings.reduce((s, h) => s + holdingTotalValue(h), 0);
+    const inBase = holdings.map((h) => [h.ticker, toBase(holdingTotalValue(h), h.currency)] as const);
+    const total = inBase.reduce((s, [, v]) => s + v, 0);
     if (total === 0) return {} as Record<string, number>;
-    return Object.fromEntries(holdings.map((h) => [h.ticker, (holdingTotalValue(h) / total) * 100]));
-  }, [holdings]);
+    return Object.fromEntries(inBase.map(([ticker, v]) => [ticker, (v / total) * 100]));
+  }, [holdings, toBase]);
 
   const sortedHoldings = useMemo(() => {
     return [...filteredHoldings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
       if (orderBy === 'currentShareValue') {
-        valA = holdingTotalValue(a);
-        valB = holdingTotalValue(b);
+        // compare in the base currency — raw natives would rank by quote unit
+        valA = toBase(holdingTotalValue(a), a.currency);
+        valB = toBase(holdingTotalValue(b), b.currency);
       } else if (orderBy === 'dividend') {
-        valA = (a.dividend ?? 0) * (a.shareAmount ?? 0);
-        valB = (b.dividend ?? 0) * (b.shareAmount ?? 0);
+        valA = toBase((a.dividend ?? 0) * (a.shareAmount ?? 0), a.currency);
+        valB = toBase((b.dividend ?? 0) * (b.shareAmount ?? 0), b.currency);
       } else if (orderBy === 'portfolioPercent') {
         valA = portfolioPercents[a.ticker] ?? 0;
         valB = portfolioPercents[b.ticker] ?? 0;
@@ -239,35 +286,22 @@ export default function HoldingsDashboardPage() {
         return order === 'asc' ? valA - valB : valB - valA;
       return order === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
     });
-  }, [filteredHoldings, orderBy, order, portfolioPercents]);
+  }, [filteredHoldings, orderBy, order, portfolioPercents, toBase]);
 
-  const { baseCurrency, stats } = useMemo(() => {
-    if (!holdings?.length) return { baseCurrency: '', stats: null };
-    const uniqueCurrencies = [...new Set(holdings.map((h) => h.currency).filter((c): c is string => !!c))];
-    const isMulti = uniqueCurrencies.length > 1;
-    // Multi-currency portfolio → display in USD; mono-currency → that currency.
-    const base = isMulti ? 'USD' : (uniqueCurrencies[0] ?? '');
-    // toBase converts native → EUR (fx = rateVsEur); displayRate then EUR → USD.
-    const toBase = (v: number, fx?: number) => isMulti && fx && fx !== 0 ? v / fx : v;
-    const displayRate = isMulti ? (fxRates['USD'] ?? 1) : 1;
-    const totalValue  = holdings.reduce((s, h) => s + toBase(holdingTotalValue(h), h.fxRate), 0) * displayRate;
-    const totalCost   = holdings.reduce((s, h) => s + toBase(holdingCostBasis(h), h.fxRate), 0) * displayRate;
-    const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.fxRate), 0) * displayRate;
+  // Aggregates: each holding is converted from its own currency to the base one.
+  const stats = useMemo(() => {
+    if (!holdings?.length) return null;
+    const totalValue  = holdings.reduce((s, h) => s + toBase(holdingTotalValue(h), h.currency), 0);
+    const totalCost   = holdings.reduce((s, h) => s + toBase(holdingCostBasis(h), h.currency), 0);
+    const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.currency), 0);
     const avgYield    = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
-    return { baseCurrency: base, stats: { totalValue, totalCost, totalProfit, avgYield } };
-  }, [holdings, fxRates]);
+    return { totalValue, totalCost, totalProfit, avgYield };
+  }, [holdings, toBase]);
 
-  // Manual cash converted to the portfolio's display currency.
-  // fxRates = currency → rateVsEur, so native → base is amount × rate(base) / rate(native).
-  const cashInBase = useMemo(() => {
-    if (!manualCash?.length) return 0;
-    const rateOf = (c: string) => {
-      const r = fxRates[c];
-      return r && r !== 0 ? r : 1;
-    };
-    const baseRate = baseCurrency ? rateOf(baseCurrency) : 1;
-    return manualCash.reduce((s, c) => s + (c.amount ?? 0) * (baseRate / rateOf(c.currency)), 0);
-  }, [manualCash, fxRates, baseCurrency]);
+  // Manual cash converted to the portfolio's base currency.
+  const cashInBase = useMemo(
+    () => (manualCash ?? []).reduce((s, c) => s + toBase(c.amount, c.currency), 0),
+    [manualCash, toBase]);
 
   // Distinct months of the value chart, ascending — options for the start-month select
   const chartMonths = useMemo(() => {
@@ -284,18 +318,11 @@ export default function HoldingsDashboardPage() {
     updatePortfolioSettings(pid, { chartRange: range });
   };
 
-  // Realized P&L (per currency from backend) converted to the display currency —
+  // Realized P&L (per currency from backend) converted to the base currency —
   // keeps profit from fully-sold positions visible after their holding is deleted
-  const realizedInBase = useMemo(() => {
-    if (!realizedByCcy) return 0;
-    const rateOf = (c: string) => {
-      const r = fxRates[c];
-      return r && r !== 0 ? r : 1;
-    };
-    const baseRate = baseCurrency ? rateOf(baseCurrency) : 1;
-    return Object.entries(realizedByCcy).reduce(
-      (s, [ccy, amt]) => s + (amt ?? 0) * (baseRate / rateOf(ccy)), 0);
-  }, [realizedByCcy, fxRates, baseCurrency]);
+  const realizedInBase = useMemo(
+    () => Object.entries(realizedByCcy ?? {}).reduce((s, [ccy, amt]) => s + toBase(amt, ccy), 0),
+    [realizedByCcy, toBase]);
 
   const submitCashDialog = async () => {
     if (!cashDialog) return;
@@ -330,13 +357,13 @@ export default function HoldingsDashboardPage() {
       case 'shareAmount':
         return <span className="font-mono tabular-nums">{holding.shareAmount < 1 ? holding.shareAmount.toFixed(4) : holding.shareAmount}</span>;
       case 'costPerShare':
-        return <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{formatCurrency(holding.costPerShare, undefined, holding.currency)}</span>;
+        return <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">{money(holding.costPerShare, holding.currency)}</span>;
       case 'currentShareValue': {
         const total = holdingTotalValue(holding);
         return (
           <div>
-            <div className="font-semibold tabular-nums">{formatCurrency(total, undefined, holding.currency)}</div>
-            <div className="text-[11px] text-slate-400 tabular-nums">{formatCurrency(holding.currentShareValue, undefined, holding.currency)}/sh</div>
+            <div className="font-semibold tabular-nums">{money(total, holding.currency)}</div>
+            <div className="text-[11px] text-slate-400 tabular-nums">{money(holding.currentShareValue, holding.currency)}/sh</div>
           </div>
         );
       }
@@ -346,7 +373,7 @@ export default function HoldingsDashboardPage() {
         return <span className="font-semibold tabular-nums">{formatPercent(pct, 1)}</span>;
       }
       case 'dividend':
-        return <span className="font-mono tabular-nums">{formatCurrency((holding.dividend ?? 0) * holding.shareAmount, undefined, holding.currency)}</span>;
+        return <span className="font-mono tabular-nums">{money((holding.dividend ?? 0) * holding.shareAmount, holding.currency)}</span>;
       case 'dividendYield':
         return (
           <span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 tabular-nums">
@@ -361,7 +388,7 @@ export default function HoldingsDashboardPage() {
         const pos = (profit ?? 0) >= 0;
         return (
           <div className={pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
-            <div className="font-semibold tabular-nums">{formatCurrency(profit, undefined, holding.currency)}</div>
+            <div className="font-semibold tabular-nums">{money(profit, holding.currency)}</div>
             <div className="text-[11px] tabular-nums opacity-85">{formatPercent(pct)}</div>
           </div>
         );
@@ -369,7 +396,7 @@ export default function HoldingsDashboardPage() {
       case 'dailyChange': {
         const change = holding.dailyChange;
         const pos = (change ?? 0) >= 0;
-        return <span className={`font-semibold tabular-nums ${pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{formatCurrency(change, undefined, holding.currency)}</span>;
+        return <span className={`font-semibold tabular-nums ${pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{money(change, holding.currency)}</span>;
       }
       default:
         return String((holding as unknown as Record<string, unknown>)[col.key] ?? '—');
@@ -422,7 +449,7 @@ export default function HoldingsDashboardPage() {
           <div className="relative group h-full">
             <StatCard
               label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
-              value={formatCurrency(stats.totalValue + cashInBase, undefined, baseCurrency)}
+              value={money(stats.totalValue + cashInBase)}
               icon={TrendingUp}
               accent="#4F46E5"
               sub={cashInBase !== 0 ? 'incl. cash' : undefined}
@@ -432,13 +459,13 @@ export default function HoldingsDashboardPage() {
                 <div className="flex items-center justify-between text-[13px] mb-1.5">
                   <span className="text-slate-500 dark:text-slate-400">Portfolio value</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(stats.totalValue, undefined, baseCurrency)}
+                    {money(stats.totalValue)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[13px]">
                   <span className="text-slate-500 dark:text-slate-400">Cash</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(cashInBase, undefined, baseCurrency)}
+                    {money(cashInBase)}
                   </span>
                 </div>
                 {(manualCash ?? []).map((c) => (
@@ -452,7 +479,7 @@ export default function HoldingsDashboardPage() {
                 <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(stats.totalValue + cashInBase, undefined, baseCurrency)}
+                    {money(stats.totalValue + cashInBase)}
                   </span>
                 </div>
               </div>
@@ -460,14 +487,14 @@ export default function HoldingsDashboardPage() {
           </div>
           <StatCard
             label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`}
-            value={formatCurrency(stats.totalCost, undefined, baseCurrency)}
+            value={money(stats.totalCost)}
             icon={DollarSign}
             accent="#14B8A6"
           />
           <div className="relative group h-full">
             <StatCard
               label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
-              value={formatCurrency(stats.totalProfit + realizedInBase, undefined, baseCurrency)}
+              value={money(stats.totalProfit + realizedInBase)}
               icon={BarChart2}
               accent={stats.totalProfit + realizedInBase >= 0 ? '#10B981' : '#EF4444'}
               sub={realizedInBase !== 0 ? 'incl. realized' : undefined}
@@ -477,19 +504,19 @@ export default function HoldingsDashboardPage() {
                 <div className="flex items-center justify-between text-[13px] mb-1.5">
                   <span className="text-slate-500 dark:text-slate-400">Unrealized</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(stats.totalProfit, undefined, baseCurrency)}
+                    {money(stats.totalProfit)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[13px]">
                   <span className="text-slate-500 dark:text-slate-400">Realized</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(realizedInBase, undefined, baseCurrency)}
+                    {money(realizedInBase)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {formatCurrency(stats.totalProfit + realizedInBase, undefined, baseCurrency)}
+                    {money(stats.totalProfit + realizedInBase)}
                   </span>
                 </div>
               </div>
@@ -595,7 +622,9 @@ export default function HoldingsDashboardPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value Over Time</div>
-              <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All currencies converted to base</div>
+              <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">
+                {baseCurrency ? `All currencies converted to ${baseCurrency} at today's rate` : 'All currencies converted to base'}
+              </div>
             </div>
             {chartMonths.length > 1 && (
               <div className="inline-flex items-center bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md p-0.5">
@@ -616,7 +645,12 @@ export default function HoldingsDashboardPage() {
             )}
           </div>
           <div className="h-56">
-            <PortfolioValueChart portfolioId={pid} startMonth={effectiveChartStart} />
+            <PortfolioValueChart
+              portfolioId={pid}
+              startMonth={effectiveChartStart}
+              baseCurrency={baseCurrency}
+              currencyDisplay={currencyDisplay}
+            />
           </div>
         </div>
       )}
@@ -781,6 +815,12 @@ export default function HoldingsDashboardPage() {
         assetFilter={assetFilter}
         assetTypes={Object.keys(assetFilterCounts)}
         onAssetFilterChange={changeAssetFilter}
+        baseCurrency={baseCurrency || 'USD'}
+        onBaseCurrencyChange={changeBaseCurrency}
+        heldCurrencies={heldCurrencies}
+        currencyDisplay={currencyDisplay}
+        onCurrencyDisplayChange={changeCurrencyDisplay}
+        previewValue={(stats?.totalValue ?? 0) + cashInBase}
         onReset={resetSettings}
       />
     </div>

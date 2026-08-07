@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { TrendingUp, CalendarDays, Clock, BarChart2, BarChart as BarChartIcon } from 'lucide-react';
 import { useDividends } from '../../hooks/useDividends';
 import { useHoldings } from '../../hooks/useHoldings';
+import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
+import { currencyMeta } from '../../lib/currency';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -38,6 +40,10 @@ export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
   const { data: holdings } = useHoldings(portfolioId!);
+  // The API reports every dividend in the currency it was paid in; the portfolio's
+  // base currency (Portfolio Settings) decides what this page adds them up in.
+  const { baseCurrency, toBase, sumToBase } = usePortfolioCurrency(
+    portfolioId!, (holdings ?? []).map((h) => h.currency ?? ''));
   // Hovered quarter ("Q1".."Q4") — same quarter highlights across all years, rest dims
   const [hoverQuarter, setHoverQuarter] = useState<string | null>(null);
   // Hovered calendar month (0-11) — same month highlights across all years, rest dims
@@ -46,9 +52,30 @@ export default function DividendsPage() {
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading dividends" message={(error as Error).message} />;
 
-  const yearly = data?.yearlyCombineDividendsProjection ?? 0;
-  const amountByMonth = data?.amountByMonth ?? {};
-  const tickerAmountArr = data?.tickerAmount ?? [];
+  // Projection: per-currency natives summed into the base currency. Older
+  // responses only carry the flat total, tagged with displayCurrency.
+  const yearly = data?.projectionByCurrency
+    ? sumToBase(data.projectionByCurrency)
+    : toBase(data?.yearlyCombineDividendsProjection ?? 0, data?.displayCurrency);
+
+  // Monthly income: one native series per currency, converted then merged.
+  const amountByMonth: Record<string, number> = {};
+  if (data?.amountByMonthByCurrency) {
+    for (const [ccy, months] of Object.entries(data.amountByMonthByCurrency)) {
+      for (const [month, amount] of Object.entries(months)) {
+        amountByMonth[month] = (amountByMonth[month] ?? 0) + toBase(Number(amount) || 0, ccy);
+      }
+    }
+  } else {
+    for (const [month, amount] of Object.entries(data?.amountByMonth ?? {})) {
+      amountByMonth[month] = toBase(Number(amount) || 0, data?.displayCurrency);
+    }
+  }
+
+  const tickerCurrency = data?.tickerCurrency ?? {};
+  const tickerAmountArr = (data?.tickerAmount ?? []).map((entry) =>
+    Object.fromEntries(Object.entries(entry).map(([ticker, amount]) =>
+      [ticker, toBase(Number(amount) || 0, tickerCurrency[ticker] ?? data?.displayCurrency)])));
 
   const hasData =
     yearly > 0 ||
@@ -65,9 +92,7 @@ export default function DividendsPage() {
     );
   }
 
-  const displayCurrency = data?.displayCurrency ?? 'USD';
-  const CURRENCY_SYMBOLS: Record<string, string> = { USD: '$', EUR: '€', GBP: '£', CHF: 'CHF ', JPY: '¥' };
-  const sym = CURRENCY_SYMBOLS[displayCurrency] ?? `${displayCurrency} `;
+  const sym = currencyMeta(baseCurrency).symbol;
 
   const monthly = yearly / 12;
   const daily = yearly / 365;

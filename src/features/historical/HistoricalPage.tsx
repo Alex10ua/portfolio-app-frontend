@@ -179,36 +179,71 @@ function ChartSkeleton({ height }: { height: number }) {
 }
 
 // ---------- CHARTS ----------
-function useTooltipStyle() {
+/**
+ * Tooltip props for both charts. `contentStyle` alone only themes the label row —
+ * recharts paints each ITEM in its series color (the indigo/amber bar fill), so the
+ * value line ignored the theme and sat at a different color from the date above it.
+ * `itemStyle`/`labelStyle` force both rows to the same theme text color.
+ */
+function useTooltipProps() {
   const { dark } = useTheme();
-  return dark
-    ? { background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: 12.5, color: '#f1f5f9' }
-    : { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12.5 };
+  const color = dark ? '#f1f5f9' : '#0f172a';
+  return {
+    contentStyle: dark
+      ? { background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: 12.5, color }
+      : { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 12.5, color },
+    labelStyle: { color, fontWeight: 600 },
+    itemStyle: { color },
+  };
+}
+
+interface DivBar { date: string; amount: number; year: number; clipped: boolean }
+
+/** Payments each side of a bar used for its "normal for this era" reference. */
+const LOCAL_WINDOW = 4;
+
+/**
+ * Bars + Y-axis top for the dividend chart.
+ *
+ * A special dividend (the provider gives no flag for them) is many times the
+ * regular payment and would flatten decades of the rest, so the axis stops
+ * above the largest REGULAR payment and specials clip.
+ *
+ * "Regular" is judged against a LOCAL median — the payment's own neighbours —
+ * not the median of the whole series. A dividend that grew 10× over 30 years
+ * leaves every recent payment above 4× the all-time median, so a global cap
+ * clipped the entire modern era as "outliers"; growth moves the neighbours too,
+ * so a local window only trips on a genuine one-off spike.
+ */
+function buildDividendBars(payments: DividendEvent[]): { bars: DivBar[]; domainTop: number; clipped: number } {
+  const amounts = payments.map((p) => p.dividendAmount);
+  const special = amounts.map((v, i) => {
+    const local = median(amounts.slice(Math.max(0, i - LOCAL_WINDOW), i + LOCAL_WINDOW + 1));
+    return local > 0 && v > local * 4;
+  });
+
+  const regular = amounts.filter((_, i) => !special[i]);
+  const top = (regular.length ? Math.max(...regular) : Math.max(...amounts)) * 1.15;
+  const bars = payments.map((p) => ({
+    date: p.dividendDate,
+    amount: p.dividendAmount,
+    year: yearOf(p.dividendDate),
+    clipped: p.dividendAmount > top,
+  }));
+  return { bars, domainTop: top, clipped: bars.filter((b) => b.clipped).length };
 }
 
 /**
  * One bar per payment, with split markers. A per-share amount halves at a 2:1,
  * so the step down at a marker is real data, not a gap.
- * Payments far above the typical amount (special dividends — the provider gives
- * no flag for them) would flatten decades of regular payments, so the axis is
- * capped at 4× the median and those bars clip in amber with the true value in
- * the tooltip.
  */
-function DividendChart({ payments, splits, currency }: {
-  payments: DividendEvent[]; splits: SplitEvent[]; currency: string | null;
+function DividendChart({ series, splits, currency }: {
+  series: { bars: DivBar[]; domainTop: number }; splits: SplitEvent[]; currency: string | null;
 }) {
   const { dark } = useTheme();
-  const tooltipStyle = useTooltipStyle();
-  const med = median(payments.map((p) => p.dividendAmount));
-  const cap = med > 0 ? med * 4 : Math.max(...payments.map((p) => p.dividendAmount));
-  const outlier = (v: number) => med > 0 && v > cap;
-  const data = payments.map((p) => ({
-    date: p.dividendDate,
-    amount: p.dividendAmount,
-    year: yearOf(p.dividendDate),
-  }));
-  const maxBar = Math.max(...data.map((d) => d.amount));
-  const domainTop = Math.min(maxBar, cap) * 1.15;
+  const tooltip = useTooltipProps();
+  const data = series.bars;
+  const domainTop = series.domainTop;
 
   // splits inside the visible window, snapped to the nearest payment category
   const firstMs = msOf(data[0].date);
@@ -245,10 +280,12 @@ function DividendChart({ payments, splits, currency }: {
           tickFormatter={(v: number) => fmtAmount(v, currency)}
         />
         <Tooltip
-          contentStyle={tooltipStyle}
+          {...tooltip}
           labelFormatter={(d: string) => fmtDay(d)}
-          formatter={(v: number) => [
-            outlier(v) ? `${fmtAmount(v, currency)} · unusually large, likely a special dividend` : fmtAmount(v, currency),
+          formatter={(v: number, _name, item) => [
+            (item?.payload as DivBar | undefined)?.clipped
+              ? `${fmtAmount(v, currency)} · taller than the chart, likely a special dividend`
+              : fmtAmount(v, currency),
             'Payment',
           ]}
         />
@@ -260,7 +297,7 @@ function DividendChart({ payments, splits, currency }: {
         ))}
         <Bar dataKey="amount" radius={[2, 2, 0, 0]} isAnimationActive={false}>
           {data.map((d) => (
-            <Cell key={d.date} fill={outlier(d.amount) ? '#F59E0B' : '#4F46E5'} />
+            <Cell key={d.date} fill={d.clipped ? '#F59E0B' : '#4F46E5'} />
           ))}
         </Bar>
       </BarChart>
@@ -277,7 +314,7 @@ function SharesChart({ points, splits, falling }: {
   points: SharesHistoryEntry[]; splits: SplitEvent[]; falling: boolean;
 }) {
   const { dark } = useTheme();
-  const tooltipStyle = useTooltipStyle();
+  const tooltip = useTooltipProps();
   const color = falling ? '#14B8A6' : '#F59E0B';
   const values = points.map((p) => p.shares);
   const min = Math.min(...values) * 0.94;
@@ -311,7 +348,7 @@ function SharesChart({ points, splits, falling }: {
           domain={[min, max]} tickFormatter={(v: number) => fmtShares(v)}
         />
         <Tooltip
-          contentStyle={tooltipStyle}
+          {...tooltip}
           labelFormatter={(d: string) => fmtDay(d)}
           formatter={(v: number) => [v.toLocaleString('en-US'), 'Shares']}
         />
@@ -359,6 +396,7 @@ export default function HistoricalPage() {
   const dividends = allDividends.filter((d) => msOf(d.dividendDate) >= cutoff);
   const sharesHistory = (data?.sharesHistory ?? []).filter((p) => msOf(p.date) >= cutoff);
 
+  const divSeries = useMemo(() => buildDividendBars(dividends), [dividends]);
   const years = useMemo(() => aggregateYears(allDividends), [allDividends]);
   const shownYears = years.filter((r) => msOf(`${r.year}-12-31`) >= cutoff).reverse();
   const raise = useMemo(() => lastRaise(allDividends), [allDividends]);
@@ -456,7 +494,6 @@ export default function HistoricalPage() {
               right={!histLoading && dividends.length > 0 ? (
                 <div className="hidden sm:flex items-center gap-3.5 text-[11px] text-slate-500 dark:text-slate-400">
                   <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-indigo-600" /> payment</span>
-                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-amber-500" /> above scale</span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-0 w-2.5 border-t-2 border-dashed border-violet-500" /> split</span>
                 </div>
               ) : null}
@@ -471,12 +508,20 @@ export default function HistoricalPage() {
               ) : (
                 <>
                   <div className="pt-3.5 pr-3">
-                    <DividendChart payments={dividends} splits={splits} currency={currency} />
+                    <DividendChart series={divSeries} splits={splits} currency={currency} />
                   </div>
                   <Note>
                     Per-payment amounts, as reported. A split halves the per-share amount, so the drop at a marker is real —
-                    yearly totals are unaffected. The axis is capped at 4× the typical payment so one outsized payout can't flatten
-                    the rest; clipped bars show their true value in the tooltip.
+                    yearly totals are unaffected.
+                    {divSeries.clipped > 0 && (
+                      <>
+                        {' '}
+                        {divSeries.clipped === 1 ? 'One payment is' : `${divSeries.clipped} payments are`} many times the
+                        surrounding ones — a special dividend. Charting {divSeries.clipped === 1 ? 'it' : 'them'} in full would
+                        squash every regular payment flat, so the axis stops above the largest regular payment and{' '}
+                        {divSeries.clipped === 1 ? 'that bar is' : 'those bars are'} cut off in amber; hover for the true amount.
+                      </>
+                    )}
                   </Note>
                 </>
               )}

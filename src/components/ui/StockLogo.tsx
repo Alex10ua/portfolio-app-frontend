@@ -42,6 +42,15 @@ export default function StockLogo({ ticker, name, assetType, size = 'md' }: Prop
   // Hooks must run unconditionally — keep them above the CUSTOM early return
   const [src, setSrc] = useState(local);
   const [failed, setFailed] = useState(false);
+  // src/failed are seeded once at mount, but callers that swap the ticker in place
+  // (TickerSelector's button — same element, new prop) reuse this instance, so without
+  // a reset the old ticker's resolved URL or letter-fallback sticks forever.
+  const [shownTicker, setShownTicker] = useState(ticker);
+  if (shownTicker !== ticker) {
+    setShownTicker(ticker);
+    setSrc(local);
+    setFailed(false);
+  }
 
   // Custom assets: skip image fetch, show text avatar immediately
   if (assetType === 'CUSTOM') {

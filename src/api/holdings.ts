@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type { Holding } from '../types/holding';
+import type { PerformancePoint } from '../types/performance';
 
 export async function getHoldings(portfolioId: string): Promise<Holding[]> {
   const response = await apiClient.get<Holding[]>(`${portfolioId}`);
@@ -11,7 +12,7 @@ export async function getFirstTradeYear(portfolioId: string): Promise<number | n
   return response.data.firstTradeYear ?? null;
 }
 
-export async function getPortfolioHistory(portfolioId: string): Promise<{ date: string; portfolioValue: number }[]> {
-  const response = await apiClient.get<{ date: string; portfolioValue: number }[]>(`${portfolioId}/portfolio-history`);
+export async function getPortfolioHistory(portfolioId: string): Promise<PerformancePoint[]> {
+  const response = await apiClient.get<PerformancePoint[]>(`${portfolioId}/portfolio-history`);
   return response.data;
 }

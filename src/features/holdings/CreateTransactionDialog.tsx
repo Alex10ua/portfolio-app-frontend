@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -42,30 +42,37 @@ const selectClass =
 const inputClass =
   'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500';
 
+// Prefill for callers that already know what the transaction is (e.g. the Ownership
+// what-if projection). Applied on each open; the user can still edit every field.
+export type CreateTransactionInitial = Partial<Pick<FormValues, 'assetType' | 'transactionType' | 'ticker' | 'quantity' | 'price' | 'currency' | 'date'>>;
+
+const defaultValues = (): FormValues => ({
+  assetType: 'STOCK',
+  transactionType: 'BUY',
+  ticker: '',
+  date: new Date().toISOString().split('T')[0],
+  quantity: '',
+  price: '',
+  commission: '',
+  currency: 'USD',
+  amount: '',
+  name: '',
+  priceNow: '',
+});
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateTransactionPayload) => void;
   isPending?: boolean;
   portfolioId: string;
+  initial?: CreateTransactionInitial;
 }
 
-export default function CreateTransactionDialog({ open, onClose, onSubmit, isPending, portfolioId }: Props) {
+export default function CreateTransactionDialog({ open, onClose, onSubmit, isPending, portfolioId, initial }: Props) {
   const { register, handleSubmit, watch, reset, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      assetType: 'STOCK',
-      transactionType: 'BUY',
-      ticker: '',
-      date: new Date().toISOString().split('T')[0],
-      quantity: '',
-      price: '',
-      commission: '',
-      currency: 'USD',
-      amount: '',
-      name: '',
-      priceNow: '',
-    },
+    defaultValues: defaultValues(),
   });
 
   const assetType = watch('assetType') as ExtendedAssetType;
@@ -78,12 +85,25 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
   const { mutateAsync: createCustomAsset, isPending: creatingAsset } = useCreateCustomAsset(portfolioId);
   const [createAssetOpen, setCreateAssetOpen] = useState(false);
 
+  // Tracks the asset type the form last settled on, so a prefill that changes it
+  // doesn't trip the "user switched asset type" reset below and clobber the prefilled
+  // transaction type (e.g. SELL → BUY).
+  const settledAssetType = useRef<ExtendedAssetType>(assetType);
+
+  // Re-seed on open *and* whenever the prefill itself changes — a caller can swap
+  // `initial` while the dialog stays mounted (recording several positions in a row).
+  const initialKey = open ? JSON.stringify(initial ?? null) : '';
   useEffect(() => {
-    if (!open) reset();
-  }, [open, reset]);
+    const next = { ...defaultValues(), ...(initial ?? {}) } as FormValues;
+    reset(open ? next : defaultValues());
+    settledAssetType.current = (open ? next.assetType : 'STOCK') as ExtendedAssetType;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialKey]);
 
   // When switching asset type, reset transaction type to first available
   useEffect(() => {
+    if (settledAssetType.current === assetType) return;
+    settledAssetType.current = assetType;
     setValue('transactionType', availableTypes[0]);
     if (isCash) {
       setValue('ticker', '');

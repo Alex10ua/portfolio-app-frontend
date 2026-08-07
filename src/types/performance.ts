@@ -5,7 +5,10 @@ export type RealizedPnLByCurrency = Record<string, number>;
 
 export interface PerformancePoint {
   date: string;
+  /** unconverted sum of the natives below — only exact for a mono-currency portfolio */
   portfolioValue: number;
+  /** native currency (as quoted, e.g. "GBp") → value in it; convert client-side */
+  valueByCurrency?: Record<string, number>;
 }
 
 export interface PerformanceData {

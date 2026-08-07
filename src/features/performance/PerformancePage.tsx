@@ -5,6 +5,8 @@ import {
 } from 'recharts';
 import { TrendingUp, DollarSign, BarChart2, Percent, ArrowUpDown } from 'lucide-react';
 import { usePerformance } from '../../hooks/usePerformance';
+import { useHoldings } from '../../hooks/useHoldings';
+import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import StatCard from '../../components/ui/StatCard';
@@ -31,13 +33,16 @@ export default function PerformancePage() {
 
   const [period, setPeriod] = useState<PerformancePeriod>('1Y');
   const { data, isLoading, error } = usePerformance(pid, period);
+  const { data: holdings } = useHoldings(pid);
+  const { sumToBase } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading performance data" message={(error as Error).message} />;
 
+  // Points carry each quote currency's own total — convert, then sum.
   const chartData = data?.timeSeries.map((p) => ({
     date: p.date,
-    value: Number(p.portfolioValue),
+    value: p.valueByCurrency ? sumToBase(p.valueByCurrency) : Number(p.portfolioValue),
   })) ?? [];
 
   const minVal = chartData.length ? Math.min(...chartData.map((d) => d.value)) * 0.98 : 0;

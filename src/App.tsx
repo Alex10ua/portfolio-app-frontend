@@ -20,6 +20,7 @@ const CustomAssetsPage = lazy(() => import('./features/customAssets/CustomAssets
 const PerformancePage = lazy(() => import('./features/performance/PerformancePage'));
 const TagMapPage = lazy(() => import('./features/tags/TagMapPage'));
 const OwnershipPage = lazy(() => import('./features/ownership/OwnershipPage'));
+const WatchlistPage = lazy(() => import('./features/watchlist/WatchlistPage'));
 const StockValuationPage = lazy(() => import('./features/valuation/StockValuationPage'));
 const StatisticsPage = lazy(() => import('./features/statistics/StatisticsPage'));
 const HistoricalPage = lazy(() => import('./features/historical/HistoricalPage'));
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="performance" element={<PerformancePage />} />
                 <Route path="tags" element={<TagMapPage />} />
                 <Route path="ownership" element={<OwnershipPage />} />
+                <Route path="watchlist" element={<WatchlistPage />} />
                 <Route path="valuation" element={<StockValuationPage />} />
                 <Route path="statistics" element={<StatisticsPage />} />
                 <Route path="historical" element={<HistoricalPage />} />

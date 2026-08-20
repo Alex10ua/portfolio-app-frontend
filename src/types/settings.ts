@@ -8,8 +8,19 @@ export type ChartRange = '1M' | '3M' | '6M' | 'YTD' | '1Y' | 'ALL';
 
 export type CurrencyDisplay = 'Symbol' | 'Code' | 'Both';
 
+/**
+ * Desired weight of one ticker in the portfolio, in percent. A list rather than
+ * a ticker-keyed map: Mongo/Spring Data reject '.' in map keys (BRK.B, VOD.L).
+ */
+export interface AllocationTarget {
+  ticker: string;
+  percent: number;
+}
+
 export interface PortfolioSettings {
   tableConfig?: TableColumnConfig[];
+  /** per-ticker target % of portfolio; absent ticker = no target set */
+  targets?: AllocationTarget[];
   chartRange?: ChartRange;  // value-chart window; default YTD
   sortBy?: string;          // holdings-table column key
   sortOrder?: 'asc' | 'desc';

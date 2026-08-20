@@ -21,12 +21,13 @@ import ImportTransactionsModal from './ImportTransactionsModal';
 import HoldingDetailDialog from './HoldingDetailDialog';
 import PortfolioValueChart from './PortfolioValueChart';
 import PortfolioSettingsDialog from './PortfolioSettingsDialog';
+import TargetPercentCell from './TargetPercentCell';
 import { DEFAULT_COLUMNS, mergeColumns, type Column } from './holdingsColumns';
 import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
 import { formatPercent } from '../../lib/formatters';
 import StockLogo from '../../components/ui/StockLogo';
 import type { AssetType, Holding } from '../../types/holding';
-import type { ChartRange, CurrencyDisplay } from '../../types/settings';
+import type { AllocationTarget, ChartRange, CurrencyDisplay } from '../../types/settings';
 
 type SortOrder = 'asc' | 'desc';
 
@@ -60,6 +61,16 @@ const holdingTotalValue = (h: Holding) =>
   h.currentTotalValue ?? (h.currentShareValue ?? 0) * h.shareAmount;
 const holdingCostBasis = (h: Holding) =>
   h.costBasis ?? (h.costPerShare ?? 0) * h.shareAmount;
+
+// Allocation targets travel as a list (Mongo map keys can't hold the '.' in
+// BRK.B / VOD.L) but are keyed by ticker for lookup while rendering.
+const targetsToMap = (list?: AllocationTarget[]): Record<string, number> =>
+  Object.fromEntries((list ?? [])
+    .filter((t) => t.ticker && Number.isFinite(t.percent))
+    .map((t) => [t.ticker, t.percent]));
+
+const targetsToList = (map: Record<string, number>): AllocationTarget[] =>
+  Object.entries(map).map(([ticker, percent]) => ({ ticker, percent }));
 
 const ASSET_CHIP_COLORS: Record<string, string> = {
   STOCK:    'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
@@ -103,6 +114,8 @@ export default function HoldingsDashboardPage() {
   const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>((localSettings.assetFilter as AssetType | 'ALL') ?? 'ALL');
   const [columns, setColumns] = useState<Column[]>(() =>
     localSettings.tableConfig ? mergeColumns(localSettings.tableConfig as Column[]) : DEFAULT_COLUMNS);
+  // ticker → target % of portfolio; a missing entry means no target is set
+  const [targets, setTargets] = useState<Record<string, number>>(() => targetsToMap(localSettings.targets));
   // undefined = auto-detect from the holdings (single currency, else USD)
   const [currencyPref, setCurrencyPref] = useState<string | undefined>(localSettings.baseCurrency);
   const [currencyDisplay, setCurrencyDisplay] = useState<CurrencyDisplay>(localSettings.currencyDisplay ?? 'Symbol');
@@ -119,6 +132,10 @@ export default function HoldingsDashboardPage() {
     if (server.tableConfig) {
       const merged = mergeColumns(server.tableConfig as Column[]);
       setColumns((prev) => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
+    }
+    if (server.targets) {
+      const merged = targetsToMap(server.targets);
+      setTargets((prev) => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
     }
     if (server.chartRange) setChartRange((prev) => prev === server.chartRange ? prev : server.chartRange!);
     if (server.sortBy) setOrderBy((prev) => prev === server.sortBy ? prev : server.sortBy!);
@@ -170,6 +187,16 @@ export default function HoldingsDashboardPage() {
     settingsDirtyRef.current = true;
     setCurrencyDisplay(display);
     updatePortfolioSettings(pid, { currencyDisplay: display });
+  };
+
+  /** null clears the ticker's target */
+  const changeTarget = (ticker: string, percent: number | null) => {
+    settingsDirtyRef.current = true;
+    const next = { ...targets };
+    if (percent == null) delete next[ticker];
+    else next[ticker] = percent;
+    setTargets(next);
+    updatePortfolioSettings(pid, { targets: targetsToList(next) });
   };
 
   const resetSettings = () => {
@@ -335,6 +362,21 @@ export default function HoldingsDashboardPage() {
 
   const visibleColumns = useMemo(() => columns.filter((c) => c.visible), [columns]);
 
+  // Micro-bars share one scale so rows stay comparable: the largest weight or
+  // target in view, rounded up, floored at 10% so a flat portfolio isn't all-full.
+  const barScaleMax = useMemo(() => {
+    const peak = Math.max(
+      ...Object.values(portfolioPercents),
+      ...Object.values(targets),
+      0);
+    return Math.max(10, Math.ceil(peak / 5) * 5);
+  }, [portfolioPercents, targets]);
+
+  // Sum of every target set — a portfolio over 100% is over-allocated on paper.
+  const targetSum = useMemo(
+    () => Object.values(targets).reduce((s, v) => s + v, 0),
+    [targets]);
+
   const renderCell = (holding: Holding, col: Column): React.ReactNode => {
     switch (col.key) {
       case 'ticker':
@@ -370,7 +412,14 @@ export default function HoldingsDashboardPage() {
       case 'portfolioPercent': {
         const pct = portfolioPercents[holding.ticker];
         if (pct == null) return <span className="text-slate-400 dark:text-slate-500">—</span>;
-        return <span className="font-semibold tabular-nums">{formatPercent(pct, 1)}</span>;
+        return (
+          <TargetPercentCell
+            current={pct}
+            target={targets[holding.ticker] ?? null}
+            onChange={(v) => changeTarget(holding.ticker, v)}
+            scaleMax={barScaleMax}
+          />
+        );
       }
       case 'dividend':
         return <span className="font-mono tabular-nums">{money((holding.dividend ?? 0) * holding.shareAmount, holding.currency)}</span>;
@@ -667,7 +716,21 @@ export default function HoldingsDashboardPage() {
           {/* Table header with filter chips */}
           <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Holdings</div>
+              <div className="flex items-center gap-2">
+                <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Holdings</div>
+                {targetSum > 0 && (
+                  <span
+                    title="Sum of the target weights you set"
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                      targetSum > 100
+                        ? 'bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-400'
+                        : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                  >
+                    Targets {formatPercent(targetSum, 1)}
+                  </span>
+                )}
+              </div>
               <div className="text-[12px] text-slate-500 dark:text-slate-400">Sorted by {orderBy}</div>
             </div>
             {holdings && holdings.length > 0 && (

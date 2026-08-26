@@ -5,7 +5,7 @@ import Dialog from '../../components/ui/Dialog';
 import Spinner from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import { useImports, useSubmitImportBatch, useDeleteImport, useImportDetail } from '../../hooks/useImports';
-import { parseTransactionFile } from '../../lib/parseTransactionFile';
+import { parseTransactionFile, type CustomAssetSeed } from '../../lib/parseTransactionFile';
 import { tryParseIBActivityStatement } from '../../lib/parseIBTransactionFile';
 import { tryParseNNFile, buildNNFingerprint, NN_TICKERS, NN_TICKER_DISPLAY_NAME } from '../../lib/parseNNTransactionFile';
 import { tryParseVUBFile, buildVUBFingerprint, vubTickerDisplayName } from '../../lib/parseVUBGeneraliFile';
@@ -20,7 +20,7 @@ interface Props {
   portfolioId: string;
 }
 
-type View = 'drop' | 'preview' | 'nn-confirming' | 'vub-confirming';
+type View = 'drop' | 'preview' | 'nn-confirming' | 'vub-confirming' | 'generic-confirming';
 
 interface ParsedPreview {
   filename: string;
@@ -38,11 +38,15 @@ interface ParsedPreview {
   vubSkippedZeroCount?: number;
   /** Rows already present in the DB (NN/VUB fingerprint match) — skipped on confirm */
   duplicateCount?: number;
+  /** Generic file carried custom-asset columns — definitions created before the batch */
+  genericCustomAssets?: Map<string, CustomAssetSeed>;
+  /** Generic file set Asset Type per row — the dropdown override is suppressed */
+  genericHasAssetType?: boolean;
 }
 
 const selectClass = 'block rounded-md border border-slate-300 dark:border-slate-600 px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
 
-const ASSET_TYPES: AssetType[] = ['STOCK', 'CRYPTO', 'FUND', 'COIN', 'FIGURINE'];
+const ASSET_TYPES: AssetType[] = ['STOCK', 'CRYPTO', 'CUSTOM', 'FUND', 'COIN', 'FIGURINE'];
 
 function txTypeBadgeClass(type: TransactionType): string {
   switch (type) {
@@ -67,6 +71,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
   const [assetType, setAssetType] = useState<AssetType>('STOCK');
   const [nnConfirmError, setNNConfirmError] = useState<string | null>(null);
   const [vubConfirmError, setVUBConfirmError] = useState<string | null>(null);
+  const [genericConfirmError, setGenericConfirmError] = useState<string | null>(null);
   const [detailImportId, setDetailImportId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -155,8 +160,14 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
         return;
       }
       // Fall back to generic CSV/XLSX parser
-      const rows = await parseTransactionFile(file);
-      setPreview({ filename: file.name, rows, isIB: false });
+      const generic = await parseTransactionFile(file);
+      setPreview({
+        filename: file.name,
+        rows: generic.transactions,
+        isIB: false,
+        genericCustomAssets: generic.customAssets,
+        genericHasAssetType: generic.hasAssetTypeColumn,
+      });
       setAssetType('STOCK');
       setView('preview');
     } catch (e) {
@@ -300,12 +311,55 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
 
   async function handleConfirmGeneric() {
     if (!preview) return;
-    const rows = preview.isIB
+    // Per-row Asset Type from the file wins; the dropdown only fills in for files
+    // that did not declare one.
+    const rows = preview.isIB || preview.genericHasAssetType
       ? preview.rows
       : preview.rows.map((r) => ({ ...r, assetType }));
-    await submitBatch({ filename: preview.filename, transactions: rows });
-    setPreview(null);
-    setView('drop');
+
+    const seeds = [...(preview.genericCustomAssets?.values() ?? [])];
+    if (seeds.length === 0) {
+      await submitBatch({ filename: preview.filename, transactions: rows });
+      setPreview(null);
+      setView('drop');
+      return;
+    }
+
+    setGenericConfirmError(null);
+    setView('generic-confirming');
+    try {
+      const existingTickers = new Set((await getCustomAssets(portfolioId)).map((a) => a.ticker));
+      for (const seed of seeds) {
+        // Only seed assets this import creates — an asset already in the portfolio
+        // has a price history the user maintains, and the bulk merge would reset
+        // its priceNow to whatever the file says.
+        if (existingTickers.has(seed.ticker)) continue;
+        await createCustomAsset(portfolioId, {
+          ticker: seed.ticker,
+          name: seed.name,
+          assetType: seed.assetType,
+          country: seed.country,
+          currency: seed.currency,
+          unit: seed.unit,
+          priceNow: seed.priceNow,
+          priceUpdateMethod: 'MANUAL',
+          customFields: {},
+        });
+        if (seed.priceHistory.length > 0) {
+          await bulkAddPriceHistory(portfolioId, seed.ticker, seed.priceHistory);
+        }
+      }
+
+      await submitBatch({ filename: preview.filename, transactions: rows });
+      await queryClient.invalidateQueries({ queryKey: ['customAssets', portfolioId] });
+      await queryClient.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+
+      setPreview(null);
+      setView('drop');
+    } catch (e) {
+      setGenericConfirmError((e as Error).message);
+      setView('preview');
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -333,6 +387,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
     setParseError(null);
     setNNConfirmError(null);
     setVUBConfirmError(null);
+    setGenericConfirmError(null);
     onClose();
   };
 
@@ -358,6 +413,10 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
               </span>
               <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
                 Supports Interactive Brokers Activity Statement (.csv), NN Slovensko report (.xlsx), VUB Generali DDS report (.xlsx) and generic .csv / .xlsx files
+              </span>
+              <span className="mt-1 block text-xs text-slate-400 dark:text-slate-500">
+                Generic columns: Ticker, Quantity, Cost Per Share, Currency, Date, Commission —
+                optionally Name, Asset Type, Price Now, Country, Unit for custom assets
               </span>
               <input id="file-input-modal" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileChange} className="hidden" />
               <label htmlFor="file-input-modal">
@@ -437,6 +496,15 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
           </div>
         )}
 
+        {view === 'generic-confirming' && (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <Spinner />
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Preparing import — creating custom asset definitions and seeding price history…
+            </p>
+          </div>
+        )}
+
         {view === 'preview' && preview && (
           <div className="space-y-4">
             {/* Preview header */}
@@ -471,9 +539,16 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
                     )}
                   </p>
                 )}
+                {(preview.genericCustomAssets?.size ?? 0) > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    {preview.genericCustomAssets!.size} custom asset definition
+                    {preview.genericCustomAssets!.size !== 1 ? 's' : ''} will be created for tickers not already
+                    defined, each seeded with a price history from its transaction dates
+                  </p>
+                )}
               </div>
-              {/* Asset type override only for non-IB, non-NN, non-VUB imports */}
-              {!preview.isIB && !preview.isNN && !preview.isVUB && (
+              {/* Asset type override only for non-IB, non-NN, non-VUB imports that did not declare one per row */}
+              {!preview.isIB && !preview.isNN && !preview.isVUB && !preview.genericHasAssetType && (
                 <div className="flex items-center gap-2 shrink-0">
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">Asset type</label>
                   <select
@@ -501,6 +576,7 @@ export default function ImportTransactionsModal({ open, onClose, portfolioId }: 
 
             {nnConfirmError && <ErrorAlert message={nnConfirmError} />}
             {vubConfirmError && <ErrorAlert message={vubConfirmError} />}
+            {genericConfirmError && <ErrorAlert message={genericConfirmError} />}
 
             {/* Duplicate notice — rows already in the DB are skipped on confirm */}
             {(preview.isNN || preview.isVUB) && (preview.duplicateCount ?? 0) > 0 && (

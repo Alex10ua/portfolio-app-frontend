@@ -1,16 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShieldCheck, Globe, PieChart } from 'lucide-react';
+import { Lock, Mail, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-
-const FEATURES = [
-  { icon: PieChart,    title: 'Multi-asset portfolios',   desc: 'Stocks, crypto, coins, collectibles — all in one place.' },
-  { icon: Globe,       title: 'Multi-currency support',   desc: 'Auto FX conversion across USD, EUR, GBP, PLN and more.'  },
-  { icon: ShieldCheck, title: 'Private & self-hosted',    desc: 'Your data stays on your infrastructure, always.'          },
-];
-
-const inputClass =
-  'block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors';
+import AuthShell, { AuthField, AuthHeader, AuthMobileWordmark } from './AuthShell';
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -20,7 +12,7 @@ function PasswordStrength({ password }: { password: string }) {
     /[^A-Za-z0-9]/.test(password),
   ];
   const strength = checks.filter(Boolean).length;
-  const colors = ['bg-slate-200', 'bg-red-400', 'bg-amber-400', 'bg-blue-400', 'bg-emerald-500'];
+  const colors = ['bg-slate-200 dark:bg-slate-700', 'bg-red-400', 'bg-amber-400', 'bg-blue-400', 'bg-emerald-500'];
   const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
 
   if (!password) return null;
@@ -31,11 +23,16 @@ function PasswordStrength({ password }: { password: string }) {
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className={`h-1 flex-1 rounded-full transition-colors ${i <= strength ? colors[strength] : 'bg-slate-200 dark:bg-slate-700'}`}
+            className={`h-[3px] flex-1 rounded-full transition-colors ${i <= strength ? colors[strength] : 'bg-slate-200 dark:bg-slate-700'}`}
           />
         ))}
       </div>
-      <p className={`text-[11px] font-medium ${strength <= 1 ? 'text-red-500' : strength === 2 ? 'text-amber-500' : strength === 3 ? 'text-blue-500' : 'text-emerald-500'}`}>
+      <p className={`text-[11px] font-medium ${
+        strength <= 1 ? 'text-red-500 dark:text-red-400'
+          : strength === 2 ? 'text-amber-500 dark:text-amber-400'
+            : strength === 3 ? 'text-blue-500 dark:text-blue-400'
+              : 'text-emerald-500 dark:text-emerald-400'}`}
+      >
         {labels[strength]}
       </p>
     </div>
@@ -65,140 +62,64 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — indigo gradient */}
-      <div
-        className="hidden lg:flex lg:w-[46%] flex-col justify-between p-12 text-white"
-        style={{ background: 'linear-gradient(135deg, #4338CA 0%, #6D28D9 100%)' }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <span
-            className="inline-flex items-center justify-center rounded-xl text-white font-bold text-xl"
-            style={{ width: 44, height: 44, background: 'rgba(255,255,255,0.2)' }}
-          >
-            F
-          </span>
-          <span className="text-lg font-bold tracking-tight">FinancePortfolio</span>
+    <AuthShell>
+      <AuthMobileWordmark />
+
+      <AuthHeader eyebrow="Get started" title="Create your account">
+        Already have an account?{' '}
+        <Link to="/login" className="font-semibold text-primary hover:text-primary-hover dark:text-indigo-400">
+          Sign in
+        </Link>
+      </AuthHeader>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-700 dark:bg-red-900/20">
+          <p className="text-[13px] font-medium text-red-800 dark:text-red-300">{error}</p>
         </div>
+      )}
 
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-[36px] font-bold leading-tight mb-3">
-              Start tracking.<br />Start growing.
-            </h1>
-            <p className="text-indigo-200 text-[15px] leading-relaxed max-w-xs">
-              Join and get full visibility into every position, dividend, and return across all your portfolios.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {FEATURES.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="flex items-start gap-4">
-                <div className="flex items-center justify-center rounded-lg flex-shrink-0 mt-0.5" style={{ width: 36, height: 36, background: 'rgba(255,255,255,0.15)' }}>
-                  <Icon className="h-4.5 w-4.5 text-white" />
-                </div>
-                <div>
-                  <div className="text-[14px] font-semibold">{title}</div>
-                  <div className="text-[13px] text-indigo-300 mt-0.5">{desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <AuthField
+          id="username"
+          label="Username"
+          icon={User}
+          value={username}
+          onChange={setUsername}
+          placeholder="your_username"
+          autoComplete="username"
+          autoFocus
+        />
+        <AuthField
+          id="email"
+          label="Email address"
+          icon={Mail}
+          type="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
+          autoComplete="email"
+        />
+        <div>
+          <AuthField
+            id="password"
+            label="Password"
+            icon={Lock}
+            type="password"
+            value={password}
+            onChange={setPassword}
+            placeholder="At least 8 characters"
+            autoComplete="new-password"
+          />
+          <PasswordStrength password={password} />
         </div>
-
-        <p className="text-[12px] text-indigo-300">© 2026 FinancePortfolio</p>
-      </div>
-
-      {/* Right panel — form */}
-      <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-16 bg-white dark:bg-slate-950">
-        <div className="mx-auto w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <span
-              className="inline-flex items-center justify-center rounded-lg text-white font-bold text-sm"
-              style={{ width: 32, height: 32, background: 'linear-gradient(135deg, #4F46E5, #8B5CF6)' }}
-            >
-              F
-            </span>
-            <span className="text-base font-bold text-slate-900 dark:text-white">FinancePortfolio</span>
-          </div>
-
-          <h2 className="text-[26px] font-bold text-slate-900 dark:text-white mb-1">Create your account</h2>
-          <p className="text-[14px] text-slate-500 dark:text-slate-400 mb-8">
-            Already have an account?{' '}
-            <Link to="/login" className="font-semibold text-indigo-600 hover:text-indigo-500">
-              Sign in
-            </Link>
-          </p>
-
-          {error && (
-            <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-4 py-3 mb-6">
-              <p className="text-[13px] font-medium text-red-800 dark:text-red-300">{error}</p>
-            </div>
-          )}
-
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="username" className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Username
-              </label>
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                required
-                autoFocus
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={inputClass}
-                placeholder="your_username"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="you@example.com"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-[13px] font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
-                placeholder="••••••••"
-              />
-              <PasswordStrength password={password} />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors shadow-sm"
-            >
-              {isLoading ? 'Creating account…' : 'Create Account'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="mt-2 w-full rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-slate-950"
+        >
+          {isLoading ? 'Creating account…' : 'Create Account'}
+        </button>
+      </form>
+    </AuthShell>
   );
 }

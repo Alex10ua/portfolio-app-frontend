@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown,
+  ArrowLeft, Plus, Upload, Settings, ArrowUp, ArrowDown, Search,
   TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
   Wallet, Pencil, Trash2,
 } from 'lucide-react';
@@ -21,7 +21,7 @@ import ImportTransactionsModal from './ImportTransactionsModal';
 import HoldingDetailDialog from './HoldingDetailDialog';
 import PortfolioValueChart from './PortfolioValueChart';
 import PortfolioSettingsDialog from './PortfolioSettingsDialog';
-import TargetPercentCell from './TargetPercentCell';
+import TargetPercentCell, { formatTarget } from './TargetPercentCell';
 import { DEFAULT_COLUMNS, mergeColumns, type Column } from './holdingsColumns';
 import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
 import { formatPercent } from '../../lib/formatters';
@@ -30,6 +30,10 @@ import type { AssetType, Holding } from '../../types/holding';
 import type { AllocationTarget, ChartRange, CurrencyDisplay } from '../../types/settings';
 
 type SortOrder = 'asc' | 'desc';
+/** Quick profit/loss segment above the table — view-only, never persisted. */
+type PlFilter = 'All' | 'Gainers' | 'Losers';
+
+const PL_FILTERS: PlFilter[] = ['All', 'Gainers', 'Losers'];
 
 const CHART_RANGES: ChartRange[] = ['1M', '3M', '6M', 'YTD', '1Y', 'ALL'];
 const RANGE_MONTHS: Record<string, number> = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 };
@@ -103,6 +107,10 @@ export default function HoldingsDashboardPage() {
   const [cashDialog, setCashDialog]   = useState<{ currency: string; amount: string; isEdit?: boolean } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [detailHolding, setDetailHolding] = useState<Holding | null>(null);
+  // Table quick filters. Unlike the asset chips these are a moment's lookup, not
+  // a preference, so they stay local state and out of PortfolioSettings.
+  const [search, setSearch] = useState('');
+  const [plFilter, setPlFilter] = useState<PlFilter>('All');
 
   // Per-portfolio UI settings seeded from the localStorage mirror (instant paint);
   // the server copy is applied once it loads. The component is remounted per
@@ -288,8 +296,19 @@ export default function HoldingsDashboardPage() {
     return Object.fromEntries(inBase.map(([ticker, v]) => [ticker, (v / total) * 100]));
   }, [holdings, toBase]);
 
+  // Asset-chip result narrowed further by the quick search and the P&L segment.
+  const visibleHoldings = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return filteredHoldings.filter((h) => {
+      if (q && !h.ticker.toLowerCase().includes(q) && !(h.name ?? '').toLowerCase().includes(q)) return false;
+      if (plFilter === 'Gainers') return (h.totalProfit ?? 0) > 0;
+      if (plFilter === 'Losers')  return (h.totalProfit ?? 0) < 0;
+      return true;
+    });
+  }, [filteredHoldings, search, plFilter]);
+
   const sortedHoldings = useMemo(() => {
-    return [...filteredHoldings].sort((a, b) => {
+    return [...visibleHoldings].sort((a, b) => {
       let valA: number | string | null;
       let valB: number | string | null;
       if (orderBy === 'currentShareValue') {
@@ -313,7 +332,7 @@ export default function HoldingsDashboardPage() {
         return order === 'asc' ? valA - valB : valB - valA;
       return order === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
     });
-  }, [filteredHoldings, orderBy, order, portfolioPercents, toBase]);
+  }, [visibleHoldings, orderBy, order, portfolioPercents, toBase]);
 
   // Aggregates: each holding is converted from its own currency to the base one.
   const stats = useMemo(() => {
@@ -376,6 +395,29 @@ export default function HoldingsDashboardPage() {
   const targetSum = useMemo(
     () => Object.values(targets).reduce((s, v) => s + v, 0),
     [targets]);
+
+  // Pinned total row. Aggregates the rows actually on screen — a filtered view
+  // totals what it shows — with every figure converted to the base currency, so
+  // a mixed-currency portfolio still adds up.
+  const rowTotals = useMemo(() => {
+    const sum = (pick: (h: Holding) => number | null | undefined) =>
+      sortedHoldings.reduce((s, h) => s + toBase(pick(h) ?? 0, h.currency), 0);
+    const value    = sum(holdingTotalValue);
+    const cost     = sum(holdingCostBasis);
+    const profit   = sum((h) => h.totalProfit);
+    const dividend = sum((h) => (h.dividend ?? 0) * h.shareAmount);
+    const daily    = sum((h) => h.dailyChange);
+    return {
+      count: sortedHoldings.length,
+      value, cost, profit, dividend, daily,
+      weight: sortedHoldings.reduce((s, h) => s + (portfolioPercents[h.ticker] ?? 0), 0),
+      target: sortedHoldings.reduce((s, h) => s + (targets[h.ticker] ?? 0), 0),
+      profitPercent: cost > 0 ? (profit / cost) * 100 : null,
+      // portfolio-weighted averages, not means of the per-row percentages
+      yield:       value > 0 ? (dividend / value) * 100 : null,
+      yieldOnCost: cost  > 0 ? (dividend / cost)  * 100 : null,
+    };
+  }, [sortedHoldings, toBase, portfolioPercents, targets]);
 
   const renderCell = (holding: Holding, col: Column): React.ReactNode => {
     switch (col.key) {
@@ -449,6 +491,61 @@ export default function HoldingsDashboardPage() {
       }
       default:
         return String((holding as unknown as Record<string, unknown>)[col.key] ?? '—');
+    }
+  };
+
+  const dash = <span className="text-slate-400 dark:text-slate-500">—</span>;
+
+  /** Cell of the pinned total row for one column; columns with no total show a dash. */
+  const renderTotalCell = (col: Column): React.ReactNode => {
+    switch (col.key) {
+      case 'ticker':
+        return (
+          <div className="flex items-center gap-2">
+            <span className="rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+              Total
+            </span>
+            <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
+              {rowTotals.count} position{rowTotals.count === 1 ? '' : 's'}
+            </span>
+          </div>
+        );
+      case 'portfolioPercent':
+        return (
+          <span className="font-semibold tabular-nums">
+            {formatPercent(rowTotals.weight, 1)}
+            {rowTotals.target > 0 && (
+              <span className="text-slate-400 dark:text-slate-500">
+                {' / '}{formatTarget(Math.round(rowTotals.target * 10) / 10)}%
+              </span>
+            )}
+          </span>
+        );
+      case 'costPerShare':
+        return <span className="font-semibold tabular-nums">{money(rowTotals.cost)}</span>;
+      case 'currentShareValue':
+        return <span className="text-[14px] font-bold tabular-nums text-slate-900 dark:text-white">{money(rowTotals.value)}</span>;
+      case 'dividend':
+        return <span className="font-semibold tabular-nums">{money(rowTotals.dividend)}</span>;
+      case 'dividendYield':
+        return <span className="font-semibold tabular-nums">{formatPercent(rowTotals.yield)}</span>;
+      case 'dividendYieldOnCost':
+        return <span className="font-semibold tabular-nums text-slate-500 dark:text-slate-400">{formatPercent(rowTotals.yieldOnCost)}</span>;
+      case 'totalProfit':
+        return (
+          <div className={rowTotals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+            <div className="font-semibold tabular-nums">{money(rowTotals.profit)}</div>
+            <div className="text-[11px] tabular-nums opacity-85">{formatPercent(rowTotals.profitPercent)}</div>
+          </div>
+        );
+      case 'dailyChange':
+        return (
+          <span className={`font-semibold tabular-nums ${rowTotals.daily >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+            {money(rowTotals.daily)}
+          </span>
+        );
+      default:
+        return dash;
     }
   };
 
@@ -715,7 +812,7 @@ export default function HoldingsDashboardPage() {
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           {/* Table header with filter chips */}
           <div className="px-5 pt-4 pb-3 border-b border-slate-100 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div className="flex items-center gap-2">
                 <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Holdings</div>
                 {targetSum > 0 && (
@@ -731,7 +828,34 @@ export default function HoldingsDashboardPage() {
                   </span>
                 )}
               </div>
-              <div className="text-[12px] text-slate-500 dark:text-slate-400">Sorted by {orderBy}</div>
+              <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+                <div className="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-900/50">
+                  {PL_FILTERS.map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setPlFilter(f)}
+                      className={`rounded px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                        plFilter === f
+                          ? 'bg-white dark:bg-slate-700 shadow-sm text-primary dark:text-indigo-400'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative w-full sm:w-52">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Filter ticker or name…"
+                    aria-label="Filter holdings by ticker or name"
+                    className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-[12px] text-slate-900 placeholder-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900/50 dark:text-white dark:placeholder-slate-500"
+                  />
+                </div>
+                <div className="hidden text-[12px] text-slate-500 dark:text-slate-400 lg:block">Sorted by {orderBy}</div>
+              </div>
             </div>
             {holdings && holdings.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -759,7 +883,7 @@ export default function HoldingsDashboardPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900/50">
@@ -781,6 +905,20 @@ export default function HoldingsDashboardPage() {
                   ))}
                 </tr>
               </thead>
+              {/* Pinned totals — its own tbody so the rows' divide-y border does not
+                  double up against this row's 2px separator. */}
+              <tbody>
+                <tr className="bg-indigo-50/70 dark:bg-indigo-950/30">
+                  {visibleColumns.map((col) => (
+                    <td
+                      key={col.key}
+                      className="whitespace-nowrap border-b-2 border-indigo-200 px-4 py-3 text-[13px] text-slate-700 dark:border-indigo-800 dark:text-slate-300"
+                    >
+                      {renderTotalCell(col)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
                 {sortedHoldings.map((holding) => (
                   <tr key={holding.ticker} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
@@ -791,8 +929,83 @@ export default function HoldingsDashboardPage() {
                     ))}
                   </tr>
                 ))}
+                {sortedHoldings.length === 0 && (
+                  <tr>
+                    <td colSpan={visibleColumns.length} className="px-4 py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                      No holdings match the current filters.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
+          </div>
+
+          {/* Under md the table collapses to cards — no horizontal scrolling */}
+          <div className="space-y-2.5 p-3 md:hidden">
+            {sortedHoldings.length === 0 ? (
+              <div className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                No holdings match the current filters.
+              </div>
+            ) : sortedHoldings.map((holding) => {
+              const pct = portfolioPercents[holding.ticker];
+              const gain = (holding.totalProfit ?? 0) >= 0;
+              return (
+                <div
+                  key={holding.ticker}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailHolding(holding)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailHolding(holding); }
+                  }}
+                  className="cursor-pointer rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700/30"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <StockLogo ticker={holding.ticker} name={holding.name} assetType={holding.assetType} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-semibold text-slate-900 dark:text-white">{holding.ticker}</div>
+                      {holding.name && (
+                        <div className="truncate text-[11px] text-slate-400 dark:text-slate-500">{holding.name}</div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[15px] font-bold tabular-nums text-slate-900 dark:text-white">
+                        {money(holdingTotalValue(holding), holding.currency)}
+                      </div>
+                      <div className={`text-[12px] font-semibold tabular-nums ${gain ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                        {money(holding.totalProfit, holding.currency)} · {formatPercent(holding.totalProfitPercentage, 1)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-slate-100 pt-2.5 dark:border-slate-700/50">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <div className="tabular-nums">
+                        {holding.shareAmount < 1 ? holding.shareAmount.toFixed(4) : holding.shareAmount} sh
+                      </div>
+                      <div className="tabular-nums">
+                        {money(holding.costPerShare, holding.currency)}
+                        {' → '}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          {money(holding.currentShareValue, holding.currency)}
+                        </span>
+                      </div>
+                    </div>
+                    {pct != null && (
+                      /* the target editor sits inside a clickable card: its own clicks
+                         and Enter must not also open the detail dialog */
+                      <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+                        <TargetPercentCell
+                          current={pct}
+                          target={targets[holding.ticker] ?? null}
+                          onChange={(v) => changeTarget(holding.ticker, v)}
+                          scaleMax={barScaleMax}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

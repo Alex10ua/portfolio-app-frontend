@@ -119,7 +119,64 @@ export default function TransactionsPage() {
       )}
 
       {(isLoading || sorted.length > 0) && (
-        <div className="flow-root">
+        <>
+        {/* Under md the table collapses to cards — no horizontal scrolling */}
+        <div className="space-y-2.5 md:hidden">
+          {isLoading ? (
+            [0, 1, 2].map((i) => (
+              <div key={i} className="h-[86px] animate-pulse rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800" />
+            ))
+          ) : sorted.map((t) => {
+            // Direction follows the mockup's ledger reading: cash in is a credit,
+            // a position leaving the portfolio is a debit, tax is its own tone.
+            const cashIn  = t.transactionType === 'DIVIDEND' || t.transactionType === 'DEPOSIT';
+            const cashOut = t.transactionType === 'SELL' || t.transactionType === 'WITHDRAWAL';
+            const tone = cashIn ? 'text-emerald-600 dark:text-emerald-400'
+              : cashOut ? 'text-red-500 dark:text-red-400'
+                : t.transactionType === 'TAX' ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-slate-900 dark:text-white';
+            const sign = cashIn ? '+' : cashOut ? '-' : '';
+            return (
+              <div key={t.transactionId} className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div className="flex items-center gap-3">
+                  <StockLogo ticker={t.ticker} assetType={t.assetType} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-slate-900 dark:text-white">{t.ticker}</span>
+                      <Badge type={t.transactionType} />
+                    </div>
+                    <div className="mt-0.5 text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
+                      {formatDate(t.date)} · {t.quantity} @ {formatCurrency(t.price, 2, t.currency)}
+                    </div>
+                  </div>
+                  <div className={`text-[14px] font-semibold tabular-nums ${tone}`}>
+                    {t.totalAmount == null
+                      ? formatCurrency(null)
+                      : `${sign}${formatCurrency(Math.abs(t.totalAmount), 2, t.currency)}`}
+                  </div>
+                </div>
+                <div className="mt-2 flex justify-end gap-1 border-t border-slate-100 pt-2 dark:border-slate-700/50">
+                  <button
+                    onClick={() => openEdit(t)}
+                    aria-label={`Edit ${t.ticker} transaction`}
+                    className="rounded p-1.5 text-indigo-600 transition-colors hover:bg-slate-100 dark:text-indigo-400 dark:hover:bg-slate-700"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(t)}
+                    aria-label={`Delete ${t.ticker} transaction`}
+                    className="rounded p-1.5 text-red-500 transition-colors hover:bg-slate-100 dark:text-red-400 dark:hover:bg-slate-700"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden md:block">
           <div className="-mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
               <div className="overflow-hidden border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 shadow-sm">
@@ -174,6 +231,7 @@ export default function TransactionsPage() {
             </div>
           </div>
         </div>
+        </>
       )}
 
       {/* Edit dialog */}

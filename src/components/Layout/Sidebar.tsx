@@ -2,7 +2,7 @@ import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ReceiptText, DollarSign, CalendarDays,
   PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X, Network, Crown, Calculator as CalculatorIcon,
-  BarChart3, History, Eye
+  BarChart3, History, Eye, Sprout
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
@@ -48,7 +48,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     { name: 'Dividends', href: `/${portfolioId}/dividends`, icon: DollarSign, exact: false },
     { name: 'Dividend Calendar', href: `/${portfolioId}/dividend-calendar`, icon: CalendarDays, exact: false },
     { name: 'Ownership', href: `/${portfolioId}/ownership`, icon: Crown, exact: false },
-    { name: 'Watchlist', href: `/${portfolioId}/watchlist`, icon: Eye, exact: false },
+    { name: 'Watchlist', href: `//watchlist`, icon: Eye, exact: false },
+    { name: 'Self-Funding', href: `/${portfolioId}/self-funding`, icon: Sprout, exact: false },
     { name: 'Stock Valuation', href: `/${portfolioId}/valuation`, icon: CalculatorIcon, exact: false },
     { name: 'Statistics', href: `/${portfolioId}/statistics`, icon: BarChart3, exact: false },
     { name: 'Historical', href: `/${portfolioId}/historical`, icon: History, exact: false },

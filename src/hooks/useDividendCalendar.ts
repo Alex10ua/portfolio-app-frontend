@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { getDividendCalendar } from '../api/dividendCalendar';
 
-export function useDividendCalendar(portfolioId: string) {
+/** `year` omitted = the rolling 12-month projection. */
+export function useDividendCalendar(portfolioId: string, year?: number, enabled = true) {
   return useQuery({
-    queryKey: ['dividendCalendar', portfolioId],
-    queryFn: () => getDividendCalendar(portfolioId),
-    enabled: Boolean(portfolioId),
+    queryKey: ['dividendCalendar', portfolioId, year],
+    queryFn: () => getDividendCalendar(portfolioId, year),
+    enabled: enabled && Boolean(portfolioId),
   });
 }

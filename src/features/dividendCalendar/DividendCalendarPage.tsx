@@ -2,6 +2,10 @@ import { useParams } from 'react-router-dom';
 import StockLogo from '../../components/ui/StockLogo';
 import { CalendarDays } from 'lucide-react';
 import { useDividendCalendar } from '../../hooks/useDividendCalendar';
+import { useHoldings } from '../../hooks/useHoldings';
+import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
+import { looksLikePenceQuote } from '../../lib/currency';
+import { formatCurrency } from '../../lib/formatters';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -21,12 +25,13 @@ function toTitleCase(s: string): string {
 
 // Vertical bar: fill height = month total relative to the best month
 // (100% = highest-paying month of the year, 0% = no income).
-function MonthBar({ total, maxMonthly, isCurrent, height, label }: {
+function MonthBar({ total, maxMonthly, isCurrent, height, label, money }: {
   total: number;
   maxMonthly: number;
   isCurrent: boolean;
   height: number;
   label: string;
+  money: (value: number) => string;
 }) {
   const pct = maxMonthly > 0 ? (total / maxMonthly) * 100 : 0;
   // keep non-zero months visible even when tiny
@@ -37,7 +42,7 @@ function MonthBar({ total, maxMonthly, isCurrent, height, label }: {
         isCurrent ? 'ring-2 ring-indigo-500 ring-offset-1 dark:ring-offset-slate-900' : ''
       }`}
       style={{ height }}
-      title={`${label}: $${total.toFixed(2)} (${Math.round(pct)}% of best month)`}
+      title={`${label}: ${money(total)} (${Math.round(pct)}% of best month)`}
     >
       <div
         className="absolute bottom-0 left-0 right-0 rounded-t-sm transition-all"
@@ -47,25 +52,53 @@ function MonthBar({ total, maxMonthly, isCurrent, height, label }: {
   );
 }
 
-function DividendCard({ div }: { div: DividendCalendarEntry }) {
-  const total = ((div.dividendAmount ?? 0) * (div.stockQuantity ?? 0)).toFixed(2);
+/** One payer, in its own quote currency — per-row figures are never converted. */
+function DividendCard({ div, currency, perShare }: {
+  div: DividendCalendarEntry;
+  currency: string;
+  perShare: number;
+}) {
+  const total = perShare * (div.stockQuantity ?? 0);
   return (
     <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-4 flex items-center gap-3 hover:border-indigo-400 transition-colors">
       <StockLogo ticker={div.ticker} size="lg" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-slate-900 dark:text-white">{div.ticker}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          {div.stockQuantity ?? 0} shares @ ${(div.dividendAmount ?? 0).toFixed(2)}
+          {div.stockQuantity ?? 0} shares @ {formatCurrency(perShare, undefined, currency)}
         </p>
       </div>
-      <p className="text-sm font-semibold text-green-600 dark:text-green-400 shrink-0">${total}</p>
+      <p className="text-sm font-semibold text-green-600 dark:text-green-400 shrink-0 tabular-nums">
+        {formatCurrency(total, undefined, currency)}
+      </p>
     </div>
   );
 }
 
 export default function DividendCalendarPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
-  const { data, isLoading, error } = useDividendCalendar(portfolioId!);
+  const pid = portfolioId!;
+  const { data, isLoading, error } = useDividendCalendar(pid);
+  const { data: holdings } = useHoldings(pid);
+  const { toBase, money } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
+
+  /**
+   * The calendar DTO carries no currency, so each payer's is looked up from its
+   * holding. Per-row amounts stay in that currency; only the monthly and annual
+   * totals convert, which is the rule the rest of the app follows.
+   */
+  const currencyByTicker = new Map(
+    (holdings ?? []).map((h) => [h.ticker.toUpperCase(), h.currency ?? 'USD'] as const),
+  );
+  const rowCurrency = (ticker: string) => currencyByTicker.get(ticker.toUpperCase()) ?? 'USD';
+  // dividendAmount comes from MarketData, so a London payer reports pence against
+  // a GBP holding — divide before it is mixed with anything else
+  const perShareOf = (div: DividendCalendarEntry) => {
+    const amount = div.dividendAmount ?? 0;
+    return looksLikePenceQuote(div.ticker, rowCurrency(div.ticker)) ? amount / 100 : amount;
+  };
+  const baseTotalOf = (div: DividendCalendarEntry) =>
+    toBase(perShareOf(div) * (div.stockQuantity ?? 0), rowCurrency(div.ticker));
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading dividend calendar" message={(error as Error).message} />;
@@ -80,8 +113,7 @@ export default function DividendCalendarPage() {
   Object.entries(data).forEach(([month, dividends]) => {
     const idx = MONTH_NAME_TO_INDEX[month];
     if (idx !== undefined) {
-      const total = dividends.reduce((s, div) => s + (div.dividendAmount ?? 0) * (div.stockQuantity ?? 0), 0);
-      monthlyTotals[idx] += total;
+      monthlyTotals[idx] += dividends.reduce((s, div) => s + baseTotalOf(div), 0);
     }
   });
   const maxMonthly = Math.max(...monthlyTotals, 0.01);
@@ -104,7 +136,7 @@ export default function DividendCalendarPage() {
           {annualTotal > 0 && (
             <div className="text-right shrink-0">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-0.5">Annual Total</div>
-              <div className="text-[18px] font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">${annualTotal.toFixed(2)}</div>
+              <div className="text-[18px] font-semibold tabular-nums text-indigo-600 dark:text-indigo-400">{money(annualTotal)}</div>
             </div>
           )}
         </div>
@@ -115,12 +147,12 @@ export default function DividendCalendarPage() {
             const isCurrent = i === currentMonth;
             return (
               <div key={i} className="flex flex-col items-center gap-1">
-                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={96} label={MONTHS[i]} />
+                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={96} label={MONTHS[i]} money={money} />
                 <span className={`text-xs ${isCurrent ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {MONTHS[i]}
                 </span>
                 {total > 0 && (
-                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">${total.toFixed(0)}</span>
+                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">{money(total, undefined, 0)}</span>
                 )}
               </div>
             );
@@ -133,7 +165,7 @@ export default function DividendCalendarPage() {
             const isCurrent = i === currentMonth;
             return (
               <div key={i} className="flex flex-col items-center gap-1">
-                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={64} label={MONTHS[i]} />
+                <MonthBar total={total} maxMonthly={maxMonthly} isCurrent={isCurrent} height={64} label={MONTHS[i]} money={money} />
                 <span className={`text-xs ${isCurrent ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}>
                   {MONTHS[i]}
                 </span>
@@ -146,19 +178,24 @@ export default function DividendCalendarPage() {
       {/* Month cards */}
       <div className="space-y-4">
         {sortedEntries.map(([month, dividends]) => {
-          const totalMonth = dividends.reduce((s, d) => s + (d.dividendAmount ?? 0) * (d.stockQuantity ?? 0), 0);
+          const totalMonth = dividends.reduce((s, d) => s + baseTotalOf(d), 0);
           return (
             <div key={month} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
               <div className="border-b border-slate-200 dark:border-slate-700 px-5 py-3.5 flex justify-between items-center bg-slate-50 dark:bg-slate-900/50">
                 <div className="text-[13px] font-semibold text-slate-900 dark:text-white">{toTitleCase(month)}</div>
                 <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 tabular-nums">
-                  ${totalMonth.toFixed(2)}
+                  {money(totalMonth)}
                 </span>
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {dividends.map((div, idx) => (
-                    <DividendCard key={`${div.ticker}-${idx}`} div={div} />
+                    <DividendCard
+                      key={`${div.ticker}-${idx}`}
+                      div={div}
+                      currency={rowCurrency(div.ticker)}
+                      perShare={perShareOf(div)}
+                    />
                   ))}
                 </div>
               </div>

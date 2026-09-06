@@ -506,7 +506,7 @@ function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string
               data={revenueIncome}
               xAxisKey="date"
               areas={[{ dataKey: 'revenue', name: 'Revenue' }, { dataKey: 'netIncome', name: 'Net Income' }]}
-              yFormatter={(v) => formatCompactCurrency(v)}
+              yFormatter={(v) => formatCompactCurrency(v, currency)}
             />
           </div>
         ) : (
@@ -539,7 +539,7 @@ function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string
                   <td className="px-4.5 py-2 text-[13px] text-slate-700 dark:text-slate-300">{r.label}</td>
                   {r.values.map((v, i) => (
                     <td key={i} className="px-3 py-2 text-right text-[13px] font-medium text-slate-900 dark:text-white tabular-nums">
-                      {v == null ? '—' : r.unit === 'perShare' ? formatCurrency(v, 2, currency) : formatCompactCurrency(v)}
+                      {v == null ? '—' : r.unit === 'perShare' ? formatCurrency(v, 2, currency) : formatCompactCurrency(v, currency)}
                     </td>
                   ))}
                 </tr>

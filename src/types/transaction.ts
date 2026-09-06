@@ -4,7 +4,8 @@ export type TransactionType = 'BUY' | 'SELL' | 'TAX' | 'DIVIDEND' | 'DEPOSIT' | 
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CHF' | 'PLN' | 'CZK';
 
 export interface Transaction {
-  transactionId: number;
+  /** backend generates UUID().toString() — a string, never numeric */
+  transactionId: string;
   ticker: string;
   transactionType: TransactionType;
   assetType: AssetType;

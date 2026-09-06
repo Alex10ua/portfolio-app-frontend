@@ -2,6 +2,12 @@ export interface MarketData {
   ticker: string;
   name: string | null;
   price: number | null;
+  /**
+   * Quote currency of `price` — **not** the holding's transaction currency. A
+   * London listing quotes `"GBp"` (pence) while the holding is booked in `"GBP"`,
+   * so anything reusing this price must convert (`toMajorUnits`) first.
+   */
+  currency: string | null;
   country: string | null;
   sector: string | null;
   industry: string | null;

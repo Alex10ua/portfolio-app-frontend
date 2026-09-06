@@ -5,6 +5,7 @@ import { useDividends } from '../../hooks/useDividends';
 import { useHoldings } from '../../hooks/useHoldings';
 import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
 import { currencyMeta } from '../../lib/currency';
+import { monthIndexOf, parseLocalDate, quarterOf as quarterOfMonthKey, yearOf } from '../../lib/dates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -100,7 +101,10 @@ export default function DividendsPage() {
 
   // By year — numeric sort
   const byYearMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
-    const year = String(new Date(month).getFullYear());
+    // Keys are 'yyyy-MM' (DividendUtils.YEAR_MONTH_FORMATTER). Read the calendar
+    // fields off the string: new Date('2024-01') is UTC midnight, which reads back
+    // as December 2023 in any timezone west of UTC.
+    const year = String(yearOf(month));
     acc[year] = (acc[year] ?? 0) + (Number(amount) || 0);
     return acc;
   }, {});
@@ -110,8 +114,7 @@ export default function DividendsPage() {
 
   // By quarter — structured sort by year then quarter number
   const byQuarterMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
-    const d = new Date(month);
-    const key = `${d.getFullYear()} Q${Math.floor(d.getMonth() / 3) + 1}`;
+    const key = `${yearOf(month)} Q${quarterOfMonthKey(month)}`;
     acc[key] = (acc[key] ?? 0) + (Number(amount) || 0);
     return acc;
   }, {});
@@ -126,9 +129,9 @@ export default function DividendsPage() {
   // By month — formatted label for X-axis
   const byMonth = Object.entries(amountByMonth)
     .map(([month, amount]) => {
-      const d = new Date(month);
+      const d = parseLocalDate(month);
       const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), m: d.getMonth(), _date: d.getTime() };
+      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), m: monthIndexOf(month), _date: d.getTime() };
     })
     .sort((a, b) => a._date - b._date)
     .map(({ month, amount, m }) => ({ month, amount, m }));

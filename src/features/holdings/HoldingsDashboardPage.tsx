@@ -406,7 +406,10 @@ export default function HoldingsDashboardPage() {
     const cost     = sum(holdingCostBasis);
     const profit   = sum((h) => h.totalProfit);
     const dividend = sum((h) => (h.dividend ?? 0) * h.shareAmount);
-    const daily    = sum((h) => h.dailyChange);
+    // dailyChange from the backend is a PER-SHARE delta (price − priceYesterday),
+    // so it has to be multiplied by the position before it can be summed — adding
+    // raw per-share deltas across holdings produces a number with no meaning.
+    const daily    = sum((h) => (h.dailyChange ?? 0) * h.shareAmount);
     return {
       count: sortedHoldings.length,
       value, cost, profit, dividend, daily,
@@ -485,9 +488,19 @@ export default function HoldingsDashboardPage() {
         );
       }
       case 'dailyChange': {
-        const change = holding.dailyChange;
+        // per-share delta × position = what the holding actually moved today; the
+        // per-share figure rides along underneath so the quote stays visible
+        const perShare = holding.dailyChange;
+        const change = perShare == null ? null : perShare * holding.shareAmount;
         const pos = (change ?? 0) >= 0;
-        return <span className={`font-semibold tabular-nums ${pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{money(change, holding.currency)}</span>;
+        return (
+          <div className={pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+            <div className="font-semibold tabular-nums">{money(change, holding.currency)}</div>
+            {perShare != null && (
+              <div className="text-[11px] tabular-nums opacity-85">{money(perShare, holding.currency)} / sh</div>
+            )}
+          </div>
+        );
       }
       default:
         return String((holding as unknown as Record<string, unknown>)[col.key] ?? '—');

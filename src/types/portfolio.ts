@@ -1,5 +1,6 @@
 export interface Portfolio {
-  portfolioId: number;
+  /** UUID + portfolio name (PortfolioController) — a string, and not URL-safe */
+  portfolioId: string;
   portfolioName: string;
   description?: string;
 }

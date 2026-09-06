@@ -1,4 +1,5 @@
 import type { CreateTransactionPayload } from '../types/transaction';
+import { yearOf } from './dates';
 
 const COL_DATE   = 'Dátum pripísania';
 const COL_AMOUNT = 'Hodnota obratu';
@@ -122,7 +123,10 @@ function parseRows(jsonRows: Record<string, unknown>[]): VUBParseResult {
 
     const fp = buildVUBFingerprint(date, ticker, quantity, price);
     fingerprints.set(fp, ticker);
-    yearsPresent.add(new Date(date).getFullYear());
+    // read the year off the 'YYYY-MM-DD' string: new Date('2024-01-01') is UTC
+    // midnight, which reads back as 2023 west of UTC and makes the dedup check
+    // query the wrong year
+    yearsPresent.add(yearOf(date));
     transactions.push(tx);
   }
 

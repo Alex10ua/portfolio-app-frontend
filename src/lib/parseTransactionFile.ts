@@ -1,7 +1,11 @@
 import type { CreateTransactionPayload, Currency } from '../types/transaction';
 import type { AssetType } from '../types/holding';
+import { normalizeDateCell } from './dates';
 
-type RawRow = Record<string, string>;
+// Cell values are not all strings: an XLSX date cell arrives as an Excel serial
+// number and a formatted one as a Date, so every read goes through cell() or
+// normalizeDateCell() rather than assuming text.
+type RawRow = Record<string, unknown>;
 
 const ASSET_TYPES: AssetType[] = ['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO', 'CUSTOM'];
 
@@ -41,7 +45,8 @@ export interface GenericParseResult {
 }
 
 function cell(row: RawRow, key: string): string {
-  return (row[key] ?? '').toString().trim();
+  const raw = row[key];
+  return raw == null ? '' : String(raw).trim();
 }
 
 function parseAssetType(raw: string): AssetType | null {
@@ -49,13 +54,15 @@ function parseAssetType(raw: string): AssetType | null {
   return (ASSET_TYPES as string[]).includes(upper) ? (upper as AssetType) : null;
 }
 
-function mapRow(row: RawRow): CreateTransactionPayload | null {
+function mapRow(row: RawRow, date1904: boolean): CreateTransactionPayload | null {
   const ticker = cell(row, 'Ticker').toUpperCase();
-  const quantityRaw = parseFloat(row['Quantity'] ?? '');
-  const price = parseFloat(row['Cost Per Share'] ?? '');
+  const quantityRaw = parseFloat(cell(row, 'Quantity'));
+  const price = parseFloat(cell(row, 'Cost Per Share'));
   const currency = (cell(row, 'Currency') || 'USD').toUpperCase() as Currency;
-  const date = cell(row, 'Date');
-  const commission = parseFloat(row['Commission'] ?? '0') || 0;
+  // an XLSX date cell is an Excel serial (45427), not text — sending that raw
+  // fails the backend LocalDate parse and the whole import dies
+  const date = normalizeDateCell(row['Date'], date1904);
+  const commission = parseFloat(cell(row, 'Commission')) || 0;
 
   if (!ticker || isNaN(quantityRaw) || isNaN(price) || !date) return null;
 
@@ -77,7 +84,7 @@ function mapRow(row: RawRow): CreateTransactionPayload | null {
   // holding is built from these, there is no provider to fetch them from.
   const name = cell(row, 'Name');
   if (name) payload.name = name;
-  const priceNow = parseFloat(row['Price Now'] ?? '');
+  const priceNow = parseFloat(cell(row, 'Price Now'));
   if (!isNaN(priceNow)) payload.priceNow = priceNow;
 
   return payload;
@@ -97,7 +104,7 @@ function seedFromRow(row: RawRow, tx: CreateTransactionPayload): CustomAssetSeed
   };
 }
 
-function parseRows(rows: RawRow[]): GenericParseResult {
+function parseRows(rows: RawRow[], date1904 = false): GenericParseResult {
   const transactions: CreateTransactionPayload[] = [];
   const customAssets = new Map<string, CustomAssetSeed>();
   // ticker -> transaction date -> Price Now; first row per (ticker, date) wins so
@@ -106,7 +113,7 @@ function parseRows(rows: RawRow[]): GenericParseResult {
   let hasAssetTypeColumn = false;
 
   for (const row of rows) {
-    const mapped = mapRow(row);
+    const mapped = mapRow(row, date1904);
     if (!mapped) continue;
     if (parseAssetType(cell(row, 'Asset Type'))) hasAssetTypeColumn = true;
     // First row per ticker wins — a repeat purchase of the same coin must not
@@ -167,9 +174,11 @@ async function parseXlsx(file: File): Promise<GenericParseResult> {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
+        // 1904 date system files (classic Mac Excel) offset every serial by 4 years
+        const date1904 = workbook.Workbook?.WBProps?.date1904 === true;
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonRows = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: '' });
-        resolve(parseRows(jsonRows));
+        resolve(parseRows(jsonRows, date1904));
       } catch (err) {
         reject(new Error(`XLSX parse error: ${(err as Error).message}`));
       }

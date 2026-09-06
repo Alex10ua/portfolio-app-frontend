@@ -12,6 +12,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Badge from '../../components/ui/Badge';
 import Dialog from '../../components/ui/Dialog';
 import { formatDate, formatCurrency } from '../../lib/formatters';
+import { parseLocalDate, toDateInputValue } from '../../lib/dates';
 import StockLogo from '../../components/ui/StockLogo';
 import type { Transaction, TransactionType, Currency } from '../../types/transaction';
 
@@ -61,7 +62,7 @@ export default function TransactionsPage() {
       quantity: String(t.quantity),
       price: String(t.price),
       commission: String(t.commission ?? 0),
-      date: new Date(t.date).toISOString().slice(0, 16),
+      date: toDateInputValue(t.date),
       currency: t.currency,
     });
   };
@@ -79,7 +80,10 @@ export default function TransactionsPage() {
         quantity: parseFloat(data.quantity),
         price: parseFloat(data.price),
         commission: parseFloat(data.commission || '0'),
-        date: new Date(data.date).toISOString(),
+        // the backend field is a LocalDate: send the calendar day as typed. Going
+        // through toISOString() shifts it a day back east of UTC (00:00 CEST is
+        // 22:00Z the day before) and can be rejected outright as a LocalDate.
+        date: data.date,
       },
     });
     setEditTarget(null);
@@ -93,7 +97,7 @@ export default function TransactionsPage() {
 
   // Newest first — sort by date explicitly, backend order is not guaranteed
   const sorted = transactions
-    ? [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    ? [...transactions].sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())
     : [];
 
   return (
@@ -245,7 +249,7 @@ export default function TransactionsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date</label>
-              <input type="datetime-local" {...register('date')} className={inputClass} />
+              <input type="date" {...register('date')} className={inputClass} />
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import type { CreateTransactionPayload } from '../types/transaction';
+import { normalizeDateCell, yearOf } from './dates';
 
 export const NN_TICKERS = new Set([
   'NN-INDEXOVY',
@@ -36,20 +37,9 @@ export interface NNParseResult {
   yearsPresent: Set<number>;
 }
 
-function excelSerialToISO(serial: number, date1904: boolean): string {
-  // 1904 date system (used by NN Slovensko): epoch = 1904-01-01
-  // 1900 date system (standard): epoch = 1899-12-30 (accounts for Lotus leap year bug)
-  const epoch = date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
-  const date = new Date(epoch + serial * 86400000);
-  return date.toISOString().slice(0, 10);
-}
-
-function parseDateCell(raw: unknown, date1904: boolean): string {
-  if (typeof raw === 'number') return excelSerialToISO(raw, date1904);
-  if (raw instanceof Date) return raw.toISOString().slice(0, 10);
-  if (typeof raw === 'string') return raw.trim();
-  return '';
-}
+// Serial/Date/string handling now lives in lib/dates.ts, shared with the generic
+// importer. NN statements use the 1904 date system, hence the flag on every call.
+const parseDateCell = (raw: unknown, date1904: boolean): string => normalizeDateCell(raw, date1904);
 
 function mapFundName(name: string): string | null {
   return FUND_TICKER_MAP[name.trim()] ?? null;
@@ -128,7 +118,8 @@ function parseRows(jsonRows: Record<string, unknown>[], date1904: boolean): NNPa
 
     const fp = buildNNFingerprint(date, ticker, quantity, pricePerUnit);
     fingerprints.set(fp, ticker);
-    yearsPresent.add(new Date(date).getFullYear());
+    // off the string, not through a UTC-parsed Date — see parseVUBGeneraliFile
+    yearsPresent.add(yearOf(date));
     transactions.push(tx);
   }
 

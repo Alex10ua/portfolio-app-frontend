@@ -10,7 +10,8 @@ import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import StatCard from '../../components/ui/StatCard';
-import { formatCurrency, formatPercent } from '../../lib/formatters';
+import { formatPercent } from '../../lib/formatters';
+import { parseLocalDate } from '../../lib/dates';
 import type { PerformancePeriod } from '../../types/performance';
 
 const PERIODS: PerformancePeriod[] = ['1W', '1M', '3M', 'YTD', '1Y', 'ALL'];
@@ -20,11 +21,17 @@ function pnlColor(value: number | null | undefined) {
   return value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
 }
 
-function formatPnl(value: number | null | undefined, pct?: number | null) {
+/** `money` comes from the portfolio's currency settings — nothing here assumes USD. */
+function formatPnl(
+  value: number | null | undefined,
+  money: (v: number | null | undefined) => string,
+  pct?: number | null,
+) {
   if (value == null) return 'N/A';
   const sign = value >= 0 ? '+' : '';
   const pctPart = pct != null ? ` (${sign}${formatPercent(pct)})` : '';
-  return `${sign}${formatCurrency(value)}${pctPart}`;
+  // money() writes its own minus sign, so only the '+' is added here
+  return `${sign}${money(value)}${pctPart}`;
 }
 
 export default function PerformancePage() {
@@ -34,7 +41,8 @@ export default function PerformancePage() {
   const [period, setPeriod] = useState<PerformancePeriod>('1Y');
   const { data, isLoading, error } = usePerformance(pid, period);
   const { data: holdings } = useHoldings(pid);
-  const { sumToBase } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
+  const { sumToBase, money, baseCurrency } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
+  const cash = (v: number | null | undefined) => money(v, baseCurrency, 0);
 
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading performance data" message={(error as Error).message} />;
@@ -46,6 +54,13 @@ export default function PerformancePage() {
   })) ?? [];
 
   const minVal = chartData.length ? Math.min(...chartData.map((d) => d.value)) * 0.98 : 0;
+
+  // The summary figures are flat, unconverted native sums (no per-currency
+  // breakdown exists on this DTO, unlike timeSeries.valueByCurrency), so they are
+  // only exact while the portfolio holds one currency. Say so rather than
+  // presenting a mixed sum as if it were converted.
+  const heldCurrencies = [...new Set((holdings ?? []).map((h) => h.currency).filter(Boolean))];
+  const mixedCurrency = heldCurrencies.length > 1;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -89,7 +104,9 @@ export default function PerformancePage() {
                 tick={{ fontSize: 11, fill: '#94a3b8' }}
                 tickLine={false}
                 tickFormatter={(d) => {
-                  const dt = new Date(d);
+                  // local-midnight parse: new Date('2024-05-14') is UTC midnight and
+                  // renders as the 13th in any timezone west of UTC
+                  const dt = parseLocalDate(d);
                   return `${dt.getMonth() + 1}/${dt.getDate()}/${String(dt.getFullYear()).slice(2)}`;
                 }}
                 interval="preserveStartEnd"
@@ -99,11 +116,11 @@ export default function PerformancePage() {
                 tickLine={false}
                 axisLine={false}
                 domain={[minVal, 'auto']}
-                tickFormatter={(v) => `$${(v as number).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+                tickFormatter={(v) => cash(v as number)}
                 width={80}
               />
               <Tooltip
-                formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 'Value']}
+                formatter={(value: number) => [money(value), 'Value']}
                 labelFormatter={(label) => `Date: ${label}`}
                 contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: 8, color: '#f1f5f9' }}
               />
@@ -126,19 +143,19 @@ export default function PerformancePage() {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
               label="Total Invested"
-              value={formatCurrency(data.totalInvested)}
+              value={money(data.totalInvested)}
               icon={DollarSign}
               accent="#64748B"
             />
             <StatCard
               label="Current Value"
-              value={formatCurrency(data.currentValue)}
+              value={money(data.currentValue)}
               icon={TrendingUp}
               accent="#4F46E5"
             />
             <StatCard
               label="Total Return"
-              value={formatPnl(data.totalReturn, data.totalReturnPct)}
+              value={formatPnl(data.totalReturn, money, data.totalReturnPct)}
               icon={BarChart2}
               accent={data.totalReturn >= 0 ? '#10B981' : '#EF4444'}
             />
@@ -155,22 +172,29 @@ export default function PerformancePage() {
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Unrealized P&L</div>
               <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.unrealizedPnL)}`}>
-                {formatPnl(data.unrealizedPnL, data.unrealizedPnLPct)}
+                {formatPnl(data.unrealizedPnL, money, data.unrealizedPnLPct)}
               </div>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Realized P&L</div>
               <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.realizedPnL)}`}>
-                {formatPnl(data.realizedPnL)}
+                {formatPnl(data.realizedPnL, money)}
               </div>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Total Dividends</div>
               <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-white">
-                {formatCurrency(data.totalDividends)}
+                {money(data.totalDividends)}
               </div>
             </div>
           </div>
+
+          {mixedCurrency && (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              Summary figures are native sums shown in {baseCurrency}; this portfolio holds{' '}
+              {heldCurrencies.join(', ')}, so only the chart above is FX-converted.
+            </p>
+          )}
         </>
       )}
 

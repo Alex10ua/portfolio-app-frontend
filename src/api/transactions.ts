@@ -13,7 +13,7 @@ export async function createTransaction(portfolioId: string, payload: CreateTran
 
 export async function updateTransaction(
   portfolioId: string,
-  transactionId: number,
+  transactionId: string,
   payload: UpdateTransactionPayload,
 ): Promise<Transaction> {
   const response = await apiClient.put<Transaction>(
@@ -23,7 +23,7 @@ export async function updateTransaction(
   return response.data;
 }
 
-export async function deleteTransaction(portfolioId: string, transactionId: number): Promise<void> {
+export async function deleteTransaction(portfolioId: string, transactionId: string): Promise<void> {
   await apiClient.delete(`${portfolioId}/transactions/${transactionId}/delete`);
 }
 

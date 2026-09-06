@@ -49,7 +49,7 @@ export default function PortfolioListPage() {
   // Biggest portfolio first; portfolios whose value hasn't loaded yet sink to the end.
   // Cards and the allocation summary use the same order so PALETTE colors line up.
   const orderedPortfolios = useMemo(() => {
-    const valueOf = (id: number) => items.find((it) => it.portfolioId === id)?.value ?? -1;
+    const valueOf = (id: string) => items.find((it) => it.portfolioId === id)?.value ?? -1;
     return [...portfolios].sort((a, b) => valueOf(b.portfolioId) - valueOf(a.portfolioId));
   }, [portfolios, items]);
   const orderedItems = useMemo(

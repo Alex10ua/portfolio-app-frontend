@@ -77,6 +77,9 @@ export type CurrencyDisplay = 'Symbol' | 'Code' | 'Both';
 /**
  * Money in the user's chosen notation. Grouped thousands + fixed decimals so
  * columns line up under `tabular-nums`.
+ *
+ * The sign is written before the symbol (`-€50.00`); formatting the signed number
+ * and prepending the symbol gives `€-50.00`.
  */
 export function formatMoney(
   value: number | null | undefined,
@@ -88,8 +91,38 @@ export function formatMoney(
   const meta = currencyMeta(currency);
   const abs = Math.abs(value);
   const d = decimals !== undefined ? decimals : (abs > 0 && abs < 0.01 ? 6 : 2);
-  const num = value.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const num = abs.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const sign = value < 0 ? '-' : '';
   const prefix = display === 'Code' ? '' : meta.symbol;
   const suffix = display === 'Symbol' ? '' : ` ${meta.code}`;
-  return `${prefix}${num}${suffix}`;
+  return `${sign}${prefix}${num}${suffix}`;
+}
+
+/**
+ * Pence quotes (`GBp`/`GBx`) are the same asset as `GBP` in minor units, and the
+ * two travel together on a holding: `MarketData.price` is pence while
+ * `Holdings.currency` says GBP. Anything that mixes a market price with a
+ * transaction currency has to divide by 100 first or it is out by 100×.
+ */
+export function isMinorUnit(code: string | null | undefined): boolean {
+  return code === 'GBp' || code === 'GBx';
+}
+
+/** A price quoted in `quoteCurrency` expressed in the major unit of that currency. */
+export function toMajorUnits(value: number, quoteCurrency: string | null | undefined): number {
+  return isMinorUnit(quoteCurrency) ? value / 100 : value;
+}
+
+/**
+ * Heuristic for "this market figure is probably pence" where the quote currency
+ * isn't available. Several endpoints report a price or dividend straight from
+ * `MarketData` while carrying only the *transaction* currency (the dividend
+ * calendar has no currency field at all), and London listings are the one place
+ * those disagree: `GBp` against a `GBP` holding, a factor of 100.
+ *
+ * Prefer the real `MarketData.currency` wherever it is available and treat this as
+ * the fallback.
+ */
+export function looksLikePenceQuote(ticker: string, txCurrency: string | null | undefined): boolean {
+  return normalizeCurrency(txCurrency) === 'GBP' && /\.(L|IL)$/i.test(ticker);
 }

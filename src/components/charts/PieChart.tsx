@@ -9,6 +9,10 @@ interface PieDataItem {
 interface AppPieChartProps {
   data: PieDataItem[];
   colors?: string[];
+  /** How to render an amount. Defaults to a plain number: this component has no
+   *  way to know the caller's currency, and guessing dollars is how every
+   *  portfolio ended up labelled in USD. */
+  formatValue?: (value: number) => string;
 }
 
 const DEFAULT_COLORS = [
@@ -18,7 +22,11 @@ const DEFAULT_COLORS = [
   '#22c55e', '#f43f5e', '#f472b6', '#fb923c', '#a3e635',
 ];
 
-export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieChartProps) {
+export default function AppPieChart({
+  data,
+  colors = DEFAULT_COLORS,
+  formatValue = (v) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+}: AppPieChartProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
@@ -84,7 +92,7 @@ export default function AppPieChart({ data, colors = DEFAULT_COLORS }: AppPieCha
             {active.name}
           </span>
           <span className="text-[14px] font-bold" style={{ color: activeColor }}>
-            ${active.amount.toFixed(2)}
+            {formatValue(active.amount)}
           </span>
           <span className="text-[11px] text-slate-500 dark:text-slate-400">
             {((active.amount / total) * 100).toFixed(1)}%

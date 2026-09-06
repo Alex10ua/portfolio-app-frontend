@@ -17,7 +17,7 @@ const DERIVED_KEYS = ['holdings', 'cashBalance', 'portfolioHistory', 'dividends'
 export function useUpdateTransaction(portfolioId: string, year: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ transactionId, payload }: { transactionId: number; payload: UpdateTransactionPayload }) =>
+    mutationFn: ({ transactionId, payload }: { transactionId: string; payload: UpdateTransactionPayload }) =>
       updateTransaction(portfolioId, transactionId, payload),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId, year] });
@@ -31,7 +31,7 @@ export function useUpdateTransaction(portfolioId: string, year: number) {
 export function useDeleteTransaction(portfolioId: string, year: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (transactionId: number) => deleteTransaction(portfolioId, transactionId),
+    mutationFn: (transactionId: string) => deleteTransaction(portfolioId, transactionId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId, year] });
       for (const key of DERIVED_KEYS) {

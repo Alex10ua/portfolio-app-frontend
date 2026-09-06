@@ -9,7 +9,7 @@ import type { Portfolio } from '../types/portfolio';
 export type AssetSegment = { label: string; weight: number; color: string };
 
 export type PortfolioValueItem = {
-  portfolioId: number;
+  portfolioId: string;
   name: string;
   value: number;
   cost: number;

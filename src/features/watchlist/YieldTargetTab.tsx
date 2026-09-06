@@ -4,8 +4,9 @@ import TargetYieldField from './TargetYieldField';
 import YieldHistoryChart from './YieldHistoryChart';
 import YieldStrip, { PercentileCell } from './YieldStrip';
 import {
-  Chip, Segmented, SignalCell, TD, TH, TickerCell, money, percent, signedPercent,
+  Segmented, SignalCell, TD, TH, TickerCell, money, percent, signedPercent,
 } from './rowBits';
+import TagFilterBar from '../../components/ui/TagFilterBar';
 import {
   TF_ORDER, THRESHOLDS, percentileYield, timeframeLabel, yieldStats,
   type Timeframe, type YieldStats,
@@ -18,6 +19,8 @@ interface Props {
   tagNames: string[];
   activeTag: string;
   onTag: (tag: string) => void;
+  tagsCollapsed: boolean;
+  onToggleTags: (collapsed: boolean) => void;
   timeframe: Timeframe;
   onTimeframe: (tf: Timeframe) => void;
   threshold: number;
@@ -35,7 +38,7 @@ interface Scored { entry: WatchlistEntry; stats: YieldStats }
  * and is counted out at the bottom rather than dropped silently.
  */
 export default function YieldTargetTab({
-  entries, tagNames, activeTag, onTag, timeframe, onTimeframe,
+  entries, tagNames, activeTag, onTag, tagsCollapsed, onToggleTags, timeframe, onTimeframe,
   threshold, onThreshold, expanded, onExpand, onTarget,
 }: Props) {
   const { scored, unranked } = useMemo(() => {
@@ -87,12 +90,14 @@ export default function YieldTargetTab({
           onChange={(label) => onThreshold(THRESHOLDS.find((t) => t.label === label)?.value ?? 0)}
         />
         <div className="flex-1" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip label={ALL_TAGS} active={activeTag === ALL_TAGS} onClick={() => onTag(ALL_TAGS)} />
-          {tagNames.map((tag) => (
-            <Chip key={tag} label={`#${tag}`} active={activeTag === tag} onClick={() => onTag(tag)} />
-          ))}
-        </div>
+        <TagFilterBar
+          allLabel={ALL_TAGS}
+          tagNames={tagNames}
+          activeTag={activeTag}
+          onTag={onTag}
+          collapsed={tagsCollapsed}
+          onToggle={onToggleTags}
+        />
       </div>
 
       {/* KPI strip */}

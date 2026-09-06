@@ -9,6 +9,7 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
+  LabelList,
   type TooltipProps,
 } from 'recharts';
 
@@ -24,6 +25,8 @@ interface AppBarChartProps {
   getBarColor?: (entry: Record<string, unknown>, index: number) => string | undefined;
   /** Fires with the hovered row (whole category band, same as the tooltip), null on leave */
   onBarHover?: (entry: Record<string, unknown> | null) => void;
+  /** Text drawn above one bar; return null/undefined to leave that bar unlabelled */
+  getBarLabel?: (entry: Record<string, unknown>, index: number) => string | null | undefined;
 }
 
 export default function AppBarChart({
@@ -36,6 +39,7 @@ export default function AppBarChart({
   tooltipContent,
   getBarColor,
   onBarHover,
+  getBarLabel,
 }: AppBarChartProps) {
   const fmtY = yFormatter ?? ((v: number) => `${currencySymbol}${v}`);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -56,7 +60,8 @@ export default function AppBarChart({
     <ResponsiveContainer width="100%" height="100%">
       <BarChart
         data={data}
-        margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
+        // bar labels are drawn above the bar, so the tallest one needs headroom
+        margin={{ top: getBarLabel ? 22 : 5, right: 10, left: 0, bottom: 0 }}
         onMouseMove={
           onBarHover
             ? (state: { activeTooltipIndex?: number | string | null }) => {
@@ -88,6 +93,28 @@ export default function AppBarChart({
             data.map((entry, i) => (
               <Cell key={i} fill={getBarColor(entry, i) ?? color} />
             ))}
+          {getBarLabel && (
+            <LabelList
+              dataKey={yKey}
+              content={(props: { x?: number | string; y?: number | string; width?: number | string; index?: number }) => {
+                const index = Number(props.index ?? -1);
+                const entry = data[index];
+                const text = entry ? getBarLabel(entry, index) : null;
+                if (!text) return null;
+                const x = Number(props.x ?? 0) + Number(props.width ?? 0) / 2;
+                const y = Number(props.y ?? 0) - 6;
+                return (
+                  <text
+                    x={x} y={y} textAnchor="middle"
+                    fontSize={11} fontWeight={700}
+                    fill={getBarColor?.(entry, index) ?? color}
+                  >
+                    {text}
+                  </text>
+                );
+              }}
+            />
+          )}
         </Bar>
       </BarChart>
     </ResponsiveContainer>

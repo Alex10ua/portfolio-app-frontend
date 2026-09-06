@@ -1,8 +1,9 @@
 import { Plus, RefreshCw, Search, Target, Trash2 } from 'lucide-react';
 import TargetYieldField from './TargetYieldField';
 import {
-  Chip, SignalCell, TD, TH, TickerCell, formatDay, money, moveClass, percent, signedPercent,
+  SignalCell, TD, TH, TickerCell, formatDay, money, moveClass, percent, signedPercent,
 } from './rowBits';
+import TagFilterBar from '../../components/ui/TagFilterBar';
 import type { WatchlistEntry } from '../../types/watchlist';
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   tagCounts: Record<string, number>;
   activeTag: string;
   onTag: (tag: string) => void;
+  tagsCollapsed: boolean;
+  onToggleTags: (collapsed: boolean) => void;
   filter: string;
   onFilter: (value: string) => void;
   onAddClick: () => void;
@@ -27,17 +30,22 @@ export const ALL_TAGS = 'All watched';
 /** Tab 1 — the list itself: what each ticker pays now against what you asked for. */
 export default function WatchlistTab({
   entries, tagNames, tagCounts, activeTag, onTag, filter, onFilter,
-  onAddClick, onTarget, onRemove, onRefresh, refreshing, composer, showComposer,
+  tagsCollapsed, onToggleTags, onAddClick, onTarget, onRemove, onRefresh, refreshing, composer, showComposer,
 }: Props) {
   const atTarget = entries.filter((e) => e.atTarget).length;
 
   return (
     <div className="space-y-3.5">
       <div className="flex flex-wrap items-center gap-2">
-        <Chip label={ALL_TAGS} count={tagCounts[ALL_TAGS]} active={activeTag === ALL_TAGS} onClick={() => onTag(ALL_TAGS)} />
-        {tagNames.map((tag) => (
-          <Chip key={tag} label={`#${tag}`} count={tagCounts[tag]} active={activeTag === tag} onClick={() => onTag(tag)} />
-        ))}
+        <TagFilterBar
+          allLabel={ALL_TAGS}
+          tagNames={tagNames}
+          counts={tagCounts}
+          activeTag={activeTag}
+          onTag={onTag}
+          collapsed={tagsCollapsed}
+          onToggle={onToggleTags}
+        />
         <div className="flex-1" />
         <div className="flex items-center gap-2 h-[34px] w-[220px] px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
           <Search className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />

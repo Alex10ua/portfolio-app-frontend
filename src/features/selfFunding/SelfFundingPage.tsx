@@ -13,7 +13,10 @@ import EmptyState from '../../components/ui/EmptyState';
 import StatCard from '../../components/ui/StatCard';
 import StockLogo from '../../components/ui/StockLogo';
 import CreateTransactionDialog from '../holdings/CreateTransactionDialog';
-import { Chip, Segmented, TD, TH } from '../watchlist/rowBits';
+import { Segmented, TD, TH } from '../watchlist/rowBits';
+import TagFilterBar from '../../components/ui/TagFilterBar';
+import { useSettings } from '../../context/SettingsContext';
+import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
 import { formatCurrency } from '../../lib/formatters';
 import {
   ALL_TAGS, PERIOD_DIVISOR, PERIODS, SORTS, TIER_COLOR,
@@ -225,6 +228,12 @@ export default function SelfFundingPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [buyTicker, setBuyTicker] = useState<string | null>(null);
 
+  // Same per-portfolio pref the Watchlist uses, so hiding the cloud on one page
+  // is remembered on the other — it is one tag vocabulary, not two.
+  const { getPortfolioSettings, updatePortfolioSettings } = useSettings();
+  const tagsCollapsed = getPortfolioSettings(pid)?.tagFilterCollapsed
+    ?? readLocalPortfolioSettings(pid).tagFilterCollapsed ?? false;
+
   const tagsByTicker = useMemo(() => {
     const map = new Map<string, string[]>();
     allTags.forEach((doc) => map.set(doc.ticker, doc.tags ?? []));
@@ -324,12 +333,15 @@ export default function SelfFundingPage() {
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Period</span>
         <Segmented options={PERIODS} active={period} onChange={setPeriod} />
-        <div className="flex flex-wrap items-center gap-2">
-          <Chip label={ALL_TAGS} count={tagCounts[ALL_TAGS]} active={activeTag === ALL_TAGS} onClick={() => setActiveTag(ALL_TAGS)} />
-          {tagNames.map((tag) => (
-            <Chip key={tag} label={`#${tag}`} count={tagCounts[tag]} active={activeTag === tag} onClick={() => setActiveTag(tag)} />
-          ))}
-        </div>
+        <TagFilterBar
+          allLabel={ALL_TAGS}
+          tagNames={tagNames}
+          counts={tagCounts}
+          activeTag={activeTag}
+          onTag={setActiveTag}
+          collapsed={tagsCollapsed}
+          onToggle={(collapsed) => updatePortfolioSettings(pid, { tagFilterCollapsed: collapsed })}
+        />
         <div className="flex-1" />
         <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Sort</span>
         <Segmented options={SORTS} active={sort} onChange={setSort} />

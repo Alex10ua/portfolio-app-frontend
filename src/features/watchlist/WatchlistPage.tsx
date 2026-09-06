@@ -6,6 +6,8 @@ import {
   useSetTargetYield, useWatchlist,
 } from '../../hooks/useWatchlist';
 import { useAllTags } from '../../hooks/useTags';
+import { useSettings } from '../../context/SettingsContext';
+import { readLocalPortfolioSettings } from '../../lib/portfolioSettingsStore';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import AddTickerComposer from './AddTickerComposer';
@@ -51,6 +53,13 @@ export default function WatchlistPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>('5Y');
   const [threshold, setThreshold] = useState(90);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Hiding the tag cloud is a per-portfolio view pref, so it survives a reload
+  // and a portfolio switch re-seeds it like every other setting.
+  const { getPortfolioSettings, updatePortfolioSettings } = useSettings();
+  const tagsCollapsed = getPortfolioSettings(pid)?.tagFilterCollapsed
+    ?? readLocalPortfolioSettings(pid).tagFilterCollapsed ?? false;
+  const setTagsCollapsed = (collapsed: boolean) => updatePortfolioSettings(pid, { tagFilterCollapsed: collapsed });
 
   const tagsByTicker = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -139,6 +148,8 @@ export default function WatchlistPage() {
           tagCounts={tagCounts}
           activeTag={activeTag}
           onTag={setActiveTag}
+          tagsCollapsed={tagsCollapsed}
+          onToggleTags={setTagsCollapsed}
           filter={filter}
           onFilter={setFilter}
           onAddClick={() => setComposerOpen(true)}
@@ -155,6 +166,8 @@ export default function WatchlistPage() {
           tagNames={tagNames}
           activeTag={activeTag}
           onTag={setActiveTag}
+          tagsCollapsed={tagsCollapsed}
+          onToggleTags={setTagsCollapsed}
           timeframe={timeframe}
           onTimeframe={setTimeframe}
           threshold={threshold}

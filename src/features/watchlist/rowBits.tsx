@@ -90,23 +90,9 @@ export function Segmented<T extends string>({ options, active, onChange }: {
   );
 }
 
-export function Chip({ label, count, active, onClick }: {
-  label: string; count?: number; active: boolean; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
-        active
-          ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
-          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-      }`}
-    >
-      {label}
-      {count != null && <span className="tabular-nums opacity-60">{count}</span>}
-    </button>
-  );
-}
+// Chip moved to components/ui so TagFilterBar can use it without a ui → features
+// import; re-exported here because several tabs already import it from this file.
+export { default as Chip } from '../../components/ui/Chip';
 
 export const TH = 'text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 py-2';
 export const TD = 'px-3 py-2 text-[12.5px]';

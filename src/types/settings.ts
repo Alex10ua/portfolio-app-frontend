@@ -28,6 +28,8 @@ export interface PortfolioSettings {
   /** ISO code every aggregated figure is converted to; unset = auto-detect from the holdings */
   baseCurrency?: string;
   currencyDisplay?: CurrencyDisplay; // how amounts are written; default 'Symbol'
+  /** tag-chip cloud folded away on the tag-filtered pages (Watchlist, Self-Funding) */
+  tagFilterCollapsed?: boolean;
 }
 
 export interface UserSettings {

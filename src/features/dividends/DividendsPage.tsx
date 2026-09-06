@@ -43,7 +43,7 @@ export default function DividendsPage() {
   const { data: holdings } = useHoldings(portfolioId!);
   // The API reports every dividend in the currency it was paid in; the portfolio's
   // base currency (Portfolio Settings) decides what this page adds them up in.
-  const { baseCurrency, toBase, sumToBase } = usePortfolioCurrency(
+  const { baseCurrency, toBase, sumToBase, money } = usePortfolioCurrency(
     portfolioId!, (holdings ?? []).map((h) => h.currency ?? ''));
   // Hovered quarter ("Q1".."Q4") — same quarter highlights across all years, rest dims
   const [hoverQuarter, setHoverQuarter] = useState<string | null>(null);
@@ -210,6 +210,13 @@ export default function DividendsPage() {
                 onBarHover={(entry) =>
                   setHoverQuarter(entry ? quarterOf(String(entry.yearQuarter)) : null)
                 }
+                // every lit bar prints its own quarter's income, so hovering Q1 2024
+                // lets you read Q1 across all years at once
+                getBarLabel={(entry) =>
+                  (hoverQuarter && quarterOf(String(entry.yearQuarter)) === hoverQuarter
+                    ? money(Number(entry.amount), baseCurrency, 0)
+                    : null)
+                }
               />
             </div>
           </div>
@@ -248,6 +255,11 @@ export default function DividendsPage() {
                   return MONTH_COLORS[m];
                 }}
                 onBarHover={(entry) => setHoverMonth(entry ? Number(entry.m) : null)}
+                getBarLabel={(entry) =>
+                  (hoverMonth != null && Number(entry.m) === hoverMonth
+                    ? money(Number(entry.amount), baseCurrency, 0)
+                    : null)
+                }
               />
             </div>
           </div>

@@ -4,10 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import Dialog from '../../components/ui/Dialog';
+import TickerSearchInput from '../../components/ui/TickerSearchInput';
 import CreateCustomAssetDialog from '../customAssets/CreateCustomAssetDialog';
 import { useCustomAssets, useCreateCustomAsset } from '../../hooks/useCustomAssets';
+import { normalizeCurrency, toMajorUnits } from '../../lib/currency';
 import type { AssetType, Holding } from '../../types/holding';
 import type { TransactionType, Currency, CreateTransactionPayload } from '../../types/transaction';
+import type { TickerSuggestion } from '../../types/watchlist';
 
 const schema = z.object({
   assetType: z.enum(['STOCK', 'FIGURINE', 'COIN', 'FUND', 'CRYPTO', 'CUSTOM', 'CASH']),
@@ -36,6 +39,8 @@ const transactionTypesByAsset: Record<ExtendedAssetType, TransactionType[]> = {
   CUSTOM: ['BUY', 'SELL'],
   CASH: ['DEPOSIT', 'WITHDRAWAL'],
 };
+
+const CURRENCY_CODES: Currency[] = ['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK'];
 
 const selectClass =
   'block w-full rounded-md border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100';
@@ -85,6 +90,19 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
   const { mutateAsync: createCustomAsset, isPending: creatingAsset } = useCreateCustomAsset(portfolioId);
   const [createAssetOpen, setCreateAssetOpen] = useState(false);
 
+  // Suggestion chosen in the ticker search, kept only to show the last known quote
+  // under the field. The transaction still books whatever price the user types —
+  // a BUY dated last year must not silently take today's price.
+  const [picked, setPicked] = useState<TickerSuggestion | null>(null);
+  const ticker = watch('ticker') ?? '';
+
+  const applyPick = (hit: TickerSuggestion) => {
+    setPicked(hit);
+    // GBp/GBx quotes collapse to GBP — transactions are booked in major units
+    const ccy = normalizeCurrency(hit.currency) as Currency;
+    if (CURRENCY_CODES.includes(ccy)) setValue('currency', ccy);
+  };
+
   // Tracks the asset type the form last settled on, so a prefill that changes it
   // doesn't trip the "user switched asset type" reset below and clobber the prefilled
   // transaction type (e.g. SELL → BUY).
@@ -97,6 +115,7 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
     const next = { ...defaultValues(), ...(initial ?? {}) } as FormValues;
     reset(open ? next : defaultValues());
     settledAssetType.current = (open ? next.assetType : 'STOCK') as ExtendedAssetType;
+    setPicked(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialKey]);
 
@@ -232,7 +251,29 @@ export default function CreateTransactionDialog({ open, onClose, onSubmit, isPen
                       </button>
                     </div>
                   ) : (
-                    <input {...register('ticker')} className={inputClass} placeholder="AAPL" />
+                    <TickerSearchInput
+                      portfolioId={portfolioId}
+                      value={ticker}
+                      onChange={(v) => {
+                        setValue('ticker', v, { shouldDirty: true });
+                        if (picked && v !== picked.ticker) setPicked(null);
+                      }}
+                      onPick={applyPick}
+                      placeholder="Ticker or company — e.g. AAPL, Apple"
+                    />
+                  )}
+                  {!isCustom && picked?.price != null && (
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Last {toMajorUnits(picked.price, picked.currency).toLocaleString(undefined, { maximumFractionDigits: 4 })}{' '}
+                      {normalizeCurrency(picked.currency)}
+                      <button
+                        type="button"
+                        onClick={() => setValue('price', String(toMajorUnits(picked.price as number, picked.currency)), { shouldDirty: true })}
+                        className="ml-2 font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        use as price
+                      </button>
+                    </p>
                   )}
                   {errors.ticker && <p className="mt-1 text-xs text-red-600">{errors.ticker.message}</p>}
                 </div>

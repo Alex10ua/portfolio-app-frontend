@@ -211,7 +211,11 @@ export default function DividendCalendarPage() {
   const cachedFirst = parseInt(localStorage.getItem(`firstTradeYear-${pid}`) ?? String(currentYear), 10);
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const firstYear = Math.min(firstTradeYear ?? cachedFirst, currentYear);
-  const yearOptions = Array.from({ length: currentYear - firstYear + 1 }, (_, i) => firstYear + i);
+  // One year past this one: the backend projects it end to end from the trailing
+  // payment pattern, which is the "what will a full year of this portfolio pay"
+  // question the rolling projection answers without a year to pin it to.
+  const lastYear = currentYear + 1;
+  const yearOptions = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i);
 
   const [year, setYear] = useState(currentYear);
   // A year that fell outside the range once firstTradeYear landed (the cache said
@@ -290,9 +294,12 @@ export default function DividendCalendarPage() {
   const delta = previousTotal > 0 ? ((annualTotal - previousTotal) / previousTotal) * 100 : null;
 
   const isCurrentYear = year === currentYear;
-  const caption = isCurrentYear
-    ? 'Paid to date · remaining months scheduled from last year’s payment pattern'
-    : 'Closed year · payments valued on the shares held on each ex-date';
+  const isFutureYear = year > currentYear;
+  const caption = isFutureYear
+    ? 'Projected · trailing payment pattern at today’s rate and today’s holdings'
+    : isCurrentYear
+      ? 'Paid to date · remaining months scheduled from last year’s payment pattern'
+      : 'Closed year · payments valued on the shares held on each ex-date';
 
   const yearSelector = (
     <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -333,9 +340,11 @@ export default function DividendCalendarPage() {
             icon={CalendarDays}
             title={`No dividends in ${year}`}
             description={
-              isCurrentYear
-                ? 'No payments have been recorded or scheduled for this year yet.'
-                : 'No dividend was paid on a position held during this year.'
+              isFutureYear
+                ? 'Nothing to project — no holding has paid a dividend in the last year.'
+                : isCurrentYear
+                  ? 'No payments have been recorded or scheduled for this year yet.'
+                  : 'No dividend was paid on a position held during this year.'
             }
           />
         )}
@@ -351,7 +360,7 @@ export default function DividendCalendarPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2 rounded-lg border border-indigo-200 dark:border-indigo-900 p-5 shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-200 dark:from-slate-800 dark:to-indigo-950">
           <div className="text-[11px] font-bold uppercase tracking-[0.10em] text-indigo-600 dark:text-indigo-300 mb-2">
-            {year} {isCurrentYear ? 'Paid & Scheduled' : 'Total Received'}
+            {year} {isFutureYear ? 'Projected' : isCurrentYear ? 'Paid & Scheduled' : 'Total Received'}
           </div>
           <div className="text-[38px] leading-none font-bold tracking-tight tabular-nums text-slate-900 dark:text-white">
             {money(annualTotal)}

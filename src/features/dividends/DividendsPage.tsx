@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { TrendingUp, CalendarDays, Clock, BarChart2, BarChart as BarChartIcon } from 'lucide-react';
 import { useDividends } from '../../hooks/useDividends';
 import { useHoldings } from '../../hooks/useHoldings';
+import { useTransactions } from '../../hooks/useTransactions';
 import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
-import { currencyMeta } from '../../lib/currency';
+import { currencyMeta, looksLikePenceQuote } from '../../lib/currency';
 import { monthIndexOf, parseLocalDate, quarterOf as quarterOfMonthKey, yearOf } from '../../lib/dates';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -41,6 +42,9 @@ export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
   const { data: holdings } = useHoldings(portfolioId!);
+  // This year's transactions — the same React Query cache the Transactions page
+  // fills ('transactions', portfolioId, year), so switching pages costs no fetch.
+  const { data: yearTransactions } = useTransactions(portfolioId!, new Date().getFullYear());
   // The API reports every dividend in the currency it was paid in; the portfolio's
   // base currency (Portfolio Settings) decides what this page adds them up in.
   const { baseCurrency, toBase, sumToBase, money } = usePortfolioCurrency(
@@ -98,6 +102,53 @@ export default function DividendsPage() {
   const monthly = yearly / 12;
   const daily = yearly / 365;
   const hourly = daily / 24;
+
+  // --- What the last transaction batch did to the projection -----------------
+  // A batch is every transaction sharing the newest date in this year's list:
+  // an imported statement lands as one date, a hand-entered trade is a batch of
+  // one. Only share moves shift the projection, and they shift it by exactly
+  // what the backend projects with — annual DPS x quantity, in the ticker's own
+  // (MarketData) currency, converted here like every other figure on the page.
+  // A ticker sold out completely has no holding left to read a DPS from, so its
+  // SELL contributes nothing — the projection it used to carry is simply gone.
+  const dayOf = (t: { date?: string | null }) => String(t.date ?? '').slice(0, 10);
+  const lastBatchDate = (yearTransactions ?? []).reduce(
+    (max, t) => (dayOf(t) > max ? dayOf(t) : max), '');
+  const lastBatch = lastBatchDate
+    ? (yearTransactions ?? []).filter((t) => dayOf(t) === lastBatchDate)
+    : [];
+
+  const holdingByTicker = new Map((holdings ?? []).map((h) => [h.ticker, h]));
+  const batchYearlyDelta = lastBatch.reduce((sum, t) => {
+    const sign = t.transactionType === 'BUY' ? 1 : t.transactionType === 'SELL' ? -1 : 0;
+    if (!sign) return sum; // DIVIDEND/TAX/DEPOSIT/WITHDRAWAL move no shares
+    const h = holdingByTicker.get(t.ticker);
+    const dps = Number(h?.dividend) || 0;
+    if (!dps) return sum; // non-payer, crypto, custom asset or sold out
+    // MarketData currency, not the transaction's: a .L payer quotes dividends in
+    // pence while the trade books in GBP.
+    const ccy = tickerCurrency[t.ticker]
+      ?? (looksLikePenceQuote(t.ticker, h?.currency) ? 'GBp' : h?.currency);
+    return sum + toBase(sign * (Number(t.quantity) || 0) * dps, ccy);
+  }, 0);
+
+  const batchTitle = `Last transaction batch: ${lastBatch.length} transaction${
+    lastBatch.length === 1 ? '' : 's'} on ${lastBatchDate}`;
+  /** the batch's share of one card's figure, in "(+$1.23)" form; null when it moved nothing */
+  const batchDelta = (perYear: number, decimals: number) => {
+    const d = batchYearlyDelta / perYear;
+    if (!d) return null;
+    return (
+      <span
+        title={batchTitle}
+        className={`text-[13px] font-semibold tabular-nums ${
+          d > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+        }`}
+      >
+        ({d > 0 ? '+' : '-'}{sym}{Math.abs(d).toFixed(decimals)})
+      </span>
+    );
+  };
 
   // By year — numeric sort
   const byYearMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
@@ -157,10 +208,10 @@ export default function DividendsPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       {/* KPI projection row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Yearly Projection" value={`${sym}${yearly.toFixed(2)}`}   icon={TrendingUp}  accent="#4F46E5" />
-        <StatCard label="Monthly Average"   value={`${sym}${monthly.toFixed(2)}`}  icon={CalendarDays} accent="#14B8A6" sub="Projected" />
-        <StatCard label="Daily Average"     value={`${sym}${daily.toFixed(2)}`}    icon={BarChart2}    accent="#10B981" sub="Calendar daily" />
-        <StatCard label="Hourly Average"    value={`${sym}${hourly.toFixed(4)}`}   icon={Clock}        accent="#8B5CF6" sub="While you sleep" />
+        <StatCard label="Yearly Projection" value={`${sym}${yearly.toFixed(2)}`}   icon={TrendingUp}  accent="#4F46E5" extra={batchDelta(1, 2)}    sub={lastBatchDate ? `Last batch ${lastBatchDate}` : undefined} />
+        <StatCard label="Monthly Average"   value={`${sym}${monthly.toFixed(2)}`}  icon={CalendarDays} accent="#14B8A6" extra={batchDelta(12, 2)}   sub="Projected" />
+        <StatCard label="Daily Average"     value={`${sym}${daily.toFixed(2)}`}    icon={BarChart2}    accent="#10B981" extra={batchDelta(365, 2)}  sub="Calendar daily" />
+        <StatCard label="Hourly Average"    value={`${sym}${hourly.toFixed(4)}`}   icon={Clock}        accent="#8B5CF6" extra={batchDelta(8760, 4)} sub="While you sleep" />
       </div>
 
       {/* Charts */}

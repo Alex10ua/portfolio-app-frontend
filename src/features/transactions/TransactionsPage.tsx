@@ -74,7 +74,7 @@ export default function TransactionsPage() {
       payload: {
         ...data,
         transactionType: data.transactionType as TransactionType,
-        // backend never persists assetType on update (fixed per ticker) — pass through unchanged
+        // the edit form does not offer an asset-type change — pass the stored one through
         assetType: editTarget.assetType,
         currency: data.currency as Currency,
         quantity: parseFloat(data.quantity),

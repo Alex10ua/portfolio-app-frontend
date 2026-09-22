@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
@@ -9,12 +10,14 @@ interface StatCardProps {
   trend?: string;
   trendUp?: boolean;
   sub?: string;
+  /** rendered next to the value, e.g. what the last transaction batch added */
+  extra?: ReactNode;
 }
 
 export default function StatCard({
   label, value, icon: Icon,
   accent = '#4F46E5',
-  trend, trendUp, sub,
+  trend, trendUp, sub, extra,
 }: StatCardProps) {
   const dir = trendUp ?? (trend ? !trend.startsWith('-') : undefined);
 
@@ -40,8 +43,11 @@ export default function StatCard({
       <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
         {label}
       </div>
-      <div className="text-[22px] font-semibold text-slate-900 dark:text-white tabular-nums leading-tight">
-        {value}
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <div className="text-[22px] font-semibold text-slate-900 dark:text-white tabular-nums leading-tight">
+          {value}
+        </div>
+        {extra}
       </div>
       {sub && (
         <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{sub}</div>

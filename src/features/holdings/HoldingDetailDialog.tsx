@@ -267,6 +267,7 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
   const today = new Date().toISOString().slice(0, 10);
   const [confirming, setConfirming] = useState(false);
   const [sellPrice, setSellPrice] = useState('');
+  const [sellCommission, setSellCommission] = useState('');
   const [sellDate, setSellDate] = useState(today);
   const [error, setError] = useState<string | null>(null);
   const { mutateAsync: createTransaction, isPending } = useCreateTransaction(portfolioId);
@@ -292,27 +293,39 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
     : (pence ? holding.currentShareValue / 100 : holding.currentShareValue);
   const priceNum = Number(sellPrice);
   const priceValid = sellPrice !== '' && Number.isFinite(priceNum) && priceNum >= 0;
-  const total = priceValid ? priceNum * holding.shareAmount : null;
+  const commissionNum = sellCommission === '' ? 0 : Number(sellCommission);
+  const commissionValid = Number.isFinite(commissionNum) && commissionNum >= 0;
+  /**
+   * `shareAmount` is rounded to 2dp for display; selling that number leaves whatever the rounding
+   * shaved off behind as an un-closable dust holding (UL showed 5.99 for 5.994666 shares, so
+   * 0.004666 survived the close). Book the SELL against the backend's unrounded quantity; the
+   * fallback only covers an API response from before that field existed.
+   */
+  const exactShares = holding.exactShareAmount ?? holding.shareAmount;
+  // full precision goes on the wire; the confirmation text shows a readable form of it
+  const exactSharesLabel = Number(exactShares.toFixed(8)).toString();
+  const total = priceValid && commissionValid ? priceNum * exactShares - commissionNum : null;
 
   const openConfirm = () => {
     // prefill with the current market price, in the currency the SELL is booked in
     setSellPrice(marketPriceInTxCurrency != null ? String(marketPriceInTxCurrency) : '');
+    setSellCommission('');
     setSellDate(today);
     setError(null);
     setConfirming(true);
   };
 
   const closePosition = async () => {
-    if (!priceValid || !sellDate) return;
+    if (!priceValid || !commissionValid || !sellDate) return;
     setError(null);
     try {
       await createTransaction({
         ticker: holding.ticker,
         transactionType: 'SELL',
         assetType: holding.assetType ?? undefined,
-        quantity: holding.shareAmount,
+        quantity: exactShares,
         price: priceNum,
-        commission: 0,
+        commission: commissionNum,
         date: sellDate,
         currency: currency as Currency,
         name: holding.name ?? undefined,
@@ -340,14 +353,18 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-red-700 dark:text-red-300">
-              Sell <strong>all {holding.shareAmount}</strong> {holding.shareAmount === 1 ? 'share' : 'shares'} of{' '}
+              Sell <strong>all {exactSharesLabel}</strong> {exactShares === 1 ? 'share' : 'shares'} of{' '}
               <strong>{holding.ticker}</strong>
-              {total != null && <> for ≈ <strong>{formatCurrency(total, undefined, currency)}</strong></>}?
+              {total != null && (
+                <> for ≈ <strong>{formatCurrency(total, undefined, currency)}</strong>
+                  {commissionNum > 0 && <> net of {formatCurrency(commissionNum, undefined, currency)} commission</>}
+                </>
+              )}?
               A SELL transaction will be created and the position will disappear from the table.
             </p>
           </div>
-          <div className="flex gap-2">
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap gap-2">
+            <div className="flex-1 min-w-[140px]">
               <label className="block text-[11px] font-semibold text-red-700 dark:text-red-300 mb-1">
                 Sell price ({currency})
               </label>
@@ -366,6 +383,20 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
                   Quoted {formatCurrency(holding.currentShareValue, undefined, 'GBp')} — converted to {currency}
                 </p>
               )}
+            </div>
+            <div className="w-[110px] shrink-0">
+              <label className="block text-[11px] font-semibold text-red-700 dark:text-red-300 mb-1">
+                Commission
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={sellCommission}
+                onChange={(e) => setSellCommission(e.target.value)}
+                placeholder="0.00"
+                className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
             </div>
             <div className="w-[150px] shrink-0">
               <label className="block text-[11px] font-semibold text-red-700 dark:text-red-300 mb-1">
@@ -392,7 +423,7 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
             <button
               type="button"
               onClick={() => void closePosition()}
-              disabled={isPending || !priceValid || !sellDate}
+              disabled={isPending || !priceValid || !commissionValid || !sellDate}
               className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {isPending ? 'Closing…' : 'Sell All & Close'}

@@ -5,6 +5,8 @@ export interface Holding {
   assetType: AssetType | null;
   name: string | null;
   shareAmount: number;
+  /** unrounded holding quantity; `shareAmount` is 2dp for display. Book SELLs against this. */
+  exactShareAmount?: number | null;
   costPerShare: number | null;
   costBasis: number | null;           // backend-computed (BigDecimal): costPerShare × shares
   currentShareValue: number | null;

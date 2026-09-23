@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { SEC_TIMEOUT_MS } from './client';
 import type { CompanyFundamentals } from '../types/fundamentals';
 
 export async function getFundamentals(ticker: string): Promise<CompanyFundamentals | null> {
@@ -13,6 +13,6 @@ export async function getFundamentals(ticker: string): Promise<CompanyFundamenta
 }
 
 export async function refreshFundamentals(ticker: string): Promise<CompanyFundamentals | { status: string; ticker: string }> {
-  const response = await apiClient.post(`fundamentals/${ticker}/refresh`);
+  const response = await apiClient.post(`fundamentals/${ticker}/refresh`, undefined, { timeout: SEC_TIMEOUT_MS });
   return response.data;
 }

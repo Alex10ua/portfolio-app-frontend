@@ -18,7 +18,20 @@ export interface Holding {
   totalProfit: number | null;
   totalProfitPercentage: number | null;
   dailyChange: number | null;
-  currency?: string;   // native currency of the asset, e.g. "USD"
+  /**
+   * Book currency — the one the position was bought in. After `useHoldings` has normalized
+   * the row, every money field on it is in this currency.
+   */
+  currency?: string;
+  /**
+   * The provider's quote currency (may be "GBp" pence, or USD for a coin bought in EUR).
+   * The API sends currentShareValue/currentTotalValue/dailyChange/dividend in it and leaves
+   * profit null where it differs from `currency`; `normalizeHolding` converts. Null when the
+   * provider named none, i.e. the figures are already in `currency`.
+   */
+  quoteCurrency?: string | null;
+  /** The price as quoted, in `quoteCurrency` — set by `normalizeHolding`, never by the API. */
+  quoteShareValue?: number | null;
   fxRate?: number;     // rateVsEur: units of this currency per 1 EUR
   sharesOutstanding?: number | null; // total shares outstanding (STOCK only); powers Ownership view
 }

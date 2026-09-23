@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { PROVIDER_TIMEOUT_MS, SEC_TIMEOUT_MS } from './client';
 import type { MarketData, MarketStatistics, TickerHistoricalData } from '../types/marketData';
 
 export async function getMarketData(ticker: string): Promise<MarketData> {
@@ -22,6 +22,8 @@ export async function getStatistics(ticker: string): Promise<MarketStatistics | 
 export async function refreshStatistics(ticker: string): Promise<MarketStatistics | null> {
   const response = await apiClient.post<MarketStatistics | { status: string }>(
     `/market-data/${ticker}/statistics/refresh`,
+    undefined,
+    { timeout: PROVIDER_TIMEOUT_MS },
   );
   return 'status' in response.data ? null : response.data;
 }
@@ -42,6 +44,8 @@ export async function getHistoricalData(ticker: string): Promise<TickerHistorica
 export async function refreshHistoricalData(ticker: string): Promise<TickerHistoricalData | null> {
   const response = await apiClient.post<TickerHistoricalData | { status: string }>(
     `/market-data/${ticker}/historical/refresh`,
+    undefined,
+    { timeout: SEC_TIMEOUT_MS },
   );
   return 'status' in response.data ? null : response.data;
 }

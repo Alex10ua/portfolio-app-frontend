@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { PROVIDER_TIMEOUT_MS } from './client';
 import type { TickerSuggestion, WatchlistEntry } from '../types/watchlist';
 
 export async function getWatchlist(portfolioId: string): Promise<WatchlistEntry[]> {
@@ -37,7 +37,8 @@ export async function addToWatchlist(
   ticker: string,
   targetYield?: number | null,
 ): Promise<WatchlistEntry> {
-  const res = await apiClient.post<WatchlistEntry>(`${portfolioId}/watchlist`, { ticker, targetYield });
+  const res = await apiClient.post<WatchlistEntry>(`${portfolioId}/watchlist`, { ticker, targetYield },
+    { timeout: PROVIDER_TIMEOUT_MS });
   return res.data;
 }
 
@@ -55,6 +56,7 @@ export async function removeFromWatchlist(portfolioId: string, ticker: string): 
 }
 
 export async function refreshWatchlistTicker(portfolioId: string, ticker: string): Promise<WatchlistEntry> {
-  const res = await apiClient.post<WatchlistEntry>(`${portfolioId}/watchlist/${ticker}/refresh`);
+  const res = await apiClient.post<WatchlistEntry>(`${portfolioId}/watchlist/${ticker}/refresh`, undefined,
+    { timeout: PROVIDER_TIMEOUT_MS });
   return res.data;
 }

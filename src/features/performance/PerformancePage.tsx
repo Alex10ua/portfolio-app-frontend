@@ -12,6 +12,7 @@ import ErrorAlert from '../../components/ui/ErrorAlert';
 import StatCard from '../../components/ui/StatCard';
 import { formatPercent } from '../../lib/formatters';
 import { parseLocalDate } from '../../lib/dates';
+import { summarizePerformance } from '../../lib/performanceSummary';
 import type { PerformancePeriod } from '../../types/performance';
 
 const PERIODS: PerformancePeriod[] = ['1W', '1M', '3M', 'YTD', '1Y', 'ALL'];
@@ -41,7 +42,7 @@ export default function PerformancePage() {
   const [period, setPeriod] = useState<PerformancePeriod>('1Y');
   const { data, isLoading, error } = usePerformance(pid, period);
   const { data: holdings } = useHoldings(pid);
-  const { sumToBase, money, baseCurrency } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
+  const { sumToBase, money, baseCurrency, fxRates } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
   const cash = (v: number | null | undefined) => money(v, baseCurrency, 0);
 
   if (isLoading) return <FullPageSpinner />;
@@ -55,11 +56,10 @@ export default function PerformancePage() {
 
   const minVal = chartData.length ? Math.min(...chartData.map((d) => d.value)) * 0.98 : 0;
 
-  // The summary figures are flat, unconverted native sums (no per-currency
-  // breakdown exists on this DTO, unlike timeSeries.valueByCurrency), so they are
-  // only exact while the portfolio holds one currency. Say so rather than
-  // presenting a mixed sum as if it were converted.
-  const heldCurrencies = [...new Set((holdings ?? []).map((h) => h.currency).filter(Boolean))];
+  // Summary figures come per currency and are converted here; only an API that predates
+  // the ...ByCurrency maps leaves the flat native sums, and then the caption says so.
+  const summary = data ? summarizePerformance(data, baseCurrency, fxRates) : null;
+  const heldCurrencies = [...new Set((holdings ?? []).flatMap((h) => [h.currency, h.quoteCurrency]).filter(Boolean))];
   const mixedCurrency = heldCurrencies.length > 1;
 
   return (
@@ -138,32 +138,32 @@ export default function PerformancePage() {
       </div>
 
       {/* Primary summary cards */}
-      {data && (
+      {summary && (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard
               label="Total Invested"
-              value={money(data.totalInvested)}
+              value={money(summary.totalInvested)}
               icon={DollarSign}
               accent="#64748B"
             />
             <StatCard
               label="Current Value"
-              value={money(data.currentValue)}
+              value={money(summary.currentValue)}
               icon={TrendingUp}
               accent="#4F46E5"
             />
             <StatCard
               label="Total Return"
-              value={formatPnl(data.totalReturn, money, data.totalReturnPct)}
+              value={formatPnl(summary.totalReturn, money, summary.totalReturnPct)}
               icon={BarChart2}
-              accent={data.totalReturn >= 0 ? '#10B981' : '#EF4444'}
+              accent={summary.totalReturn >= 0 ? '#10B981' : '#EF4444'}
             />
             <StatCard
               label="XIRR (Annualized)"
-              value={formatPercent(data.xirr)}
+              value={formatPercent(summary.xirr)}
               icon={Percent}
-              accent={data.xirr >= 0 ? '#4F46E5' : '#EF4444'}
+              accent={(summary.xirr ?? 0) >= 0 ? '#4F46E5' : '#EF4444'}
             />
           </div>
 
@@ -171,28 +171,30 @@ export default function PerformancePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Unrealized P&L</div>
-              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.unrealizedPnL)}`}>
-                {formatPnl(data.unrealizedPnL, money, data.unrealizedPnLPct)}
+              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(summary.unrealizedPnL)}`}>
+                {formatPnl(summary.unrealizedPnL, money, summary.unrealizedPnLPct)}
               </div>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Realized P&L</div>
-              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(data.realizedPnL)}`}>
-                {formatPnl(data.realizedPnL, money)}
+              <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(summary.realizedPnL)}`}>
+                {formatPnl(summary.realizedPnL, money)}
               </div>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Total Dividends</div>
               <div className="text-[20px] font-semibold tabular-nums text-slate-900 dark:text-white">
-                {money(data.totalDividends)}
+                {money(summary.totalDividends)}
               </div>
             </div>
           </div>
 
           {mixedCurrency && (
             <p className="text-[11px] text-slate-400 dark:text-slate-500">
-              Summary figures are native sums shown in {baseCurrency}; this portfolio holds{' '}
-              {heldCurrencies.join(', ')}, so only the chart above is FX-converted.
+              {summary.converted
+                ? <>Figures in {heldCurrencies.join(', ')} converted to {baseCurrency} at today's rates; XIRR applies today's rate to past cash flows too.</>
+                : <>Summary figures are native sums shown in {baseCurrency}; this portfolio holds{' '}
+                  {heldCurrencies.join(', ')}, so only the chart above is FX-converted.</>}
             </p>
           )}
         </>

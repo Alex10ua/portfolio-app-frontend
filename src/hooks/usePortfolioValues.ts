@@ -4,6 +4,8 @@ import { useFxRates } from './useFxRates';
 import { useSettings } from '../context/SettingsContext';
 import { readLocalPortfolioSettings } from '../lib/portfolioSettingsStore';
 import { convert, normalizeCurrency } from '../lib/currency';
+import { normalizeHoldings } from '../lib/holdingCurrency';
+import type { Holding } from '../types/holding';
 import type { Portfolio } from '../types/portfolio';
 
 export type AssetSegment = { label: string; weight: number; color: string };
@@ -38,6 +40,8 @@ export function usePortfolioValues(portfolios: Portfolio[]) {
       queryKey: ['holdings', String(p.portfolioId)],
       queryFn: () => getHoldings(String(p.portfolioId)),
       enabled: portfolios.length > 0,
+      // same cache entry as useHoldings, so the same per-observer conversion into book currency
+      select: (data: Holding[]) => normalizeHoldings(data, fxRates),
     })),
   });
 

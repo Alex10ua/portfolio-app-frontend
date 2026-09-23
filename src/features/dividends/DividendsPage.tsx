@@ -38,6 +38,79 @@ const MONTH_COLORS = [
 ];
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+/** `'yyyy-MM'`, the key amountByMonth uses (DividendUtils.YEAR_MONTH_FORMATTER); `month` is 0-based */
+const monthKey = (year: number, month: number) => `${year}-${String(month + 1).padStart(2, '0')}`;
+/** the month key `by` months away (negative = earlier) */
+const shiftMonth = (key: string, by: number) => {
+  const i = yearOf(key) * 12 + monthIndexOf(key) + by;
+  return monthKey(Math.floor(i / 12), i % 12);
+};
+/** keys of `count` consecutive months starting at `month` (0-based) of `year` */
+const monthsFrom = (year: number, month: number, count: number) =>
+  Array.from({ length: count }, (_, i) => shiftMonth(monthKey(year, month), i));
+/** 'Sep 2025' — the axis's 'Sep 25' reads like a day of the month inside a sentence */
+const monthName = (key: string) => `${MONTH_LABELS[monthIndexOf(key)]} ${yearOf(key)}`;
+
+/** The % change line of an income tooltip: the hovered period against the same period a year earlier. */
+type Change = {
+  pct: number;
+  /** the period compared against, as the tooltip names it: '2024', 'Q3 2024', 'Apr 2024' */
+  vs: string;
+  /** months of `vs` it was measured on while the hovered period is still running ('Jan–Aug'); null = all of it */
+  months: string | null;
+};
+
+/** What the income tooltip reads off a bar; each chart adds its own axis key. */
+type IncomeBar = {
+  amount: number;
+  title: string;
+  /** YTD / QTD / MTD while the period is still running */
+  tag: string | null;
+  change: Change | null;
+};
+
+/**
+ * Tooltip of the Income by Year / Quarter / Month cards: the period's income and
+ * its % change on the same period a year earlier. Passed as an element, so
+ * Recharts clones it with `active`/`payload` filled in.
+ */
+function IncomeTooltip({ active, payload, format }: {
+  active?: boolean;
+  payload?: { payload?: IncomeBar }[];
+  format: (value: number) => string;
+}) {
+  const bar = payload?.[0]?.payload;
+  if (!active || !bar) return null;
+  const { change } = bar;
+  // rounded before the sign is read, so -0.04% prints as 0.0%, not -0.0%
+  const pct = change ? Math.round(change.pct * 10) / 10 : 0;
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-[13px] shadow-sm">
+      <div className="font-semibold text-slate-900 dark:text-white">
+        {bar.title}
+        {bar.tag && (
+          <span className="ml-1.5 text-[9.5px] font-bold tracking-wider text-slate-400 dark:text-slate-500">{bar.tag}</span>
+        )}
+      </div>
+      <div className="tabular-nums text-slate-700 dark:text-slate-200">{format(bar.amount)}</div>
+      {change && (
+        <div className="tabular-nums">
+          <span className={`font-semibold ${
+            pct > 0 ? 'text-emerald-600 dark:text-emerald-400'
+              : pct < 0 ? 'text-red-600 dark:text-red-400'
+                : 'text-slate-500 dark:text-slate-400'
+          }`}>
+            {pct > 0 ? '+' : pct < 0 ? '-' : ''}{Math.abs(pct).toFixed(1)}%
+          </span>
+          <span className="text-slate-500 dark:text-slate-400">
+            {' '}vs {change.vs}{change.months && ` (${change.months})`}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DividendsPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const { data, isLoading, error } = useDividends(portfolioId!);
@@ -150,6 +223,27 @@ export default function DividendsPage() {
     );
   };
 
+  // Tooltip comparison: % change of a period (its month keys) on the same months
+  // a year earlier — Q3 2025 against Q3 2024, Apr 2025 against Apr 2024. A period
+  // still running is measured on its finished months only, against those same
+  // months last year: a part period against a whole one would read as a cut. No
+  // finished month yet (a running month; January for a year), or nothing paid a
+  // year earlier (the first year of all), leaves nothing to compare.
+  const now = new Date();
+  const thisMonth = monthKey(now.getFullYear(), now.getMonth());
+  const paidIn = (keys: string[]) => keys.reduce((sum, key) => sum + (amountByMonth[key] ?? 0), 0);
+  const changeOn = (months: string[], vs: string): Change | null => {
+    const done = months.filter((m) => m < thisMonth);
+    const base = paidIn(done.map((m) => shiftMonth(m, -12)));
+    if (!done.length || base <= 0) return null;
+    const [first, last] = [done[0], done[done.length - 1]].map((m) => MONTH_LABELS[monthIndexOf(m)]);
+    return {
+      pct: (paidIn(done) / base - 1) * 100,
+      vs,
+      months: done.length === months.length ? null : first === last ? first : `${first}–${last}`,
+    };
+  };
+
   // By year — numeric sort
   const byYearMap = Object.entries(amountByMonth).reduce<Record<string, number>>((acc, [month, amount]) => {
     // Keys are 'yyyy-MM' (DividendUtils.YEAR_MONTH_FORMATTER). Read the calendar
@@ -160,7 +254,16 @@ export default function DividendsPage() {
     return acc;
   }, {});
   const byYear = Object.entries(byYearMap)
-    .map(([year, amount]) => ({ year, amount: parseFloat(amount.toFixed(2)) }))
+    .map(([year, amount]) => {
+      const months = monthsFrom(Number(year), 0, 12);
+      return {
+        year,
+        amount: parseFloat(amount.toFixed(2)),
+        title: year,
+        tag: months.includes(thisMonth) ? 'YTD' : null,
+        change: changeOn(months, String(Number(year) - 1)),
+      };
+    })
     .sort((a, b) => Number(a.year) - Number(b.year));
 
   // By quarter — structured sort by year then quarter number
@@ -170,22 +273,36 @@ export default function DividendsPage() {
     return acc;
   }, {});
   const byQuarter = Object.entries(byQuarterMap)
-    .map(([yearQuarter, amount]) => ({ yearQuarter, amount: parseFloat(amount.toFixed(2)) }))
+    .map(([yearQuarter, amount]) => {
+      const [year, q] = yearQuarter.split(' Q').map(Number);
+      const months = monthsFrom(year, (q - 1) * 3, 3);
+      return {
+        yearQuarter,
+        amount: parseFloat(amount.toFixed(2)),
+        title: `Q${q} ${year}`,
+        tag: months.includes(thisMonth) ? 'QTD' : null,
+        change: changeOn(months, `Q${q} ${year - 1}`),
+      };
+    })
     .sort((a, b) => {
       const [aYear, aQ] = a.yearQuarter.split(' Q').map(Number);
       const [bYear, bQ] = b.yearQuarter.split(' Q').map(Number);
       return aYear !== bYear ? aYear - bYear : aQ - bQ;
     });
 
-  // By month — formatted label for X-axis
+  // By month — formatted label for X-axis. 'yyyy-MM' keys sort as text.
   const byMonth = Object.entries(amountByMonth)
-    .map(([month, amount]) => {
-      const d = parseLocalDate(month);
-      const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      return { month: label, amount: parseFloat(Number(amount).toFixed(2)), m: monthIndexOf(month), _date: d.getTime() };
-    })
-    .sort((a, b) => a._date - b._date)
-    .map(({ month, amount, m }) => ({ month, amount, m }));
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({
+      month: parseLocalDate(month).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      amount: parseFloat(Number(amount).toFixed(2)),
+      m: monthIndexOf(month),
+      title: monthName(month),
+      tag: month === thisMonth ? 'MTD' : null,
+      change: changeOn([month], monthName(shiftMonth(month, -12))),
+    }));
+
+  const incomeTooltip = <IncomeTooltip format={(v) => money(v, baseCurrency)} />;
 
   // By stock — sorted descending by amount
   const tickerMap = tickerAmountArr.reduce<Record<string, number>>(
@@ -221,7 +338,13 @@ export default function DividendsPage() {
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Income by Year</div>
             <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">All-time history</div>
             <div className="h-64">
-              <AppBarChart data={byYear} xKey="year" color="#4F46E5" currencySymbol={sym} />
+              <AppBarChart
+                data={byYear}
+                xKey="year"
+                color="#4F46E5"
+                currencySymbol={sym}
+                tooltipContent={incomeTooltip}
+              />
             </div>
           </div>
         )}
@@ -253,6 +376,7 @@ export default function DividendsPage() {
                 xKey="yearQuarter"
                 color="#14B8A6"
                 currencySymbol={sym}
+                tooltipContent={incomeTooltip}
                 getBarColor={(entry) => {
                   const q = quarterOf(String(entry.yearQuarter));
                   if (hoverQuarter && q !== hoverQuarter) return DIMMED_BAR;
@@ -300,6 +424,7 @@ export default function DividendsPage() {
                 xKey="month"
                 color="#4F46E5"
                 currencySymbol={sym}
+                tooltipContent={incomeTooltip}
                 getBarColor={(entry) => {
                   const m = Number(entry.m);
                   if (hoverMonth != null && m !== hoverMonth) return DIMMED_BAR;

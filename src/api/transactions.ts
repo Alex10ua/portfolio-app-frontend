@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient, { PROVIDER_TIMEOUT_MS } from './client';
 import type { Transaction, CreateTransactionPayload, UpdateTransactionPayload } from '../types/transaction';
 
 export async function getTransactions(portfolioId: string, year: number): Promise<Transaction[]> {
@@ -7,7 +7,9 @@ export async function getTransactions(portfolioId: string, year: number): Promis
 }
 
 export async function createTransaction(portfolioId: string, payload: CreateTransactionPayload): Promise<Transaction> {
-  const response = await apiClient.post<Transaction>(`${portfolioId}/createTransaction`, payload);
+  // a first trade in a ticker fetches its market data synchronously before answering
+  const response = await apiClient.post<Transaction>(`${portfolioId}/createTransaction`, payload,
+    { timeout: PROVIDER_TIMEOUT_MS });
   return response.data;
 }
 

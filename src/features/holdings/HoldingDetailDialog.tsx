@@ -10,7 +10,6 @@ import { useCustomAsset, useUpdateCustomAssetPrice } from '../../hooks/useCustom
 import { useCreateTransaction } from '../../hooks/useHoldings';
 import { useFundamentals, useRefreshFundamentals } from '../../hooks/useFundamentals';
 import { formatCompactCurrency, formatCurrency } from '../../lib/formatters';
-import { isMinorUnit } from '../../lib/currency';
 import type { Holding } from '../../types/holding';
 import type { Currency } from '../../types/transaction';
 import type { FundamentalEntry } from '../../types/fundamentals';
@@ -271,26 +270,18 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
   const [sellDate, setSellDate] = useState(today);
   const [error, setError] = useState<string | null>(null);
   const { mutateAsync: createTransaction, isPending } = useCreateTransaction(portfolioId);
-  // cached by the panels above, so this is a cache read, not a second request
-  const { data: market } = useMarketData(holding.ticker);
-
   const currency = holding.currency ?? 'USD';
 
   /**
-   * `holding.currentShareValue` is `MarketData.price`, quoted in the provider's
-   * currency; `holding.currency` is the transaction currency. For a London listing
-   * those differ by a factor of 100 (GBp pence vs GBP), so prefilling the raw price
-   * as a GBP sale overstates it 100×. The transaction Currency union has no pence
-   * member, so the value has to be converted, not relabelled.
-   *
-   * The ticker-suffix check is a fallback for the moment before market data lands —
-   * IOB/LSE lines are the only pence quotes this app sees.
+   * `useHoldings` has already converted `currentShareValue` from the quote currency into
+   * the book currency (`holding.currency`) — pence to pounds for a London line, USD to EUR
+   * for a coin bought in euros — so it can prefill the SELL as it is. `quoteShareValue` is
+   * the price as quoted, shown alongside when the two currencies differ.
    */
-  const pence = isMinorUnit(market?.currency)
-    || (market?.currency == null && currency === 'GBP' && /\.(L|IL)$/i.test(holding.ticker));
-  const marketPriceInTxCurrency = holding.currentShareValue == null
-    ? null
-    : (pence ? holding.currentShareValue / 100 : holding.currentShareValue);
+  const quoted = holding.quoteCurrency && holding.quoteCurrency !== currency && holding.quoteShareValue != null
+    ? { value: holding.quoteShareValue, currency: holding.quoteCurrency }
+    : null;
+  const marketPriceInTxCurrency = holding.currentShareValue ?? null;
   const priceNum = Number(sellPrice);
   const priceValid = sellPrice !== '' && Number.isFinite(priceNum) && priceNum >= 0;
   const commissionNum = sellCommission === '' ? 0 : Number(sellCommission);
@@ -378,9 +369,9 @@ function ClosePositionSection({ holding, portfolioId, onClosed }: {
                 placeholder="0.00"
                 className="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 tabular-nums focus:outline-none focus:ring-1 focus:ring-red-500"
               />
-              {pence && holding.currentShareValue != null && (
+              {quoted && (
                 <p className="mt-1 text-[11px] text-red-700/80 dark:text-red-300/80 tabular-nums">
-                  Quoted {formatCurrency(holding.currentShareValue, undefined, 'GBp')} — converted to {currency}
+                  Quoted {formatCurrency(quoted.value, undefined, quoted.currency)} — converted to {currency}
                 </p>
               )}
             </div>

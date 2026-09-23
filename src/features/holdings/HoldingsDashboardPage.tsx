@@ -163,6 +163,15 @@ export default function HoldingsDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, pid]);
 
+  // A sold-out position loses its target server-side; drop it here too, or the
+  // stale entry keeps counting in targetSum and rides along on the next push.
+  useEffect(() => {
+    if (!holdings) return;
+    const held = new Set(holdings.map((h) => h.ticker));
+    if (Object.keys(targets).every((t) => held.has(t))) return;
+    setTargets(Object.fromEntries(Object.entries(targets).filter(([t]) => held.has(t))));
+  }, [holdings, targets]);
+
   useEffect(() => {
     if (firstTradeYear) {
       try { localStorage.setItem(`firstTradeYear-${pid}`, String(firstTradeYear)); } catch { /* storage blocked */ }

@@ -546,7 +546,8 @@ export default function StatisticsPage() {
                   )}
                 </div>
                 <div className="px-4 pt-3.5 pb-4">
-                  <TargetRange s={stats} price={active.currentShareValue ?? null} />
+                  {/* analyst targets are in the quote currency; currentShareValue is the book-currency price */}
+                  <TargetRange s={stats} price={active.quoteShareValue ?? active.currentShareValue ?? null} />
                   {stats.numberOfAnalystOpinions != null && (
                     <div className="mt-3.5 pt-3 border-t border-slate-100 dark:border-slate-700 grid grid-cols-2 gap-x-5">
                       <StatRow label="Analysts covering" value={int(stats.numberOfAnalystOpinions)} last />

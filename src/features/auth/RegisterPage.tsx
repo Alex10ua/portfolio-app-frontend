@@ -51,6 +51,11 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    // the backend rejects shorter passwords; axios would only surface "status code 400"
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
     setIsLoading(true);
     const result = await register({ username, email, passwordHash: password });
     if (result.success) {

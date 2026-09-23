@@ -40,6 +40,10 @@ export function useDeleteImport(portfolioId: string, onSuccess?: () => void) {
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['performance', portfolioId] });
+      // positions the batch opened are closed again, and closing drops their tags
+      for (const key of ['tags', 'tagNames', 'tickerTags']) {
+        void qc.invalidateQueries({ queryKey: [key, portfolioId] });
+      }
       onSuccess?.();
     },
   });

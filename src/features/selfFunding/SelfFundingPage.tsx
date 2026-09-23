@@ -29,7 +29,7 @@ import type { Currency } from '../../types/transaction';
 // (GBp…) is recorded with the form's default rather than a value it can't show
 const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'CHF', 'PLN', 'CZK'];
 
-/** Money in the row's own quote currency — the API never converts. */
+/** Money in the holding's own currency (useHoldings converts quote prices into it). */
 const rowMoney = (value: number | null | undefined, row: SfRow, decimals?: number) =>
   (value == null ? '—' : formatCurrency(value, decimals, row.currency ?? 'USD'));
 
@@ -210,7 +210,7 @@ function RowDetail({ row, period, onBuy }: { row: SfRow; period: Period; onBuy: 
  * Self-Funding — how many shares each holding needs before one period's dividend
  * buys one more share at today's price, and what closing that gap costs.
  *
- * Rows stay in their own quote currency; only the KPI strip converts, to the
+ * Rows stay in each holding's own currency; only the KPI strip converts, to the
  * portfolio's base currency. Chips reuse tags rather than a separate grouping.
  */
 export default function SelfFundingPage() {
@@ -390,7 +390,7 @@ export default function SelfFundingPage() {
             {period === 'Yearly' ? 'One share per year' : period === 'Quarterly' ? 'One share every quarter' : 'One share every month'}
           </span>
           <span className="text-[12px] text-slate-500 dark:text-slate-400 tabular-nums">
-            threshold = ⌈price ÷ (annual DPS ÷ {PERIOD_DIVISOR[period]})⌉ · rows in their own quote currency
+            threshold = ⌈price ÷ (annual DPS ÷ {PERIOD_DIVISOR[period]})⌉ · rows in each holding's own currency
           </span>
           <div className="flex-1" />
           <span className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">

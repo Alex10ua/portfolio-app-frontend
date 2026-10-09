@@ -1,12 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { Menu as HMenu, MenuButton, MenuItems, MenuItem } from '@headlessui/react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { ChevronDown, Minus, Plus, Calculator as CalculatorIcon } from 'lucide-react';
 import { useHoldings } from '../../hooks/useHoldings';
 import { useFundamentals } from '../../hooks/useFundamentals';
+import { useFinancials, useRefreshFinancials, useStatistics } from '../../hooks/useMarketData';
+import { useFxRates } from '../../hooks/useFxRates';
+import { monthIndexOf, yearOf } from '../../lib/dates';
+import {
+  annualPerShare, deriveStartValues, historicalGrowth, historyTable, roundStart,
+  type HistoryRow, type StartValue,
+} from './valuationStartValues';
+import type { MarketStatistics, YahooFinancials } from '../../types/marketData';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import Spinner from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
@@ -15,15 +23,15 @@ import StockLogo from '../../components/ui/StockLogo';
 import StackedAreaChart from '../../components/charts/AreaChart';
 import { useTheme } from '../../hooks/useTheme';
 import { formatCompactCurrency, formatCurrency, formatPercent } from '../../lib/formatters';
+import { convert, normalizeCurrency } from '../../lib/currency';
 import type { Holding } from '../../types/holding';
 import type { FundamentalEntry } from '../../types/fundamentals';
 
 // ---------- DCF MODEL ----------
-// All assumptions (starting FCF/share, growth, exit P/FCF, target return) are
-// user-entered and kept client-side only — there is no backend concept for
-// free-cash-flow yet (SEC EDGAR fundamentals cover revenue/netIncome/eps/etc,
-// see sec_edgar_provider.py FUNDAMENTAL_CONCEPTS, but not operating cash flow
-// or capex). See TODO.list for adding a real FCF data source.
+// Assumptions (starting value per share, growth, exit multiple, target return) are
+// kept client-side only. Starting values are prefilled from the company's reported
+// figures — Yahoo financial statements (yahooFinancials, any listing), with SEC
+// EDGAR's 10-K EPS as the Net Income fallback — see valuationStartValues.ts.
 const HORIZON = 5;
 
 // Each metric (Revenue/Net Income/Gross Profit/Op. Income/FCF) is an independent
@@ -144,9 +152,67 @@ function StartValueInput({ value, onCommit }: { value: number; onCommit: (v: num
   );
 }
 
+// ---------- STARTING-VALUE SOURCE ----------
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function periodLabel(sv: StartValue) {
+  const when = `${MONTHS[monthIndexOf(sv.periodEnd)]} ${yearOf(sv.periodEnd)}`;
+  return sv.basis === 'TTM' ? `trailing 12 months to ${when}` : `fiscal year to ${when}`;
+}
+
+/** Where the starting value comes from — or why there is none to offer. */
+function StartValueSource({
+  source, start, currency, label, ticker, hasFinancials, loading, currencyIssue,
+  refreshing, refreshFailed, onRefresh, onUseLatest,
+}: {
+  source: StartValue | undefined; start: number; currency: string; label: string; ticker: string;
+  hasFinancials: boolean; loading: boolean; currencyIssue: string | null;
+  refreshing: boolean; refreshFailed: boolean;
+  onRefresh: () => void; onUseLatest: (v: number) => void;
+}) {
+  const hint = 'text-[12px] text-slate-500 dark:text-slate-400 mt-1.5';
+  const link = 'mt-1 inline-flex items-center gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-60 disabled:no-underline';
+
+  if (source) {
+    const latest = roundStart(source.value);
+    const converted = source.reportedCurrency !== normalizeCurrency(currency);
+    return (
+      <div className={hint}>
+        <p>
+          From {source.source}, {periodLabel(source)}
+          {converted && <> · reported {formatCurrency(source.reported, 2, source.reportedCurrency)}, converted at today&apos;s rate</>}
+          .
+        </p>
+        {start !== latest && (
+          <button type="button" onClick={() => onUseLatest(latest)} className={link}>
+            Use reported {formatCurrency(latest, Math.abs(latest) < 1 ? 4 : 2, currency)}
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (loading) return <p className={hint}>Loading reported figures…</p>;
+  if (!hasFinancials) {
+    return (
+      <div className={hint}>
+        <p>No Yahoo financial statements stored for {ticker} yet. The next price update fetches them, or load them now.</p>
+        <button type="button" onClick={onRefresh} disabled={refreshing} className={link}>
+          {refreshing && <Spinner size="sm" className="h-3.5 w-3.5" />}
+          {refreshing ? 'Loading from Yahoo…' : 'Load from Yahoo'}
+        </button>
+        {refreshFailed && !refreshing && (
+          <p className="mt-1 text-red-500 dark:text-red-400">Yahoo returned no statements for {ticker}.</p>
+        )}
+      </div>
+    );
+  }
+  if (currencyIssue) return <p className={hint}>{currencyIssue}. Enter it manually.</p>;
+  return <p className={hint}>No positive {label} reported for {ticker}. Enter it manually.</p>;
+}
+
 // ---------- STEPPER ----------
-function Stepper({ color, label, hint, value, onChange, min, max, step = 1, suffix }: {
-  color: string; label: string; hint?: string; value: number;
+function Stepper({ color, label, hint, reference, value, onChange, min, max, step = 1, suffix }: {
+  color: string; label: string; hint?: string; reference?: ReactNode; value: number;
   onChange: (v: number) => void; min: number; max: number; step?: number; suffix?: string;
 }) {
   return (
@@ -176,6 +242,107 @@ function Stepper({ color, label, hint, value, onChange, min, max, step = 1, suff
         </button>
       </div>
       {hint && <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-2">{hint}</div>}
+      {reference && <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">{reference}</div>}
+    </div>
+  );
+}
+
+// ---------- DATA REFERENCES ----------
+const USE_LINK = 'ml-1.5 font-semibold text-indigo-600 dark:text-indigo-400 hover:underline';
+
+const fyLabel = (date: string) => `FY${date.slice(0, 4)}`;
+
+/** What the company's own history says about the growth assumption. */
+function GrowthReference({ financials, metric, label, current, onUse }: {
+  financials: YahooFinancials | null | undefined; metric: MetricKey; label: string;
+  current: number; onUse: (v: number) => void;
+}) {
+  if (!financials?.annual) return null;
+  const g = historicalGrowth(annualPerShare(financials, metric));
+  if (!g) return <>No growth rate from history: under two years, or a loss year at one end.</>;
+  const use = Math.round(g.rate);
+  return (
+    <>
+      History: <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{g.rate.toFixed(1)}%/yr</span>{' '}
+      {label} per share, {fyLabel(g.from)}–{fyLabel(g.to)}.
+      {use >= 0 && use <= 80 && use !== current && (
+        <button type="button" className={USE_LINK} onClick={() => onUse(use)}>Use {use}%</button>
+      )}
+    </>
+  );
+}
+
+/** What the market pays today for the starting value, as the exit-multiple reference. */
+function MultipleReference({ livePrice, start, ratioAbbr, forwardPE, current, onUse }: {
+  livePrice: number; start: number; ratioAbbr: string; forwardPE?: number;
+  current: number; onUse: (v: number) => void;
+}) {
+  if (!(livePrice > 0) || !(start > 0)) return null;
+  const today = livePrice / start;
+  const use = Math.round(today);
+  return (
+    <>
+      Today: <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{ratioAbbr} {today.toFixed(1)}</span>{' '}
+      (live price ÷ starting value)
+      {forwardPE != null && <> · forward P/E {forwardPE.toFixed(1)} (analysts)</>}.
+      {use >= 1 && use <= 80 && use !== current && (
+        <button type="button" className={USE_LINK} onClick={() => onUse(use)}>Use {use}</button>
+      )}
+    </>
+  );
+}
+
+/**
+ * Yahoo key statistics next to the model: analyst price targets and the P/E
+ * multiples. Targets are quoted in the listing's currency (GBp for London) and
+ * converted into the holding's; with no rate for it they are left out.
+ */
+function MarketView({ stats, livePrice, currency, quoteCurrency, rates }: {
+  stats: MarketStatistics | null | undefined; livePrice: number; currency: string;
+  quoteCurrency: string | null | undefined; rates: Record<string, number>;
+}) {
+  if (!stats) return null;
+  const from = stats.currency ?? quoteCurrency;
+  const to = normalizeCurrency(currency);
+  const fromMajor = from ? normalizeCurrency(from) : null;
+  const hasRate = (c: string) => c === 'EUR' || (rates[c] ?? 0) > 0;
+  const convertible = !!fromMajor && (fromMajor === to || (hasRate(fromMajor) && hasRate(to)));
+  const money = (v: number | undefined) => (v != null && convertible ? convert(v, from, currency, rates) : undefined);
+  const mean = money(stats.targetMeanPrice);
+  const low = money(stats.targetLowPrice);
+  const high = money(stats.targetHighPrice);
+  const upside = mean != null && livePrice > 0 ? ((mean - livePrice) / livePrice) * 100 : undefined;
+  const pe = [
+    stats.trailingPE != null ? `Trailing P/E ${stats.trailingPE.toFixed(1)}` : null,
+    stats.forwardPE != null ? `Forward P/E ${stats.forwardPE.toFixed(1)}` : null,
+  ].filter(Boolean);
+  if (mean == null && !pe.length) return null;
+
+  const strong = 'font-semibold text-slate-900 dark:text-white tabular-nums';
+  return (
+    <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+      <div className="text-[13px] font-bold text-slate-900 dark:text-white mb-1.5">Market view</div>
+      <div className="text-[13px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        {mean != null && (
+          <div>
+            Analyst target <span className={strong}>{formatCurrency(mean, 2, currency)}</span>
+            {upside != null && (
+              <span className={`ml-1 font-semibold ${pnlTextColor(upside)}`}>
+                {upside >= 0 ? '+' : ''}{upside.toFixed(0)}%
+              </span>
+            )}
+            {low != null && high != null && (
+              <> · range {formatCurrency(low, 2, currency)}–{formatCurrency(high, 2, currency)}</>
+            )}
+            {stats.numberOfAnalystOpinions != null && <> · {stats.numberOfAnalystOpinions} analysts</>}
+            {stats.recommendationKey && stats.recommendationKey !== 'none' && (
+              <> · {stats.recommendationKey.replace(/_/g, ' ')}</>
+            )}
+          </div>
+        )}
+        {pe.length > 0 && <div>{pe.join(' · ')}</div>}
+        {stats.updatedAt && <div className="text-[11.5px] text-slate-400 dark:text-slate-500 mt-0.5">Yahoo Finance, {stats.updatedAt}</div>}
+      </div>
     </div>
   );
 }
@@ -301,23 +468,36 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
     setAssumptions(loadAssumptions(holding.ticker));
   }, [holding.ticker]);
 
-  // Net Income is the one metric with a real data source already on hand —
-  // prefill its starting value from the latest annual diluted EPS the first
-  // time this ticker is opened (never overwrites a value the user set).
+  const { data: financials, isLoading: financialsLoading } = useFinancials(holding.ticker);
+  const { data: statistics } = useStatistics(holding.ticker);
+  const refreshFinancials = useRefreshFinancials(holding.ticker);
+  const resetRefresh = refreshFinancials.reset;
+  // one mutation serves every ticker — a "no statements" result must not follow the user to the next one
+  useEffect(() => resetRefresh(), [holding.ticker, resetRefresh]);
+  const rates = useFxRates();
+  const startValues = useMemo(() => deriveStartValues({
+    financials,
+    secEps: fundamentals?.concepts?.epsDiluted,
+    bookCurrency: currency,
+    rates,
+    sharesOutstanding: holding.sharesOutstanding,
+  }), [financials, fundamentals, currency, rates, holding.sharesOutstanding]);
+
+  // Prefill each metric's starting value from the reported figures the first time
+  // they are available — never over a value the user set. A zero/negative figure
+  // (a loss, cash burn) never arrives here: it is no base for a multiple.
   useEffect(() => {
-    const epsSeries = fundamentals?.concepts?.epsDiluted;
-    if (!epsSeries?.length) return;
-    const latest = [...epsSeries].filter((e) => e.form?.startsWith('10-K')).sort((a, b) => a.date.localeCompare(b.date)).pop();
-    // negative/zero EPS (loss-making company) is useless as a multiple base —
-    // prefilling it would persist junk and re-trigger on every visit
-    if (!latest || latest.value <= 0) return;
     setAssumptions((prev) => {
-      if (prev.metrics.net.start > 0) return prev;
-      const next = { ...prev, metrics: { ...prev.metrics, net: { ...prev.metrics.net, start: latest.value } } };
-      saveAssumptions(holding.ticker, next);
+      let next = prev;
+      for (const m of METRICS) {
+        const sv = startValues.values[m.key];
+        if (!sv || prev.metrics[m.key].start > 0) continue;
+        next = { ...next, metrics: { ...next.metrics, [m.key]: { ...next.metrics[m.key], start: roundStart(sv.value) } } };
+      }
+      if (next !== prev) saveAssumptions(holding.ticker, next);
       return next;
     });
-  }, [fundamentals, holding.ticker]);
+  }, [startValues, holding.ticker]);
 
   const updateMetric = (key: MetricKey, patch: Partial<MetricAssumptions>) => {
     setAssumptions((prev) => {
@@ -338,6 +518,7 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
   const div0 = holding.dividend ?? 0;
   const metricMeta = METRICS.find((m) => m.key === metric)!;
   const active = assumptions.metrics[metric];
+  const activeSource = startValues.values[metric];
 
   const series = useMemo(
     () => buildProjection(active.start, active.growth, div0),
@@ -357,7 +538,7 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
             <EmptyState
               icon={CalculatorIcon}
               title={`Enter a starting ${metricMeta.startLabel} to model this stock`}
-              description={`No automated data source for this metric yet — type the latest actual ${metricMeta.startLabel} into the field on the right to run the valuation.`}
+              description={`No reported figure to start from — type the latest actual ${metricMeta.startLabel} into the field on the right to run the valuation.`}
             />
           </div>
         ) : (
@@ -422,24 +603,41 @@ function ValuationTab({ holding, currency }: { holding: Holding; currency: strin
             value={active.start}
             onCommit={(v) => updateMetric(metric, { start: v })}
           />
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1.5">
-            {metric === 'net'
-              ? 'Prefilled from the latest annual diluted EPS (SEC EDGAR) — edit freely.'
-              : 'Manual entry — no automated data source for this metric yet.'}
-          </p>
+          <StartValueSource
+            source={activeSource}
+            start={active.start}
+            currency={currency}
+            label={metricMeta.label}
+            ticker={holding.ticker}
+            hasFinancials={Boolean(financials)}
+            loading={financialsLoading}
+            currencyIssue={startValues.currencyIssue}
+            refreshing={refreshFinancials.isPending}
+            refreshFailed={refreshFinancials.isError || (refreshFinancials.isSuccess && !refreshFinancials.data)}
+            onRefresh={() => refreshFinancials.mutate()}
+            onUseLatest={(v) => updateMetric(metric, { start: v })}
+          />
         </div>
 
         <div className="flex flex-col gap-6">
           <Stepper color={metricMeta.color} label={`${metricMeta.label} YoY Growth Rate`}
             value={active.growth} onChange={(v) => updateMetric(metric, { growth: v })} min={0} max={80} suffix="%"
-            hint={`${active.growth}% estimated ${metricMeta.label} growth rate.`} />
+            hint={`${active.growth}% estimated ${metricMeta.label} growth rate.`}
+            reference={<GrowthReference financials={financials} metric={metric} label={metricMeta.label}
+              current={active.growth} onUse={(v) => updateMetric(metric, { growth: v })} />} />
           <Stepper color={metricMeta.color} label={`${metricMeta.ratioAbbr} Ratio at Sale`}
             value={active.ratio} onChange={(v) => updateMetric(metric, { ratio: v })} min={1} max={80}
-            hint={`${active.ratio} ${metricMeta.ratioAbbr} ratio assumed at the ${HORIZON}-year exit.`} />
+            hint={`${active.ratio} ${metricMeta.ratioAbbr} ratio assumed at the ${HORIZON}-year exit.`}
+            reference={<MultipleReference livePrice={livePrice} start={active.start} ratioAbbr={metricMeta.ratioAbbr}
+              forwardPE={metric === 'net' ? statistics?.forwardPE : undefined}
+              current={active.ratio} onUse={(v) => updateMetric(metric, { ratio: v })} />} />
           <Stepper color="#64748B" label="Target Rate of Return"
             value={assumptions.targetReturn} onChange={updateTargetReturn} min={1} max={40} suffix="%"
             hint={`Discount future value back at ${assumptions.targetReturn}%/yr to get intrinsic value. Shared across all metrics.`} />
         </div>
+
+        <MarketView stats={statistics} livePrice={livePrice} currency={currency}
+          quoteCurrency={holding.quoteCurrency} rates={rates} />
       </div>
     </div>
   );
@@ -481,7 +679,141 @@ function buildFinancialTable(concepts: Record<string, FundamentalEntry[]>) {
   };
 }
 
+/** Fiscal years Yahoo reports for the ticker (the income statement's period ends). */
+function fiscalYears(f: YahooFinancials | null | undefined) {
+  return new Set(Object.values(f?.annual?.income ?? {}).flat().map((e) => e.date)).size;
+}
+
+const compactCount = (v: number) =>
+  new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(v);
+
+function formatHistoryValue(row: HistoryRow, v: number | undefined, currency: string) {
+  if (v == null) return '—';
+  if (row.unit === 'percent') return `${v.toFixed(1)}%`;
+  if (row.unit === 'count') return compactCount(v);
+  return formatCurrency(v, 2, currency);
+}
+
+/** Per-share history of every model metric, in the reporting currency. */
+function PerShareHistoryChart({ financials, currency, isDark }: {
+  financials: YahooFinancials; currency: string; isDark: boolean;
+}) {
+  const data = useMemo(() => {
+    const byDate = new Map<string, Record<string, number | string>>();
+    for (const m of METRICS) {
+      for (const p of annualPerShare(financials, m.key)) {
+        byDate.set(p.date, { ...byDate.get(p.date), date: p.date, year: fyLabel(p.date), [m.key]: p.value });
+      }
+    }
+    return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  }, [financials]);
+
+  const tooltipStyle = isDark
+    ? { background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: 13, color: '#f1f5f9' }
+    : { background: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: 13 };
+
+  if (data.length < 2) {
+    return <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-12">Not enough fiscal years to chart yet.</p>;
+  }
+  return (
+    <>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+        {METRICS.map((m) => (
+          <span key={m.key} className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: m.color }} />
+            {m.label}
+          </span>
+        ))}
+      </div>
+      <div className="h-[260px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#334155' : '#e2e8f0'} />
+            <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }}
+              tickFormatter={(v: number) => formatCurrency(v, 0, currency)} />
+            <Tooltip
+              contentStyle={tooltipStyle}
+              formatter={(value: number, name: string) => [formatCurrency(value, 2, currency), `${name} / share`]}
+            />
+            {METRICS.map((m) => (
+              <Line key={m.key} type="monotone" dataKey={m.key} name={m.label} stroke={m.color}
+                strokeWidth={2} dot={{ r: 3 }} connectNulls />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </>
+  );
+}
+
+/** Historicals from Yahoo's statements — any listing, not only US filers. */
+function YahooHistoricals({ ticker, financials }: { ticker: string; financials: YahooFinancials }) {
+  const { dark } = useTheme();
+  const reporting = financials.currency ?? '';
+  const { columns, rows } = useMemo(() => historyTable(financials, 3), [financials]);
+  const currencyNote = reporting ? `${reporting}, as reported` : 'currency not reported';
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-5">
+        <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Per-share history</div>
+        <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-3.5">
+          Yahoo Finance · fiscal years · {ticker} · {currencyNote}
+        </div>
+        <PerShareHistoryChart financials={financials} currency={reporting} isDark={dark} />
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="px-4.5 pt-4 pb-3">
+          <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Financial history</div>
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Fiscal year · per share · {currencyNote}</div>
+        </div>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-t border-slate-100 dark:border-slate-700">
+              <th className="text-left px-4.5 py-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">Metric</th>
+              {columns.map((c) => (
+                <th key={c.label} title={`Period ending ${c.date}`}
+                  className="text-right px-2.5 py-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => {
+              const groupStart = ri > 0 && r.unit === 'percent' && rows[ri - 1].unit !== 'percent';
+              return (
+                <tr key={r.label} className={groupStart
+                  ? 'border-t-2 border-slate-100 dark:border-slate-700'
+                  : 'border-t border-slate-50 dark:border-slate-800'}>
+                  <td className="px-4.5 py-2 text-[13px] text-slate-700 dark:text-slate-300 whitespace-nowrap">{r.label}</td>
+                  {r.values.map((v, i) => (
+                    <td key={i} className={`px-2.5 py-2 text-right text-[13px] tabular-nums whitespace-nowrap ${
+                      i === r.values.length - 1
+                        ? 'font-semibold text-slate-900 dark:text-white'
+                        : 'font-medium text-slate-500 dark:text-slate-400'}`}>
+                      {formatHistoryValue(r, v, reporting)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string }) {
+  const { data: financials, isLoading } = useFinancials(ticker);
+  if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (financials && fiscalYears(financials) > 0) return <YahooHistoricals ticker={ticker} financials={financials} />;
+  return <SecHistoricals ticker={ticker} currency={currency} />;
+}
+
+/** No Yahoo statements stored: the SEC EDGAR view (US filers only). */
+function SecHistoricals({ ticker, currency }: { ticker: string; currency: string }) {
   const { data, isLoading } = useFundamentals(ticker);
 
   if (isLoading) return <div className="flex justify-center py-12"><Spinner /></div>;
@@ -552,6 +884,19 @@ function HistoricalsTab({ ticker, currency }: { ticker: string; currency: string
   );
 }
 
+/** "Historicals loaded · 5 fiscal years" beside the picker, as in the mockup. */
+function HistoricalsStatus({ ticker }: { ticker: string }) {
+  const { data: financials, isLoading } = useFinancials(ticker);
+  if (isLoading) return null;
+  const years = fiscalYears(financials);
+  return (
+    <div className="inline-flex items-center gap-2 text-[12px] text-slate-500 dark:text-slate-400">
+      <span className={`w-[7px] h-[7px] rounded-full ${years ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+      {years ? `Historicals loaded · ${years} fiscal year${years === 1 ? '' : 's'}` : 'No Yahoo historicals yet'}
+    </div>
+  );
+}
+
 // ---------- PAGE ----------
 export default function StockValuationPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
@@ -604,6 +949,7 @@ export default function StockValuationPage() {
 
       <div className="flex flex-wrap items-center gap-4">
         <HoldingSelector holdings={stockHoldings} holding={holding} currency={currency} onSelect={setTicker} />
+        <HistoricalsStatus ticker={holding.ticker} />
         <div className="flex-1" />
         <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 p-1 gap-0.5">
           {(['Valuation', 'Historicals'] as const).map((tb) => (

@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  getFinancials,
   getHistoricalData,
   getMarketData,
   getStatistics,
+  refreshFinancials,
   refreshHistoricalData,
   refreshStatistics,
 } from '../api/marketData';
@@ -30,6 +32,26 @@ export function useRefreshStatistics(ticker: string) {
     mutationFn: () => refreshStatistics(ticker),
     onSuccess: (data) => {
       qc.setQueryData(['marketStatistics', ticker], data);
+    },
+  });
+}
+
+export function useFinancials(ticker: string | null) {
+  return useQuery({
+    queryKey: ['yahooFinancials', ticker],
+    queryFn: () => getFinancials(ticker!),
+    enabled: Boolean(ticker),
+    staleTime: 60 * 60 * 1000, // statements move once a quarter
+  });
+}
+
+/** Yahoo statements refresh — on demand, for a ticker the regular update has not reached yet. */
+export function useRefreshFinancials(ticker: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => refreshFinancials(ticker),
+    onSuccess: (data) => {
+      qc.setQueryData(['yahooFinancials', ticker], data);
     },
   });
 }

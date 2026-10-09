@@ -26,6 +26,11 @@ export interface MarketStatistics {
   // Fiscal year
   fiscalYearEnd?: string;
   mostRecentQuarter?: string;
+  /**
+   * Currency of the statement figures (revenue, grossProfit, ebitda, cash flow, totalCash…).
+   * Not the quote currency: ULVR.L is quoted in GBp and reports in EUR.
+   */
+  financialCurrency?: string;
 
   // Profitability
   profitMargin?: number;
@@ -155,4 +160,38 @@ export interface TickerHistoricalData {
   dividends: DividendEvent[];
   splits: SplitEvent[];
   sharesHistory: SharesHistoryEntry[];
+}
+
+/** One period of a statement line item. */
+export interface StatementEntry {
+  /** Period end, 'YYYY-MM-DD'. */
+  date: string;
+  value: number;
+}
+
+/** Line-item key (TotalRevenue, GrossProfit, FreeCashFlow, …) → date-ascending series. */
+export type Statement = Record<string, StatementEntry[]>;
+
+export interface Statements {
+  income?: Statement | null;
+  /** Annual only — Yahoo has no trailing balance sheet. */
+  balanceSheet?: Statement | null;
+  cashFlow?: Statement | null;
+}
+
+/**
+ * Yahoo financial statements (yahooFinancials), every line item Yahoo publishes.
+ * All amounts are in `currency`, the company's **reporting** currency — not the
+ * quote currency, so convert before comparing with a price.
+ */
+export interface YahooFinancials {
+  ticker: string;
+  /** Yahoo's financialCurrency; null when Yahoo did not say. */
+  currency: string | null;
+  /** Last 4–5 fiscal years. */
+  annual?: Statements | null;
+  /** Trailing twelve months, one period per item. Yahoo leaves gaps (no TTM DilutedEPS for MSFT). */
+  trailing?: Statements | null;
+  updatedAt?: string;
+  checkedAt?: string;
 }

@@ -27,6 +27,8 @@ interface Payment {
   /** amount converted to the portfolio's base currency */
   baseAmount: number;
   currency: string;
+  /** projected from last year's pattern — nothing declared for it yet */
+  scheduled: boolean;
 }
 
 interface MonthBucket {
@@ -87,6 +89,9 @@ function MonthSection({ month, year, currentYear, money }: {
   money: (value: number, currency?: string, decimals?: number) => string;
 }) {
   const count = month.payments.length;
+  // This month mixes both kinds: what already went ex, and what is still due
+  // later in the month off last year's pattern.
+  const scheduledCount = month.payments.filter((p) => p.scheduled).length;
   return (
     <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <div
@@ -95,18 +100,20 @@ function MonthSection({ month, year, currentYear, money }: {
         }`}
       >
         <span className="text-[13.5px] font-bold text-slate-900 dark:text-white">{month.label}</span>
-        {month.current ? (
+        {month.current && (
           <span className="text-[9.5px] font-bold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/20">
             This month
           </span>
-        ) : !month.paid && count ? (
+        )}
+        {!month.paid && scheduledCount > 0 && (
           <span className="text-[9.5px] font-bold uppercase tracking-[0.06em] rounded px-1.5 py-px text-slate-500 dark:text-slate-400 border border-dashed border-slate-300 dark:border-slate-600">
             Scheduled
           </span>
-        ) : null}
+        )}
         {count > 0 && (
           <span className="text-[11.5px] text-slate-400 dark:text-slate-500 tabular-nums">
             {count} payment{count !== 1 ? 's' : ''}
+            {month.current && scheduledCount > 0 && scheduledCount < count && ` · ${scheduledCount} scheduled`}
           </span>
         )}
         <div className="flex-1" />
@@ -122,7 +129,7 @@ function MonthSection({ month, year, currentYear, money }: {
             <PaymentCard
               key={`${payment.ticker}-${idx}`}
               payment={payment}
-              paid={month.paid || month.current}
+              paid={!payment.scheduled && (month.paid || month.current)}
               money={money}
             />
           ))}
@@ -259,7 +266,15 @@ export default function DividendCalendarPage() {
     const currency = normalizeCurrency(quoted ?? fallback);
     const shares = entry.stockQuantity ?? 0;
     const amount = perShare * shares;
-    return { ticker, perShare, shares, amount, baseAmount: toBase(amount, currency), currency };
+    return {
+      ticker,
+      perShare,
+      shares,
+      amount,
+      baseAmount: toBase(amount, currency),
+      currency,
+      scheduled: entry.scheduled ?? false,
+    };
   };
 
   const bucketsOf = (calendar: DividendCalendarData | undefined, forYear: number): MonthBucket[] =>
@@ -298,7 +313,7 @@ export default function DividendCalendarPage() {
   const caption = isFutureYear
     ? 'Projected · trailing payment pattern at today’s rate and today’s holdings'
     : isCurrentYear
-      ? 'Paid to date · remaining months scheduled from last year’s payment pattern'
+      ? 'Paid to date · payments still due scheduled from last year’s payment pattern'
       : 'Closed year · payments valued on the shares held on each ex-date';
 
   const yearSelector = (

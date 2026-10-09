@@ -1,5 +1,5 @@
 import apiClient, { PROVIDER_TIMEOUT_MS, SEC_TIMEOUT_MS } from './client';
-import type { MarketData, MarketStatistics, TickerHistoricalData } from '../types/marketData';
+import type { MarketData, MarketStatistics, TickerHistoricalData, YahooFinancials } from '../types/marketData';
 
 export async function getMarketData(ticker: string): Promise<MarketData> {
   const response = await apiClient.get<MarketData>(`/market-data/${ticker}`);
@@ -22,6 +22,28 @@ export async function getStatistics(ticker: string): Promise<MarketStatistics | 
 export async function refreshStatistics(ticker: string): Promise<MarketStatistics | null> {
   const response = await apiClient.post<MarketStatistics | { status: string }>(
     `/market-data/${ticker}/statistics/refresh`,
+    undefined,
+    { timeout: PROVIDER_TIMEOUT_MS },
+  );
+  return 'status' in response.data ? null : response.data;
+}
+
+/** null until a Yahoo update has stored statements for the ticker (404). */
+export async function getFinancials(ticker: string): Promise<YahooFinancials | null> {
+  try {
+    const response = await apiClient.get<YahooFinancials>(`/market-data/${ticker}/financials`);
+    return response.data;
+  } catch (e) {
+    const err = e as { response?: { status?: number } };
+    if (err.response?.status === 404) return null;
+    throw e;
+  }
+}
+
+/** Fetches fresh statements from Yahoo server-side; resolves to null when Yahoo had none. */
+export async function refreshFinancials(ticker: string): Promise<YahooFinancials | null> {
+  const response = await apiClient.post<YahooFinancials | { status: string }>(
+    `/market-data/${ticker}/financials/refresh`,
     undefined,
     { timeout: PROVIDER_TIMEOUT_MS },
   );

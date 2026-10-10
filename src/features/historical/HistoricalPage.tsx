@@ -60,6 +60,37 @@ function median(values: number[]): number {
 // ---------- YEARLY AGGREGATION ----------
 interface YearRow { year: number; count: number; total: number; partial: boolean; yoy: number | null }
 
+/** Finished years that vote on the usual payment count — see usualCadence. */
+const CADENCE_WINDOW_YEARS = 5;
+
+/**
+ * The ticker's usual payments per year: the most common count among the last
+ * CADENCE_WINDOW_YEARS finished years (the running year never votes), a tie
+ * going to the higher count. Not the maximum — one stray extra payment (KO's
+ * 2001 holds a fifth, a pre-split duplicate from Yahoo) made every normal year
+ * read as short, so all of them went partial and the growth columns blank.
+ * Same rule as AiTickerAssembler.usualCadence.
+ */
+function usualCadence(counts: Map<number, number>, currentYear: number): number {
+  const finished = [...counts.entries()]
+    .filter(([y]) => y < currentYear)
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, CADENCE_WINDOW_YEARS)
+    .map(([, c]) => c);
+  const votes = finished.length ? finished : [...counts.values()];
+  const tally = new Map<number, number>();
+  votes.forEach((c) => tally.set(c, (tally.get(c) ?? 0) + 1));
+  let cadence = 0;
+  let most = 0;
+  tally.forEach((n, c) => {
+    if (n > most || (n === most && c > cadence)) {
+      cadence = c;
+      most = n;
+    }
+  });
+  return cadence;
+}
+
 /**
  * Per-year dividend totals. A year holding fewer payments than the ticker's usual
  * cadence is INCOMPLETE — the year in progress, or the first year of a policy —
@@ -76,9 +107,8 @@ function aggregateYears(payments: DividendEvent[]): YearRow[] {
     byYear.set(y, row);
   });
 
-  const counts = [...byYear.values()].map((r) => r.count);
-  const cadence = counts.length ? Math.max(...counts) : 0;
   const currentYear = new Date().getFullYear();
+  const cadence = usualCadence(new Map([...byYear].map(([y, r]) => [y, r.count])), currentYear);
 
   const rows: YearRow[] = [...byYear.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -305,13 +335,138 @@ function DividendChart({ series, splits, currency }: {
   );
 }
 
+// ---------- SHARE BASIS ----------
+interface AdjustedShares extends SharesHistoryEntry {
+  /** the count as filed */
+  reported: number;
+  /** multiplier applied to reach today's basis; 1 = filed in it already */
+  factor: number;
+  /** fits its neighbours in no share basis — a junk filing, left off the chart */
+  outlier: boolean;
+}
+
 /**
- * Share count over time. The series is SPARSE — a point exists only where the
- * count changed — so the line steps and holds; interpolating would invent a
- * gradual trend that never happened. Dots mark the real filings.
+ * Below this a filed count is a placeholder or a sign error, never a share count:
+ * SEC carries 0 (KO, NEE, MRK), 1 (ICE's 2013 holding-company shell, four
+ * filings running), 100 and 1,000 (pre-listing shells) and OXY's −891M. Kept low
+ * on purpose — ALLY's real 2009 count is 799,120 shares before its 310:1 split.
+ */
+const MIN_PLAUSIBLE_SHARES = 10_000;
+/** A jump costs at most this much, so a junk filing cannot cost more than one bad step. */
+const SHARE_JUMP_CAP = Math.log(1.5);
+/** Leaving one point out — just under one capped jump, so junk is dropped, not routed around. */
+const SHARE_SKIP_COST = 0.8 * SHARE_JUMP_CAP;
+/** Reading a filed count as thousands: only when its neighbours clearly say so. */
+const THOUSANDS_PENALTY = 0.05;
+/** Counts under this may have been filed in thousands (they would be < 100B shares). */
+const THOUSANDS_BELOW = 1e8;
+/** Tie-break toward the raw (pre-split) reading when nothing else decides. */
+const RESTATED_PENALTY = 1e-6;
+
+/**
+ * Share counts restated in today's share basis, so a split no longer reads as
+ * issuance: KO's 2012 2:1 showed as +85.7% since 2009 when buybacks had cut the
+ * count ~7%. Dividends arrive from Yahoo back-scaled the same way, so both
+ * sections now speak one basis.
+ *
+ * A point does NOT simply take every later split. SEC keeps the latest filing
+ * per date, and a balance sheet filed after a split restates its prior-period
+ * comparative, so restated and raw points interleave: GOOGL 2021-09-30 665M,
+ * 2021-12-31 13,242M (already ×20), 2022-03-31 659M. Each point may be restated
+ * through any of the splits after it, so its candidate factors are the products
+ * of the newest-first suffixes of those splits (×20 raw, ×1 restated). The
+ * path through the candidates with the smallest total log jump wins (Viterbi):
+ * counts drift a few percent a year while a wrong basis is off by a whole split
+ * ratio.
+ *
+ * SEC also carries junk, handled on the same path:
+ * - counts filed in thousands (AAPL 2014-03-29 861,745; C 2009 22.9M for 22.9B;
+ *   AWR, CMG, AWK) get each candidate ×1000 as well, at THOUSANDS_PENALTY;
+ * - one-off wrong facts (ROL 2016-03-09 at the pre-split level a year after its
+ *   split, MA's 2009–10 cover pages counting class A alone) are skipped at SHARE_SKIP_COST and
+ *   their neighbours linked directly. Capping jumps alone is not enough: ROL's
+ *   junk point made rescaling all earlier history by 1.5 (one jump) cheaper
+ *   than the two jumps around it;
+ * - anything under MIN_PLAUSIBLE_SHARES never enters the path.
+ * Skipped and implausible points come back flagged `outlier`.
+ */
+function splitAdjustShares(all: SharesHistoryEntry[], splits: SplitEvent[]): AdjustedShares[] {
+  const points = all
+    .filter((p) => p.shares >= MIN_PLAUSIBLE_SHARES)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const n = points.length;
+  const asOutlier = (p: SharesHistoryEntry): AdjustedShares =>
+    ({ date: p.date, shares: p.shares, reported: p.shares, factor: 1, outlier: true });
+  if (n === 0) return all.map(asOutlier);
+  const ordered = splits
+    .filter((s) => s.ratioSplit > 0)
+    .sort((a, b) => a.splitDate.localeCompare(b.splitDate));
+
+  // options[i]: restated through none of the later splits (first, the raw reading) … all
+  // of them (×1), then the same again ×1000 when the count may have been filed in thousands.
+  // A split dated on the point's own day counts as already applied — same rule as share accumulation.
+  const options = points.map((p) => {
+    const later = ordered.filter((s) => s.splitDate > p.date);
+    const basis = [...later.map((_, k) => later.slice(k).reduce((f, s) => f * s.ratioSplit, 1)), 1]
+      .map((factor, k) => ({ factor, penalty: k * RESTATED_PENALTY }));
+    return p.shares < THOUSANDS_BELOW
+      ? [...basis, ...basis.map((o) => ({ factor: o.factor * 1000, penalty: o.penalty + THOUSANDS_PENALTY }))]
+      : basis;
+  });
+  const value = (i: number, k: number) => points[i].shares * options[i][k].factor;
+  const jump = (a: number, b: number) => Math.min(Math.abs(Math.log(a / b)), SHARE_JUMP_CAP);
+
+  // cost[i][k]: cheapest path ending on point i read with option k;
+  // from[i][k]: the kept point before it (i-1, or i-2 when i-1 is skipped), null at the start
+  const cost: number[][] = [];
+  const from: ([number, number] | null)[][] = [];
+  for (let i = 0; i < n; i++) {
+    cost.push([]);
+    from.push([]);
+    options[i].forEach((option, k) => {
+      // a path may start here, or here with point 0 skipped
+      let best = i === 0 ? 0 : i === 1 ? SHARE_SKIP_COST : Infinity;
+      let src: [number, number] | null = null;
+      for (const [p, extra] of [[i - 1, 0], [i - 2, SHARE_SKIP_COST]] as const) {
+        if (p < 0) continue;
+        cost[p].forEach((c, j) => {
+          const total = c + extra + jump(value(p, j), value(i, k));
+          if (total < best) { best = total; src = [p, j]; }
+        });
+      }
+      cost[i].push(best + option.penalty);
+      from[i].push(src);
+    });
+  }
+
+  // the path may also end with the last point skipped
+  let at: [number, number] | null = [n - 1, cost[n - 1].indexOf(Math.min(...cost[n - 1]))];
+  if (n > 1) {
+    const prevBest = Math.min(...cost[n - 2]);
+    if (prevBest + SHARE_SKIP_COST < cost[n - 1][at[1]]) at = [n - 2, cost[n - 2].indexOf(prevBest)];
+  }
+  const kept = new Map<number, number>();
+  while (at) {
+    kept.set(at[0], at[1]);
+    at = from[at[0]][at[1]];
+  }
+
+  const fitted = new Map<SharesHistoryEntry, AdjustedShares>(points.map((p, i) => {
+    const k = kept.get(i);
+    const factor = options[i][k ?? 0].factor;
+    return [p, { date: p.date, shares: p.shares * factor, reported: p.shares, factor, outlier: k === undefined }];
+  }));
+  return all.map((p) => fitted.get(p) ?? asOutlier(p));
+}
+
+/**
+ * Share count over time, in today's share basis (see splitAdjustShares). The
+ * series is SPARSE — a point exists only where the count changed — so the line
+ * steps and holds; interpolating would invent a gradual trend that never
+ * happened. Dots mark the real filings.
  */
 function SharesChart({ points, splits, falling }: {
-  points: SharesHistoryEntry[]; splits: SplitEvent[]; falling: boolean;
+  points: AdjustedShares[]; splits: SplitEvent[]; falling: boolean;
 }) {
   const { dark } = useTheme();
   const tooltip = useTooltipProps();
@@ -350,7 +505,13 @@ function SharesChart({ points, splits, falling }: {
         <Tooltip
           {...tooltip}
           labelFormatter={(d: string) => fmtDay(d)}
-          formatter={(v: number) => [v.toLocaleString('en-US'), 'Shares']}
+          formatter={(v: number, _name, item: { payload?: AdjustedShares }) => {
+            const p = item.payload;
+            const filed = p && p.factor !== 1
+              ? ` · filed ${p.reported.toLocaleString('en-US')} ×${+p.factor.toFixed(4)}`
+              : '';
+            return [Math.round(v).toLocaleString('en-US'), `Shares${filed}`];
+          }}
         />
         {markers.map((mk) => (
           <ReferenceLine
@@ -394,7 +555,15 @@ export default function HistoricalPage() {
   const allDividends = data?.dividends ?? [];
   const splits = data?.splits ?? [];
   const dividends = allDividends.filter((d) => msOf(d.dividendDate) >= cutoff);
-  const sharesHistory = (data?.sharesHistory ?? []).filter((p) => msOf(p.date) >= cutoff);
+  // restated on the whole series first — a point's basis is read off its neighbours, range or not
+  const adjustedShares = useMemo(
+    () => splitAdjustShares(data?.sharesHistory ?? [], data?.splits ?? []),
+    [data?.sharesHistory, data?.splits],
+  );
+  const sharesInRange = adjustedShares.filter((p) => msOf(p.date) >= cutoff);
+  const sharesHistory = sharesInRange.filter((p) => !p.outlier);
+  const outlierShares = sharesInRange.filter((p) => p.outlier);
+  const adjustedCount = sharesHistory.filter((p) => p.factor !== 1).length;
 
   const divSeries = useMemo(() => buildDividendBars(dividends), [dividends]);
   const years = useMemo(() => aggregateYears(allDividends), [allDividends]);
@@ -422,7 +591,9 @@ export default function HistoricalPage() {
   const shareChange = sharesHistory.length > 1
     ? (sharesHistory[sharesHistory.length - 1].shares / sharesHistory[0].shares - 1) * 100
     : null;
-  const shareLabel = active.assetType === 'CRYPTO' ? 'Circulating supply' : 'Shares outstanding';
+  // crypto's series is live circulating-supply snapshots; a stock's is SEC filings only
+  const isCrypto = active.assetType === 'CRYPTO';
+  const shareLabel = isCrypto ? 'Circulating supply' : 'Shares outstanding';
   const cumulativeFrom = (i: number) => splits.slice(i).reduce((f, s) => f * s.ratioSplit, 1);
 
   return (
@@ -694,7 +865,8 @@ export default function HistoricalPage() {
               sub={
                 histLoading ? 'loading…'
                   : sharesHistory.length === 0 ? 'not available for this listing'
-                    : `${sharesHistory.length} reported changes · ${yearOf(sharesHistory[0].date)} → ${yearOf(sharesHistory[sharesHistory.length - 1].date)}`
+                    : `${sharesHistory.length} ${isCrypto ? 'reported changes' : 'SEC filings'} · ${yearOf(sharesHistory[0].date)} → ${yearOf(sharesHistory[sharesHistory.length - 1].date)}`
+                      + (adjustedCount > 0 ? ' · split-adjusted' : '')
               }
               right={!histLoading && shareChange != null ? (
                 <span className={`rounded-md px-2.5 py-1 text-[12.5px] font-bold tabular-nums ${
@@ -719,9 +891,28 @@ export default function HistoricalPage() {
                     <SharesChart points={sharesHistory} splits={splits} falling={(shareChange ?? 0) <= 0} />
                   </div>
                   <Note>
-                    Sparse by design — a point exists only where the count changed ({sharesHistory.length} in{' '}
+                    {isCrypto
+                      ? 'Sparse by design — a point exists only where the supply changed'
+                      : 'SEC filings only, no live quotes mixed in — one point per filing'}{' '}
+                    ({sharesHistory.length} in{' '}
                     {Math.max(1, yearOf(sharesHistory[sharesHistory.length - 1].date) - yearOf(sharesHistory[0].date))} years).
-                    The line steps and holds; dots mark real filings. Flat stretches mean "no reported change", not "no data".
+                    The line steps and holds; dots mark the {isCrypto ? 'recorded changes' : 'filings'}.
+                    Flat stretches mean &quot;no reported change&quot;, not &quot;no data&quot;.
+                    {adjustedCount > 0 && (
+                      <>
+                        {' '}Counts are in today&apos;s share basis: {adjustedCount} pre-split{' '}
+                        {adjustedCount === 1 ? 'filing is' : 'filings are'} multiplied by the splits after{' '}
+                        {adjustedCount === 1 ? 'it' : 'them'}, so a split does not read as issuance. A filing that
+                        already restated its figures is left as filed; the tooltip shows the count as filed.
+                      </>
+                    )}
+                    {outlierShares.length > 0 && (
+                      <>
+                        {' '}Left out: {outlierShares.map((p) => `${fmtDay(p.date)} (${fmtShares(p.reported)})`).join(', ')}
+                        {' '}— {outlierShares.length === 1 ? 'a filing' : 'filings'} that fit no share basis next to{' '}
+                        {outlierShares.length === 1 ? 'its' : 'their'} neighbours.
+                      </>
+                    )}
                   </Note>
                 </>
               )}

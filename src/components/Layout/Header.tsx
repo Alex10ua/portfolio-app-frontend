@@ -34,7 +34,7 @@ function usePageTitle(): { title: string; subtitle: string } {
   if (!portfolioId || path === '/') return { title: 'All Portfolios', subtitle: `${portfolios.length} portfolio${portfolios.length !== 1 ? 's' : ''}` };
   if (path.endsWith('/transactions'))    return { title: 'Transactions',       subtitle: name };
   if (path.endsWith('/dividends'))       return { title: 'Dividends',          subtitle: name };
-  if (path.endsWith('/dividend-calendar')) return { title: 'Dividend Calendar', subtitle: name };
+  if (path.endsWith('/dividend-calendar')) return { title: 'Dividend Calendar', subtitle: `${name} · every payment, month by month` };
   if (path.endsWith('/diversification')) return { title: 'Diversification',    subtitle: name };
   if (path.endsWith('/performance'))     return { title: 'Performance',        subtitle: name };
   if (path.endsWith('/custom-assets'))   return { title: 'Custom Assets',      subtitle: name };

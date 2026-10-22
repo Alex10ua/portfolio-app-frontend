@@ -1,207 +1,128 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CalendarDays } from 'lucide-react';
-import StockLogo from '../../components/ui/StockLogo';
-import { useDividendCalendar } from '../../hooks/useDividendCalendar';
-import { useHoldings, useFirstTradeYear } from '../../hooks/useHoldings';
-import { useDividends } from '../../hooks/useDividends';
-import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
-import { looksLikePenceQuote, normalizeCurrency, toMajorUnits } from '../../lib/currency';
+import { CalendarDays, Check, Inbox, Info } from 'lucide-react';
+import Chip from '../../components/ui/Chip';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
-import type { DividendCalendarEntry, DividendCalendarData } from '../../types/dividendCalendar';
+import { useDividendCalendar } from '../../hooks/useDividendCalendar';
+import { useDividendReceipts, useSaveDividendReceipt } from '../../hooks/useDividendReceipts';
+import { useHoldings, useFirstTradeYear } from '../../hooks/useHoldings';
+import { usePortfolioCurrency } from '../../hooks/usePortfolioCurrency';
+import { looksLikePenceQuote, normalizeCurrency, toMajorUnits } from '../../lib/currency';
+import { parseLocalDate } from '../../lib/dates';
+import { cn } from '../../lib/cn';
+import CalendarRow, { formatWeekdayDate } from './CalendarRow';
+import {
+  GRACE_DAYS, NO_PAY_DATE_GRACE_DAYS, STATUSES, STATUS_LABEL,
+  addDays, matchReceipts, naturalState, stateOf, toggledOverride, withholdingDefault,
+  type CalendarPayment, type StatusFilter,
+} from './calendarMath';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-interface Payment {
-  ticker: string;
-  /** dividend per share, already in the major unit of `currency` */
-  perShare: number;
-  shares: number;
-  /** native amount, i.e. perShare × shares */
-  amount: number;
-  /** amount converted to the portfolio's base currency */
-  baseAmount: number;
-  currency: string;
-  /** projected from last year's pattern — nothing declared for it yet */
-  scheduled: boolean;
-}
+type Money = (value: number, currency?: string, decimals?: number) => string;
 
-interface MonthBucket {
+interface MonthGroup {
   index: number;
   label: string;
-  short: string;
-  payments: Payment[];
-  /** base-currency total for the month */
+  /** every payment listed under the month, sorted by pay date */
+  rows: CalendarPayment[];
+  /** the rows the status filter lets through */
+  visible: CalendarPayment[];
+  /** base-currency totals */
   total: number;
-  /** already paid — a closed year, or a month before this one */
-  paid: boolean;
+  received: number;
   current: boolean;
 }
 
-/** One payer, in its own quote currency — per-row figures are never converted. */
-function PaymentCard({ payment, paid, money }: {
-  payment: Payment;
-  paid: boolean;
-  money: (value: number, currency?: string, decimals?: number) => string;
-}) {
+function TodayLine({ today }: { today: Date }) {
   return (
-    <div
-      className={`flex items-center gap-3 rounded-lg px-3.5 py-2.5 bg-white dark:bg-slate-800 border transition-colors hover:border-indigo-400 ${
-        paid
-          ? 'border-slate-200 dark:border-slate-700'
-          : 'border-dashed border-slate-300 dark:border-slate-600 opacity-75'
-      }`}
-    >
-      <StockLogo ticker={payment.ticker} size="lg" />
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-slate-900 dark:text-white truncate">{payment.ticker}</p>
-        <p className="text-[11.5px] text-slate-500 dark:text-slate-400 tabular-nums">
-          {formatShares(payment.shares)} {payment.shares === 1 ? 'share' : 'shares'} @{' '}
-          {money(payment.perShare, payment.currency, 2)}
-        </p>
-      </div>
-      <p
-        className={`text-[13.5px] font-bold tabular-nums shrink-0 ${
-          paid ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400'
-        }`}
-      >
-        {money(payment.amount, payment.currency, 2)}
-      </p>
+    <div className="flex h-[22px] items-center gap-2">
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-600 dark:bg-indigo-300" />
+      <span className="whitespace-nowrap text-[10.5px] font-bold uppercase tracking-[0.06em] text-indigo-600 dark:text-indigo-300">
+        Today · {formatWeekdayDate(today)}
+      </span>
+      <span className="h-px flex-1 bg-indigo-600/40 dark:bg-indigo-300/40" />
     </div>
   );
 }
 
-/** Share counts come off ex-date maths, so they are fractional more often than not. */
-function formatShares(shares: number): string {
-  const rounded = Math.round(shares * 10000) / 10000;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(4).replace(/0+$/, '');
+/** Received / expected, in the portfolio's base currency. */
+function MonthChip({ month, money }: { month: MonthGroup; money: Money }) {
+  const some = month.received > 0;
+  return (
+    <span
+      title="Received / expected this month"
+      className={cn(
+        'inline-flex items-center gap-[5px] whitespace-nowrap rounded-full border px-2.5 py-[3px] text-[12px] font-bold tabular-nums',
+        some
+          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+          : 'border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-400/10',
+      )}
+    >
+      <Check
+        className={cn('h-3 w-3', some ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400')}
+        strokeWidth={3}
+      />
+      <span className={some ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}>
+        {money(month.received)}
+      </span>
+      <span className="font-semibold text-slate-500 dark:text-slate-400">/ {money(month.total)}</span>
+    </span>
+  );
 }
 
-function MonthSection({ month, year, currentYear, money }: {
-  month: MonthBucket;
+function MonthBlock({ month, year, today, popped, money, onToggle, onSaveRate }: {
+  month: MonthGroup;
   year: number;
-  currentYear: number;
-  money: (value: number, currency?: string, decimals?: number) => string;
+  today: Date;
+  popped: string | null;
+  money: Money;
+  onToggle: (p: CalendarPayment) => void;
+  onSaveRate: (p: CalendarPayment, rate: number | null) => void;
 }) {
-  const count = month.payments.length;
-  // This month mixes both kinds: what already went ex, and what is still due
-  // later in the month off last year's pattern.
-  const scheduledCount = month.payments.filter((p) => p.scheduled).length;
+  const rows = month.visible;
+  // A "today" marker between what has paid and what is due. Rows sit under their
+  // ex-date's month but sort by pay date, so last month's list can straddle today
+  // too; the current month always shows it, even at either end.
+  let todayAt = rows.findIndex((p) => p.anchor > today);
+  if (!month.current && todayAt <= 0) todayAt = -1;
+  else if (todayAt < 0) todayAt = rows.length;
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-      <div
-        className={`flex flex-wrap items-center gap-2.5 px-4 py-3 bg-slate-50 dark:bg-slate-900/50 ${
-          count ? 'border-b border-slate-200 dark:border-slate-700' : ''
-        }`}
-      >
-        <span className="text-[13.5px] font-bold text-slate-900 dark:text-white">{month.label}</span>
+    <section id={`cal-month-${month.index}`} className="flex scroll-mt-48 flex-col gap-2 lg:scroll-mt-20 lg:gap-3">
+      <div className="flex flex-wrap items-center gap-2 px-0.5 lg:h-7 lg:flex-nowrap lg:gap-3 lg:px-0">
+        <h3 className="whitespace-nowrap text-[15px] font-bold tracking-[-0.01em] text-slate-900 dark:text-white lg:text-[19px]">
+          {month.label} {year}
+        </h3>
         {month.current && (
-          <span className="text-[9.5px] font-bold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/20">
+          <span className="whitespace-nowrap rounded bg-indigo-600/10 px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-[0.06em] text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-300">
             This month
           </span>
         )}
-        {!month.paid && scheduledCount > 0 && (
-          <span className="text-[9.5px] font-bold uppercase tracking-[0.06em] rounded px-1.5 py-px text-slate-500 dark:text-slate-400 border border-dashed border-slate-300 dark:border-slate-600">
-            Scheduled
-          </span>
-        )}
-        {count > 0 && (
-          <span className="text-[11.5px] text-slate-400 dark:text-slate-500 tabular-nums">
-            {count} payment{count !== 1 ? 's' : ''}
-            {month.current && scheduledCount > 0 && scheduledCount < count && ` · ${scheduledCount} scheduled`}
-          </span>
-        )}
-        <div className="flex-1" />
-        {count > 0 && (
-          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[12px] font-bold tabular-nums bg-indigo-50 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
-            {money(month.total)}
-          </span>
-        )}
+        <div className="flex-1 lg:hidden" />
+        <MonthChip month={month} money={money} />
       </div>
-      {count > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4">
-          {month.payments.map((payment, idx) => (
-            <PaymentCard
-              key={`${payment.ticker}-${idx}`}
-              payment={payment}
-              paid={!payment.scheduled && (month.paid || month.current)}
+      <div className="rounded-lg border border-slate-200 bg-white px-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 lg:px-5 lg:py-0.5">
+        {rows.map((p, i) => (
+          <div key={p.key}>
+            {i === todayAt && <TodayLine today={today} />}
+            <CalendarRow
+              payment={p}
+              divider={i > 0 && i !== todayAt}
+              popped={popped === p.key}
               money={money}
+              onToggle={() => onToggle(p)}
+              onSaveRate={(rate) => onSaveRate(p, rate)}
             />
-          ))}
-        </div>
-      ) : (
-        <div className="px-4 py-3.5 text-[12px] text-slate-400 dark:text-slate-500">
-          No payments {year >= currentYear ? 'scheduled' : 'received'} this month
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** 12 tiles, indigo opacity carrying the month total. */
-function YearHeatmap({ months, currentIndex, money }: {
-  months: MonthBucket[];
-  currentIndex: number;
-  money: (value: number, currency?: string, decimals?: number) => string;
-}) {
-  const max = Math.max(...months.map((m) => m.total), 0);
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-      {months.map((m) => {
-        const intensity = max > 0 ? m.total / max : 0;
-        // Two ramps: the light theme starts near transparent, the dark one needs a
-        // floor or an empty month disappears into the card.
-        const light = `rgba(79, 70, 229, ${(0.06 + intensity * 0.7).toFixed(3)})`;
-        const dark = `rgba(79, 70, 229, ${(0.15 + intensity * 0.65).toFixed(3)})`;
-        const strong = intensity > 0.55;
-        return (
-          <div
-            key={m.index}
-            className={`relative rounded-lg p-3.5 min-h-[88px] border ${
-              m.index === currentIndex
-                ? 'border-2 border-indigo-600 dark:border-indigo-400'
-                : 'border-slate-200 dark:border-slate-700'
-            }`}
-          >
-            {/* the tint sits behind the text so one class set works in both themes */}
-            <div
-              className="absolute inset-0 rounded-lg dark:hidden"
-              style={{ background: light }}
-              aria-hidden
-            />
-            <div
-              className="absolute inset-0 rounded-lg hidden dark:block"
-              style={{ background: dark }}
-              aria-hidden
-            />
-            <div className="relative">
-              <div
-                className={`text-[11px] font-semibold uppercase tracking-[0.06em] mb-1.5 ${
-                  strong ? 'text-white/90' : 'text-slate-600 dark:text-slate-300'
-                }`}
-              >
-                {m.short}
-              </div>
-              <div
-                className={`text-[18px] font-semibold tabular-nums ${
-                  strong ? 'text-white' : 'text-slate-900 dark:text-white'
-                }`}
-              >
-                {money(m.total, undefined, 0)}
-              </div>
-              <div className={`text-[11px] mt-1 ${strong ? 'text-white/75' : 'text-slate-500 dark:text-slate-400'}`}>
-                {m.payments.length} payment{m.payments.length !== 1 ? 's' : ''}
-              </div>
-            </div>
           </div>
-        );
-      })}
-    </div>
+        ))}
+        {todayAt === rows.length && <TodayLine today={today} />}
+      </div>
+    </section>
   );
 }
 
@@ -209,9 +130,13 @@ export default function DividendCalendarPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const pid = portfolioId!;
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
+  // Local midnight, fixed for the life of the page so every memo below stays put.
+  const [today] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  });
+  const currentYear = today.getFullYear();
+  const currentMonth = today.getMonth();
 
   // First selectable year, on the Transactions page's rule: the server's first
   // trade year, with the localStorage mirror covering the gap before it lands.
@@ -219,244 +144,244 @@ export default function DividendCalendarPage() {
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const firstYear = Math.min(firstTradeYear ?? cachedFirst, currentYear);
   // One year past this one: the backend projects it end to end from the trailing
-  // payment pattern, which is the "what will a full year of this portfolio pay"
-  // question the rolling projection answers without a year to pin it to.
-  const lastYear = currentYear + 1;
-  const yearOptions = Array.from({ length: lastYear - firstYear + 1 }, (_, i) => firstYear + i);
+  // payment pattern.
+  const yearOptions = Array.from({ length: currentYear + 1 - firstYear + 1 }, (_, i) => firstYear + i);
 
   const [year, setYear] = useState(currentYear);
-  // A year that fell outside the range once firstTradeYear landed (the cache said
-  // "this year" on a portfolio that started earlier) still resolves — the backend
-  // simply reports nothing for it — so no clamping effect is needed here.
+  const [filter, setFilter] = useState<StatusFilter>('all');
+  /** the row whose check was just clicked, so only it plays the pop */
+  const [popped, setPopped] = useState<string | null>(null);
 
   const { data, isLoading, error } = useDividendCalendar(pid, year);
-  // Previous year, for the YoY line. Skipped entirely when there is none to compare.
-  const hasPrevious = year - 1 >= firstYear;
-  const { data: previousData } = useDividendCalendar(pid, year - 1, hasPrevious);
-
+  const { data: receipts } = useDividendReceipts(pid);
+  const saveReceipt = useSaveDividendReceipt(pid);
   const { data: holdings } = useHoldings(pid);
-  const { data: dividendData } = useDividends(pid);
   const { toBase, money } = usePortfolioCurrency(pid, (holdings ?? []).map((h) => h.currency ?? ''));
 
-  /**
-   * The calendar DTO carries no currency. `DividendData.tickerCurrency` is the
-   * authoritative one — it is `MarketData.currency`, the same document the
-   * dividend amounts come from, and it covers tickers no longer held (a closed
-   * year still lists them). The holding's currency plus the pence heuristic is
-   * the fallback for a ticker that never reached that map.
-   */
-  const holdingCurrency = new Map(
-    (holdings ?? []).map((h) => [h.ticker.toUpperCase(), h.currency ?? 'USD'] as const),
-  );
-  const marketCurrency = new Map(
-    Object.entries(dividendData?.tickerCurrency ?? {}).map(([t, c]) => [t.toUpperCase(), c] as const),
-  );
+  const payments = useMemo<CalendarPayment[]>(() => {
+    // Fallback for an entry without a currency (an older API): the holding's
+    // currency plus the pence heuristic.
+    const holdingCurrency = new Map(
+      (holdings ?? []).map((h) => [h.ticker.toUpperCase(), h.currency ?? 'USD'] as const),
+    );
+    const raw = MONTHS.flatMap((label, monthIndex) =>
+      (data?.[label.toUpperCase()] ?? []).map((entry, i) => ({ entry, monthIndex, i })));
+    const overrides = matchReceipts(
+      raw.map(({ entry }) => ({ ticker: entry.ticker, exDate: entry.exDate ?? null })),
+      receipts ?? [],
+      year,
+    );
 
-  const toPayment = (entry: DividendCalendarEntry): Payment => {
-    const ticker = entry.ticker;
-    const quoted = marketCurrency.get(ticker.toUpperCase());
-    const fallback = holdingCurrency.get(ticker.toUpperCase()) ?? 'USD';
-    // dividendAmount is quoted in MarketData's currency, so a London payer reports
-    // pence against a GBP holding — bring it to major units before anything else.
-    const perShare = quoted
-      ? toMajorUnits(entry.dividendAmount ?? 0, quoted)
-      : looksLikePenceQuote(ticker, fallback)
-        ? (entry.dividendAmount ?? 0) / 100
-        : (entry.dividendAmount ?? 0);
-    const currency = normalizeCurrency(quoted ?? fallback);
-    const shares = entry.stockQuantity ?? 0;
-    const amount = perShare * shares;
-    return {
-      ticker,
-      perShare,
-      shares,
-      amount,
-      baseAmount: toBase(amount, currency),
-      currency,
-      scheduled: entry.scheduled ?? false,
-    };
-  };
+    return raw.map(({ entry, monthIndex, i }, idx) => {
+      const ticker = entry.ticker;
+      const fallback = holdingCurrency.get(ticker.toUpperCase()) ?? 'USD';
+      const dps = entry.dividendAmount ?? 0;
+      // dividendAmount is quoted in MarketData's currency, so a London payer reports
+      // pence against a GBP holding — bring it to major units before anything else.
+      const perShare = entry.currency
+        ? toMajorUnits(dps, entry.currency)
+        : looksLikePenceQuote(ticker, fallback) ? dps / 100 : dps;
+      const currency = normalizeCurrency(entry.currency ?? fallback);
+      const shares = entry.stockQuantity ?? 0;
+      const amount = perShare * shares;
 
-  const bucketsOf = (calendar: DividendCalendarData | undefined, forYear: number): MonthBucket[] =>
-    MONTHS.map((label, index) => {
-      const key = label.toUpperCase();
-      const payments = (calendar?.[key] ?? []).map(toPayment);
+      const scheduled = entry.scheduled ?? false;
+      const exDate = entry.exDate ? parseLocalDate(entry.exDate) : null;
+      const payDate = entry.payDate ? parseLocalDate(entry.payDate) : null;
+      const anchor = payDate ?? exDate ?? new Date(year, monthIndex, 1);
+      const autoOn = payDate ? addDays(payDate, GRACE_DAYS) : addDays(anchor, NO_PAY_DATE_GRACE_DAYS);
+      const natural = naturalState(anchor, autoOn, today, scheduled);
+      const override = overrides[idx];
+
+      const withholding = withholdingDefault(entry.country);
+      const rateEdited = override?.withholdingRate != null;
+      const rate = rateEdited ? Number(override!.withholdingRate) : withholding.rate;
+
       return {
-        index,
-        label,
-        short: label.slice(0, 3),
-        payments,
-        total: payments.reduce((sum, p) => sum + p.baseAmount, 0),
-        paid: forYear < currentYear || (forYear === currentYear && index < currentMonth),
-        current: forYear === currentYear && index === currentMonth,
+        key: `${ticker}|${entry.exDate ?? ''}|${monthIndex}-${i}`,
+        ticker,
+        name: entry.name?.trim() || ticker,
+        monthIndex,
+        exDate,
+        exDateKey: entry.exDate ?? null,
+        payDate,
+        payDateEstimated: entry.payDateEstimated ?? false,
+        anchor,
+        autoOn,
+        scheduled,
+        shares,
+        perShare,
+        amount,
+        baseAmount: toBase(amount, currency),
+        currency,
+        countryCode: withholding.code,
+        defaultRate: withholding.rate,
+        rate,
+        rateEdited,
+        tax: (amount * rate) / 100,
+        paymentMonths: entry.paymentMonths ?? [],
+        paymentsPerYear: entry.paymentsPerYear ?? null,
+        natural,
+        state: stateOf(override?.status, natural),
+        override,
       };
     });
+  }, [data, receipts, holdings, toBase, year, today]);
 
-  const months = bucketsOf(data, year);
-  const annualTotal = months.reduce((sum, m) => sum + m.total, 0);
-  const paymentCount = months.reduce((sum, m) => sum + m.payments.length, 0);
-  const payerCount = new Set(months.flatMap((m) => m.payments.map((p) => p.ticker))).size;
-  const payingMonths = months.filter((m) => m.payments.length > 0);
-  const bestMonth = payingMonths.reduce<MonthBucket | null>(
-    (best, m) => (!best || m.total > best.total ? m : best),
-    null,
-  );
-  const averageMonth = payingMonths.length ? annualTotal / payingMonths.length : 0;
+  const months: MonthGroup[] = MONTHS.map((label, index) => {
+    const rows = payments
+      .filter((p) => p.monthIndex === index)
+      .sort((a, b) => a.anchor.getTime() - b.anchor.getTime() || a.ticker.localeCompare(b.ticker));
+    return {
+      index,
+      label,
+      rows,
+      visible: filter === 'all' ? rows : rows.filter((p) => p.state === filter),
+      total: rows.reduce((sum, p) => sum + p.baseAmount, 0),
+      received: rows.reduce((sum, p) => sum + (p.state === 'received' ? p.baseAmount : 0), 0),
+      current: year === currentYear && index === currentMonth,
+    };
+  });
+  const shown = months.filter((m) => m.visible.length > 0);
+  const counts: Record<StatusFilter, number> = { all: payments.length, upcoming: 0, awaiting: 0, received: 0, missing: 0 };
+  payments.forEach((p) => { counts[p.state] += 1; });
 
-  const previousTotal = hasPrevious
-    ? bucketsOf(previousData, year - 1).reduce((sum, m) => sum + m.total, 0)
-    : 0;
-  const delta = previousTotal > 0 ? ((annualTotal - previousTotal) / previousTotal) * 100 : null;
+  // A phone opens the current year at the current month; any other year, or a
+  // new filter, starts from the top. Desktop keeps the page where it is.
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (isLoading || !window.matchMedia('(max-width: 1023px)').matches) return;
+    const signature = `${year}|${filter}`;
+    if (scrolledFor.current === signature) return;
+    scrolledFor.current = signature;
+    const target = year === currentYear ? document.getElementById(`cal-month-${currentMonth}`) : null;
+    if (target) target.scrollIntoView({ block: 'start' });
+    else window.scrollTo({ top: 0 });
+  }, [year, filter, isLoading, currentYear, currentMonth]);
 
-  const isCurrentYear = year === currentYear;
+  /** Overrides are saved under the key they were found by, so a loosely matched one is updated, not duplicated. */
+  const keyOf = (p: CalendarPayment) => ({ ticker: p.ticker, exDate: p.override?.exDate ?? p.exDateKey! });
+
+  const toggle = (p: CalendarPayment) => {
+    if (!p.exDateKey) return;
+    setPopped(p.key);
+    saveReceipt.mutate({
+      ...keyOf(p),
+      status: toggledOverride(p.state, p.natural),
+      withholdingRate: p.override?.withholdingRate ?? null,
+    });
+  };
+
+  const saveRate = (p: CalendarPayment, rate: number | null) => {
+    if (!p.exDateKey) return;
+    saveReceipt.mutate({ ...keyOf(p), status: p.override?.status ?? null, withholdingRate: rate });
+  };
+
+  const caption = 'text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400';
   const isFutureYear = year > currentYear;
-  const caption = isFutureYear
-    ? 'Projected · trailing payment pattern at today’s rate and today’s holdings'
-    : isCurrentYear
-      ? 'Paid to date · payments still due scheduled from last year’s payment pattern'
-      : 'Closed year · payments valued on the shares held on each ex-date';
-
-  const yearSelector = (
-    <div className="flex flex-wrap items-center gap-3 mb-4">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-500 dark:text-slate-400">
-        Year
-      </span>
-      <div className="inline-flex items-center bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 overflow-x-auto max-w-full">
-        {yearOptions.map((option) => (
-          <button
-            key={option}
-            onClick={() => setYear(option)}
-            className={`px-2.5 py-1 rounded text-[12px] font-semibold transition-colors shrink-0 ${
-              option === year
-                ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-      <span className="text-[11.5px] text-slate-400 dark:text-slate-500">{caption}</span>
-    </div>
-  );
-
-  // The selector stays mounted through every state — a year with nothing in it
-  // is a dead end otherwise, and switching years would flash the whole page.
-  if (isLoading || error || paymentCount === 0) {
-    return (
-      <div className="max-w-7xl mx-auto">
-        {yearSelector}
-        {isLoading ? (
-          <FullPageSpinner />
-        ) : error ? (
-          <ErrorAlert title="Error loading dividend calendar" message={(error as Error).message} />
-        ) : (
-          <EmptyState
-            icon={CalendarDays}
-            title={`No dividends in ${year}`}
-            description={
-              isFutureYear
-                ? 'Nothing to project — no holding has paid a dividend in the last year.'
-                : isCurrentYear
-                  ? 'No payments have been recorded or scheduled for this year yet.'
-                  : 'No dividend was paid on a position held during this year.'
-            }
-          />
-        )}
-      </div>
-    );
-  }
+  const isCurrentYear = year === currentYear;
 
   return (
     <div className="max-w-7xl mx-auto">
-      {yearSelector}
-
-      {/* Annual summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2 rounded-lg border border-indigo-200 dark:border-indigo-900 p-5 shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-200 dark:from-slate-800 dark:to-indigo-950">
-          <div className="text-[11px] font-bold uppercase tracking-[0.10em] text-indigo-600 dark:text-indigo-300 mb-2">
-            {year} {isFutureYear ? 'Projected' : isCurrentYear ? 'Paid & Scheduled' : 'Total Received'}
-          </div>
-          <div className="text-[38px] leading-none font-bold tracking-tight tabular-nums text-slate-900 dark:text-white">
-            {money(annualTotal)}
-          </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-[12px] text-slate-600 dark:text-slate-300">
-            <div>
-              <span className="font-semibold text-slate-900 dark:text-white">{paymentCount}</span> payments
-            </div>
-            <div>
-              <span className="font-semibold text-slate-900 dark:text-white">{payerCount}</span> payers
-            </div>
-            {delta != null ? (
-              <div>
-                <span
-                  className={`font-semibold ${
-                    delta >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                  }`}
+      {/* Year + status. Sticks under the header on a phone, where the list is long. */}
+      <div className="sticky top-16 z-30 -mx-4 mb-3.5 border-b border-slate-200 bg-slate-50 px-4 pb-2.5 pt-3 dark:border-slate-800 dark:bg-slate-950 sm:-mx-6 sm:px-6 lg:static lg:mx-0 lg:mb-2.5 lg:border-0 lg:bg-transparent lg:p-0 lg:dark:bg-transparent">
+        <div className="flex flex-col gap-2 lg:h-[34px] lg:flex-row lg:items-center lg:gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={cn(caption, 'hidden lg:inline')}>Year</span>
+            <div className="no-scrollbar inline-flex max-w-full items-center overflow-x-auto rounded-md border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-900/50">
+              {yearOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setYear(option)}
+                  className={cn(
+                    'shrink-0 rounded px-2.5 py-1 text-[12px] font-semibold transition-colors',
+                    option === year
+                      ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-700 dark:text-indigo-400'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200',
+                  )}
                 >
-                  {delta >= 0 ? '+' : ''}
-                  {delta.toFixed(1)}%
-                </span>{' '}
-                vs {year - 1}
-              </div>
-            ) : (
-              <div>first tracked year</div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
-          <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 mb-2">
-            Highest month
-          </div>
-          <div className="text-[22px] font-semibold tabular-nums text-slate-900 dark:text-white">
-            {bestMonth ? `${bestMonth.short} · ${money(bestMonth.total, undefined, 0)}` : '—'}
-          </div>
-          <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400 mt-4 mb-1.5">
-            Avg per paying month
-          </div>
-          <div className="text-[18px] font-semibold tabular-nums text-slate-900 dark:text-white">
-            {money(averageMonth)}
-          </div>
-        </div>
-      </div>
-
-      {/* Heatmap */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm mb-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
-            <div className="text-[14px] font-semibold text-slate-900 dark:text-white">{year} at a glance</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Color intensity = total dividends in that month
+                  {option}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-            <span>Less</span>
-            {[0.15, 0.35, 0.55, 0.75, 0.95].map((opacity) => (
-              <div
-                key={opacity}
-                className="w-3.5 h-3.5 rounded-[3px]"
-                style={{ background: `rgba(79, 70, 229, ${opacity})` }}
-              />
-            ))}
-            <span>More</span>
+          <div className="hidden flex-1 lg:block" />
+          <div className="flex min-w-0 items-center gap-3">
+            <span className={cn(caption, 'hidden lg:inline')}>Status</span>
+            <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+              {(['all', ...STATUSES] as StatusFilter[]).map((key) => (
+                <Chip
+                  key={key}
+                  label={STATUS_LABEL[key]}
+                  count={counts[key]}
+                  active={filter === key}
+                  onClick={() => setFilter(key)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-[5px] text-[11px] text-slate-500 dark:text-slate-400 lg:hidden">
+            <Info className="h-3 w-3 shrink-0" />
+            <span>Auto-confirms {GRACE_DAYS} days after pay date · uncheck if it didn’t arrive</span>
           </div>
         </div>
-        <YearHeatmap months={months} currentIndex={isCurrentYear ? currentMonth : -1} money={money} />
+      </div>
+      <div className="mb-6 hidden items-center gap-1.5 text-[12px] text-slate-500 dark:text-slate-400 lg:flex">
+        <Info className="h-3.5 w-3.5 shrink-0" />
+        <span>
+          Past payments confirm automatically {GRACE_DAYS} days after the pay date. Uncheck any that didn’t
+          arrive; click a withholding rate to change it for that payment.
+        </span>
       </div>
 
-      {/* Every payment of the year, month by month */}
-      <div className="space-y-4">
-        {months.map((month) => (
-          <MonthSection
-            key={month.label}
-            month={month}
-            year={year}
-            currentYear={currentYear}
-            money={money}
+      {saveReceipt.isError && (
+        <div className="mb-4">
+          <ErrorAlert
+            title="Couldn’t save that change"
+            message={`${(saveReceipt.error as Error)?.message ?? 'Request failed'} — the payment was put back as it was.`}
           />
-        ))}
-      </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <FullPageSpinner />
+      ) : error ? (
+        <ErrorAlert title="Error loading dividend calendar" message={(error as Error).message} />
+      ) : payments.length === 0 ? (
+        <EmptyState
+          icon={CalendarDays}
+          title={`No dividends in ${year}`}
+          description={
+            isFutureYear
+              ? 'Nothing to project — no holding has paid a dividend in the last year.'
+              : isCurrentYear
+                ? 'No payments have been recorded or scheduled for this year yet.'
+                : 'No dividend was paid on a position held during this year.'
+          }
+        />
+      ) : shown.length === 0 ? (
+        <EmptyState
+          icon={Inbox}
+          title={`No ${STATUS_LABEL[filter].toLowerCase()} payments`}
+          description={`Nothing in ${year} has this status.`}
+        />
+      ) : (
+        <div className="flex flex-col gap-[18px] lg:gap-7">
+          {shown.map((month) => (
+            <MonthBlock
+              key={month.index}
+              month={month}
+              year={year}
+              today={today}
+              popped={popped}
+              money={money}
+              onToggle={toggle}
+              onSaveRate={saveRate}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

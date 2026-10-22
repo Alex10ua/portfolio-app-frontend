@@ -51,6 +51,15 @@ body {
 /* Tabular numbers on all financial figures */
 .tabular-nums { font-variant-numeric: tabular-nums; }
 
+/* Horizontal chip rows that scroll on a phone without a visible bar */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Dividend Calendar receipt check: a short pop when its state changes */
+@keyframes cal-pop { 0% { transform: scale(.55); } 60% { transform: scale(1.14); } 100% { transform: scale(1); } }
+.cal-pop { animation: cal-pop .3s ease-out; }
+@media (prefers-reduced-motion: reduce) { .cal-pop { animation: none; } }
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }

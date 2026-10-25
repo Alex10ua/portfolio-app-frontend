@@ -1,8 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getHoldings, getFirstTradeYear, getPortfolioHistory } from '../api/holdings';
 import { createTransaction, getCashBalance } from '../api/transactions';
 import { normalizeHoldings } from '../lib/holdingCurrency';
+import { TransactionRetryKeys } from '../lib/transactionRetry';
 import { useFxRates } from './useFxRates';
 import type { Holding } from '../types/holding';
 import type { CreateTransactionPayload } from '../types/transaction';
@@ -51,12 +52,19 @@ export function usePortfolioHistory(portfolioId: string) {
 
 export function useCreateTransaction(portfolioId: string) {
   const qc = useQueryClient();
+  const retryKeys = useRef(new TransactionRetryKeys());
   return useMutation({
-    mutationFn: (payload: CreateTransactionPayload) => createTransaction(portfolioId, payload),
+    mutationFn: async (payload: CreateTransactionPayload) => {
+      const signature = retryKeys.current.signature(portfolioId, payload);
+      const key = retryKeys.current.get(signature);
+      const result = await createTransaction(portfolioId, payload, key);
+      retryKeys.current.complete(signature, key);
+      return result;
+    },
     onSuccess: () => {
       // A new transaction affects every derived view, not just holdings/cash.
       // (partial key match also invalidates ['performance', portfolioId, period])
-      for (const key of ['holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags']) {
+      for (const key of ['transactions', 'holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags']) {
         void qc.invalidateQueries({ queryKey: [key, portfolioId] });
       }
     },

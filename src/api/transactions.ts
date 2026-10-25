@@ -6,10 +6,12 @@ export async function getTransactions(portfolioId: string, year: number): Promis
   return response.data ?? [];
 }
 
-export async function createTransaction(portfolioId: string, payload: CreateTransactionPayload): Promise<Transaction> {
+export async function createTransaction(
+  portfolioId: string, payload: CreateTransactionPayload, idempotencyKey: string,
+): Promise<{ save: Transaction; holdingSynced: boolean }> {
   // a first trade in a ticker fetches its market data synchronously before answering
-  const response = await apiClient.post<Transaction>(`${portfolioId}/createTransaction`, payload,
-    { timeout: PROVIDER_TIMEOUT_MS });
+  const response = await apiClient.post<{ save: Transaction; holdingSynced: boolean }>(`${portfolioId}/createTransaction`, payload,
+    { timeout: PROVIDER_TIMEOUT_MS, headers: { 'Idempotency-Key': idempotencyKey } });
   return response.data;
 }
 

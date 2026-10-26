@@ -8,7 +8,12 @@ export interface Holding {
   /** unrounded holding quantity; `shareAmount` is 2dp for display. Book SELLs against this. */
   exactShareAmount?: number | null;
   costPerShare: number | null;
-  costBasis: number | null;           // backend-computed (BigDecimal): costPerShare × shares
+  costBasis: number | null;           // remaining FIFO purchase cost, including open buy commissions
+  /** Buy commissions allocated to the remaining shares; already included in costBasis/P&L. */
+  commissions?: number | null;
+  /** Native lot costs/fees; converted by normalizeHolding when buys use several currencies. */
+  costBasisByCurrency?: Record<string, number>;
+  commissionsByCurrency?: Record<string, number>;
   currentShareValue: number | null;
   currentTotalValue: number | null;   // backend-computed (BigDecimal): price × shares
   totalReceivedDividend: number | null;

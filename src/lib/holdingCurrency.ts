@@ -1,6 +1,6 @@
 import type { FxRates } from '../types/fxRate';
 import type { Holding } from '../types/holding';
-import { convert, normalizeCurrency, toMajorUnits } from './currency';
+import { convert, convertMap, normalizeCurrency, toMajorUnits } from './currency.ts';
 
 /**
  * Brings one holding row into a single currency.
@@ -19,14 +19,12 @@ import { convert, normalizeCurrency, toMajorUnits } from './currency';
  */
 export function normalizeHolding(h: Holding, rates: FxRates): Holding {
   const quote = h.quoteCurrency;
-  const book = h.currency;
-  if (!quote || !book || quote === book) {
-    return { ...h, quoteShareValue: h.currentShareValue };
-  }
+  const book = h.currency ?? quote ?? 'USD';
 
   // Pence → pounds needs no rate at all; only a real currency change goes through FX.
   const toBook = (v: number | null | undefined): number | null => {
     if (v == null) return null;
+    if (!quote || quote === book) return v;
     return normalizeCurrency(quote) === normalizeCurrency(book)
       ? toMajorUnits(v, quote)
       : convert(v, quote, book, rates);
@@ -35,20 +33,30 @@ export function normalizeHolding(h: Holding, rates: FxRates): Holding {
   const currentShareValue = toBook(h.currentShareValue);
   const currentTotalValue = toBook(h.currentTotalValue);
   const dividend = toBook(h.dividend);
-  const totalProfit = currentTotalValue != null && h.costBasis != null
-    ? currentTotalValue - h.costBasis
+  const costBasis = h.costBasisByCurrency ? convertMap(h.costBasisByCurrency, book, rates) : h.costBasis;
+  const commissions = h.commissionsByCurrency
+    ? convertMap(h.commissionsByCurrency, book, rates) : h.commissions;
+  const quantity = h.exactShareAmount ?? h.shareAmount;
+  const costPerShare = h.costBasisByCurrency && costBasis != null && quantity > 0
+    ? costBasis / quantity : h.costPerShare;
+  const totalProfit = currentTotalValue != null && costBasis != null
+    ? currentTotalValue - costBasis
     : null;
 
   return {
     ...h,
+    currency: book,
+    costBasis,
+    costPerShare,
+    commissions,
     quoteShareValue: h.currentShareValue,
     currentShareValue,
     currentTotalValue,
     dailyChange: toBook(h.dailyChange),
     dividend,
     totalProfit,
-    totalProfitPercentage: totalProfit != null && h.costBasis ? (totalProfit / h.costBasis) * 100 : null,
-    dividendYieldOnCost: dividend != null && h.costPerShare ? (dividend / h.costPerShare) * 100 : null,
+    totalProfitPercentage: totalProfit != null && costBasis ? (totalProfit / costBasis) * 100 : null,
+    dividendYieldOnCost: dividend != null && costPerShare ? (dividend / costPerShare) * 100 : null,
   };
 }
 

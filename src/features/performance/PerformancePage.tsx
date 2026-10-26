@@ -61,6 +61,7 @@ export default function PerformancePage() {
   const summary = data ? summarizePerformance(data, baseCurrency, fxRates) : null;
   const heldCurrencies = [...new Set((holdings ?? []).flatMap((h) => [h.currency, h.quoteCurrency]).filter(Boolean))];
   const mixedCurrency = heldCurrencies.length > 1;
+  const estimatedTickers = [...new Set(data?.timeSeries.flatMap((point) => point.estimatedPriceTickers ?? []) ?? [])];
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -85,6 +86,11 @@ export default function PerformancePage() {
       <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
         <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value</div>
         <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">Historical performance</div>
+        {estimatedTickers.length > 0 && (
+          <p className="text-[12px] text-amber-700 dark:text-amber-400 mb-4">
+            Historical values for {estimatedTickers.join(', ')} are estimated until their price history is refreshed.
+          </p>
+        )}
         {chartData.length === 0 ? (
           <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-12">
             No price history available for this period.
@@ -158,6 +164,7 @@ export default function PerformancePage() {
               value={formatPnl(summary.totalReturn, money, summary.totalReturnPct)}
               icon={BarChart2}
               accent={summary.totalReturn >= 0 ? '#10B981' : '#EF4444'}
+              title={`Commission included: ${money(summary.totalCommissions)}`}
             />
             <StatCard
               label="XIRR (Annualized)"
@@ -169,13 +176,15 @@ export default function PerformancePage() {
 
           {/* Secondary cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
+            <div title={`Commission included: ${money(summary.openCommissions)}`}
+              className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Unrealized P&L</div>
               <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(summary.unrealizedPnL)}`}>
                 {formatPnl(summary.unrealizedPnL, money, summary.unrealizedPnLPct)}
               </div>
             </div>
-            <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
+            <div title={`Commission included: ${money(summary.realizedCommissions)}`}
+              className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm px-5 py-4">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Realized P&L</div>
               <div className={`text-[20px] font-semibold tabular-nums ${pnlColor(summary.realizedPnL)}`}>
                 {formatPnl(summary.realizedPnL, money)}

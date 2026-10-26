@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
-import { useRealizedPnL } from '../../hooks/usePerformance';
+import { usePnlSummary } from '../../hooks/usePerformance';
 import { useSettings } from '../../context/SettingsContext';
 import { useFxRates } from '../../hooks/useFxRates';
 import { convert, formatMoney, normalizeCurrency } from '../../lib/currency';
@@ -96,7 +96,7 @@ export default function HoldingsDashboardPage() {
   const { data: cashBalance } = useCashBalance(pid);
   const { data: manualCash } = useCashHoldings(pid);
   const { data: valueHistory } = usePortfolioHistory(pid);
-  const { data: realizedByCcy } = useRealizedPnL(pid);
+  const { data: pnlSummary } = usePnlSummary(pid);
   const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
   const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
   const fxRates = useFxRates();
@@ -345,11 +345,11 @@ export default function HoldingsDashboardPage() {
 
   // Aggregates: each holding is converted from its own currency to the base one.
   const stats = useMemo(() => {
-    if (!holdings?.length) return null;
+    if (!holdings) return null;
     const totalValue  = holdings.reduce((s, h) => s + toBase(holdingTotalValue(h), h.currency), 0);
     const totalCost   = holdings.reduce((s, h) => s + toBase(holdingCostBasis(h), h.currency), 0);
     const totalProfit = holdings.reduce((s, h) => s + toBase(h.totalProfit ?? 0, h.currency), 0);
-    const avgYield    = holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length;
+    const avgYield    = holdings.length ? holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length : 0;
     return { totalValue, totalCost, totalProfit, avgYield };
   }, [holdings, toBase]);
 
@@ -376,8 +376,11 @@ export default function HoldingsDashboardPage() {
   // Realized P&L (per currency from backend) converted to the base currency —
   // keeps profit from fully-sold positions visible after their holding is deleted
   const realizedInBase = useMemo(
-    () => Object.entries(realizedByCcy ?? {}).reduce((s, [ccy, amt]) => s + toBase(amt, ccy), 0),
-    [realizedByCcy, toBase]);
+    () => Object.entries(pnlSummary?.realizedPnLByCurrency ?? {}).reduce((s, [ccy, amt]) => s + toBase(amt, ccy), 0),
+    [pnlSummary, toBase]);
+  const commissionsInBase = useMemo(
+    () => Object.entries(pnlSummary?.commissionsByCurrency ?? {}).reduce((s, [ccy, amt]) => s + toBase(amt, ccy), 0),
+    [pnlSummary, toBase]);
 
   const submitCashDialog = async () => {
     if (!cashDialog) return;
@@ -414,6 +417,7 @@ export default function HoldingsDashboardPage() {
     const value    = sum(holdingTotalValue);
     const cost     = sum(holdingCostBasis);
     const profit   = sum((h) => h.totalProfit);
+    const commissions = sum((h) => h.commissions);
     const dividend = sum((h) => (h.dividend ?? 0) * h.shareAmount);
     // dailyChange from the backend is a PER-SHARE delta (price − priceYesterday),
     // so it has to be multiplied by the position before it can be summed — adding
@@ -421,7 +425,7 @@ export default function HoldingsDashboardPage() {
     const daily    = sum((h) => (h.dailyChange ?? 0) * h.shareAmount);
     return {
       count: sortedHoldings.length,
-      value, cost, profit, dividend, daily,
+      value, cost, profit, commissions, dividend, daily,
       weight: sortedHoldings.reduce((s, h) => s + (portfolioPercents[h.ticker] ?? 0), 0),
       target: sortedHoldings.reduce((s, h) => s + (targets[h.ticker] ?? 0), 0),
       profitPercent: cost > 0 ? (profit / cost) * 100 : null,
@@ -490,7 +494,8 @@ export default function HoldingsDashboardPage() {
         const pct = holding.totalProfitPercentage;
         const pos = (profit ?? 0) >= 0;
         return (
-          <div className={pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+          <div title={`Commission included: ${money(holding.commissions ?? 0, holding.currency)}`}
+            className={pos ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
             <div className="font-semibold tabular-nums">{money(profit, holding.currency)}</div>
             <div className="text-[11px] tabular-nums opacity-85">{formatPercent(pct)}</div>
           </div>
@@ -555,7 +560,8 @@ export default function HoldingsDashboardPage() {
         return <span className="font-semibold tabular-nums text-slate-500 dark:text-slate-400">{formatPercent(rowTotals.yieldOnCost)}</span>;
       case 'totalProfit':
         return (
-          <div className={rowTotals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+          <div title={`Commission included: ${money(rowTotals.commissions)}`}
+            className={rowTotals.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
             <div className="font-semibold tabular-nums">{money(rowTotals.profit)}</div>
             <div className="text-[11px] tabular-nums opacity-85">{formatPercent(rowTotals.profitPercent)}</div>
           </div>
@@ -659,7 +665,7 @@ export default function HoldingsDashboardPage() {
             icon={DollarSign}
             accent="#14B8A6"
           />
-          <div className="relative group h-full">
+          <div className="relative group h-full" tabIndex={0} aria-describedby="portfolio-pnl-breakdown">
             <StatCard
               label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
               value={money(stats.totalProfit + realizedInBase)}
@@ -667,8 +673,7 @@ export default function HoldingsDashboardPage() {
               accent={stats.totalProfit + realizedInBase >= 0 ? '#10B981' : '#EF4444'}
               sub={realizedInBase !== 0 ? 'incl. realized' : undefined}
             />
-            {realizedInBase !== 0 && (
-              <div className="absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-lg">
+              <div id="portfolio-pnl-breakdown" role="tooltip" className="absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block group-focus-within:block w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-lg">
                 <div className="flex items-center justify-between text-[13px] mb-1.5">
                   <span className="text-slate-500 dark:text-slate-400">Unrealized</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
@@ -681,6 +686,10 @@ export default function HoldingsDashboardPage() {
                     {money(realizedInBase)}
                   </span>
                 </div>
+                <div className="flex items-center justify-between text-[12px] mt-2 text-slate-500 dark:text-slate-400">
+                  <span>Commission (included)</span>
+                  <span className="font-semibold tabular-nums">{money(commissionsInBase)}</span>
+                </div>
                 <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
                   <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
@@ -688,7 +697,6 @@ export default function HoldingsDashboardPage() {
                   </span>
                 </div>
               </div>
-            )}
           </div>
           <StatCard
             label="Avg Yield"
@@ -994,7 +1002,8 @@ export default function HoldingsDashboardPage() {
                       <div className="text-[15px] font-bold tabular-nums text-slate-900 dark:text-white">
                         {money(holdingTotalValue(holding), holding.currency)}
                       </div>
-                      <div className={`text-[12px] font-semibold tabular-nums ${gain ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                      <div title={`Commission included: ${money(holding.commissions ?? 0, holding.currency)}`}
+                        className={`text-[12px] font-semibold tabular-nums ${gain ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
                         {money(holding.totalProfit, holding.currency)} · {formatPercent(holding.totalProfitPercentage, 1)}
                       </div>
                     </div>

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getPerformance, getRealizedPnL } from '../api/performance';
+import { getPerformance, getPnlSummary, getRealizedPnL } from '../api/performance';
 import type { PerformancePeriod } from '../types/performance';
 
 export function usePerformance(portfolioId: string, period: PerformancePeriod) {
@@ -15,6 +15,15 @@ export function useRealizedPnL(portfolioId: string) {
   return useQuery({
     queryKey: ['performance', portfolioId, 'realizedPnL'],
     queryFn: () => getRealizedPnL(portfolioId),
+    enabled: Boolean(portfolioId),
+    staleTime: 60_000,
+  });
+}
+
+export function usePnlSummary(portfolioId: string) {
+  return useQuery({
+    queryKey: ['performance', portfolioId, 'pnlSummary'],
+    queryFn: () => getPnlSummary(portfolioId),
     enabled: Boolean(portfolioId),
     staleTime: 60_000,
   });

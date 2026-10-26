@@ -12,17 +12,18 @@ interface StatCardProps {
   sub?: string;
   /** rendered next to the value, e.g. what the last transaction batch added */
   extra?: ReactNode;
+  title?: string;
 }
 
 export default function StatCard({
   label, value, icon: Icon,
   accent = '#4F46E5',
-  trend, trendUp, sub, extra,
+  trend, trendUp, sub, extra, title,
 }: StatCardProps) {
   const dir = trendUp ?? (trend ? !trend.startsWith('-') : undefined);
 
   return (
-    <div className="h-full bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
+    <div title={title} className="h-full bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
       <div className="flex items-start justify-between mb-4">
         <div
           className="flex items-center justify-center rounded-lg flex-shrink-0"

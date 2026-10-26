@@ -40,8 +40,9 @@ export default function PortfolioValueChart({ portfolioId, startMonth, baseCurre
     ? `Portfolio Value (${meta.code})`
     : `Portfolio Value (${meta.symbol.trim()})`;
 
-  const chartData = data
-    .filter((p) => !startMonth || p.date.slice(0, 7) >= startMonth)
+  const visiblePoints = data.filter((p) => !startMonth || p.date.slice(0, 7) >= startMonth);
+  const estimatedTickers = [...new Set(visiblePoints.flatMap((point) => point.estimatedPriceTickers ?? []))];
+  const chartData = visiblePoints
     .map((p) => ({
       date: formatMonthLabel(p.date),
       // valueByCurrency holds each quote currency's own total — convert, then sum.
@@ -52,10 +53,19 @@ export default function PortfolioValueChart({ portfolioId, startMonth, baseCurre
     }));
 
   return (
-    <StackedAreaChart
-      data={chartData}
-      xAxisKey="date"
-      areas={[{ dataKey: 'portfolioValue', name: label }]}
-    />
+    <div className="h-full flex flex-col">
+      {estimatedTickers.length > 0 && (
+        <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">
+          Estimated history: {estimatedTickers.join(', ')}. Refresh their price history to update these values.
+        </p>
+      )}
+      <div className="flex-1 min-h-0">
+        <StackedAreaChart
+          data={chartData}
+          xAxisKey="date"
+          areas={[{ dataKey: 'portfolioValue', name: label }]}
+        />
+      </div>
+    </div>
   );
 }

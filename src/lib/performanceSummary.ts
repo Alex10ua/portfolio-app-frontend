@@ -1,6 +1,6 @@
 import type { FxRates } from '../types/fxRate';
 import type { PerformanceCashFlow, PerformanceData } from '../types/performance';
-import { convert, convertMap } from './currency';
+import { convert, convertMap } from './currency.ts';
 
 export interface PerformanceSummary {
   totalInvested: number;
@@ -9,6 +9,9 @@ export interface PerformanceSummary {
   unrealizedPnLPct: number;
   realizedPnL: number;
   totalDividends: number;
+  totalCommissions: number;
+  realizedCommissions: number;
+  openCommissions: number;
   totalReturn: number;
   totalReturnPct: number;
   /** null when the cash flows give no solution (e.g. a single flow) */
@@ -34,6 +37,9 @@ export function summarizePerformance(data: PerformanceData, baseCurrency: string
       unrealizedPnLPct: data.unrealizedPnLPct,
       realizedPnL: data.realizedPnL,
       totalDividends: data.totalDividends,
+      totalCommissions: data.totalCommissions ?? 0,
+      realizedCommissions: 0,
+      openCommissions: 0,
       totalReturn: data.totalReturn,
       totalReturnPct: data.totalReturnPct,
       xirr: data.xirr,
@@ -47,6 +53,8 @@ export function summarizePerformance(data: PerformanceData, baseCurrency: string
   const openCost = toBase(data.openCostBasisByCurrency);
   const realizedPnL = toBase(data.realizedPnLByCurrency);
   const totalDividends = toBase(data.totalDividendsByCurrency);
+  const totalCommissions = toBase(data.commissionsByCurrency);
+  const realizedCommissions = toBase(data.realizedCommissionsByCurrency);
 
   const unrealizedPnL = currentValue - openCost;
   const totalReturn = unrealizedPnL + realizedPnL + totalDividends;
@@ -64,6 +72,9 @@ export function summarizePerformance(data: PerformanceData, baseCurrency: string
     unrealizedPnLPct: openCost !== 0 ? (unrealizedPnL / openCost) * 100 : 0,
     realizedPnL,
     totalDividends,
+    totalCommissions,
+    realizedCommissions,
+    openCommissions: totalCommissions - realizedCommissions,
     totalReturn,
     totalReturnPct: totalInvested !== 0 ? (totalReturn / totalInvested) * 100 : 0,
     xirr: (data.cashFlows ?? []).length > 0 ? xirrPercent(flows) : 0,

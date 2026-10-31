@@ -64,6 +64,8 @@ export function useUpdateCustomAssetPrice(portfolioId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['customAssets', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth-history', portfolioId] });
     },
   });
 }

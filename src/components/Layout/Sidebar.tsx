@@ -2,10 +2,11 @@ import { NavLink, useMatch, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ReceiptText, DollarSign, CalendarDays,
   PieChart, LogOut, FolderOpen, Boxes, TrendingUp, X, Network, Crown, Calculator as CalculatorIcon,
-  BarChart3, History, Eye, Sprout
+  BarChart3, History, Eye, Sprout, Building2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePortfolios } from '../../hooks/usePortfolios';
+import { useRealEstateHidden } from '../../hooks/useRealEstate';
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -34,6 +35,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const { data: portfolios = [] } = usePortfolios();
+  const realEstateHidden = useRealEstateHidden(portfolioId);
 
   const handleLogout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -43,6 +45,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
 
   const subNav = [
     { name: 'Dashboard', href: `/${portfolioId}`, icon: LayoutDashboard, exact: true },
+    { name: 'Real Estate', href: `/${portfolioId}/real-estate`, icon: Building2, exact: false },
     { name: 'Transactions', href: `/${portfolioId}/transactions`, icon: ReceiptText, exact: false },
     { name: 'Custom Assets', href: `/${portfolioId}/custom-assets`, icon: Boxes, exact: false },
     { name: 'Dividends', href: `/${portfolioId}/dividends`, icon: DollarSign, exact: false },
@@ -56,7 +59,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
     { name: 'Diversification', href: `/${portfolioId}/diversification`, icon: PieChart, exact: false },
     { name: 'Performance', href: `/${portfolioId}/performance`, icon: TrendingUp, exact: false },
     { name: 'Tag Mind Map', href: `/${portfolioId}/tags`, icon: Network, exact: false },
-  ];
+  ].filter((item) => !(realEstateHidden && item.name === 'Real Estate'));
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">

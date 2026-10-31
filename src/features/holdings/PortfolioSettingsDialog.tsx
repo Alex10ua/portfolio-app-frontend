@@ -31,6 +31,12 @@ interface Props {
   onCurrencyDisplayChange: (display: CurrencyDisplay) => void;
   /** portfolio value in baseCurrency, for the live notation preview */
   previewValue: number;
+  /** property kept out of this portfolio's nav, totals and chart */
+  realEstateHidden: boolean;
+  settingsLoading: boolean;
+  onRealEstateHiddenChange: (hidden: boolean) => void;
+  /** active properties recorded in this portfolio */
+  propertyCount: number;
   onReset: () => void;
 }
 
@@ -42,7 +48,7 @@ export default function PortfolioSettingsDialog({
   open, onClose, columns, onToggleColumn, onMoveColumn,
   sortBy, sortOrder, onSortChange, assetFilter, assetTypes, onAssetFilterChange,
   baseCurrency, onBaseCurrencyChange, heldCurrencies, currencyDisplay, onCurrencyDisplayChange,
-  previewValue, onReset,
+  previewValue, realEstateHidden, settingsLoading, onRealEstateHiddenChange, propertyCount, onReset,
 }: Props) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const visibleCount = columns.filter((c) => c.visible).length;
@@ -101,6 +107,30 @@ export default function PortfolioSettingsDialog({
               </div>
             </div>
           )}
+        </section>
+
+        {/* Real estate */}
+        <section>
+          <div className={sectionTitle}>Real Estate</div>
+          <label className="flex items-start gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/40">
+            <input
+              type="checkbox"
+              checked={!realEstateHidden}
+              disabled={settingsLoading}
+              onChange={(e) => onRealEstateHiddenChange(!e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>
+              <span className="block text-sm text-slate-700 dark:text-slate-300">Show real estate in this portfolio</span>
+              <span className="block text-[12px] text-slate-500 dark:text-slate-400">
+                {realEstateHidden
+                  ? 'Hidden from the menu and totals. Net worth includes investments and manual cash; history shows investments only.'
+                  : 'Untick to keep a securities portfolio free of property equity and mortgages.'}
+                {realEstateHidden && propertyCount > 0
+                  && ` ${propertyCount} ${propertyCount === 1 ? 'property stays' : 'properties stay'} saved and return when shown again.`}
+              </span>
+            </span>
+          </label>
         </section>
 
         {/* Table columns */}
@@ -192,7 +222,8 @@ export default function PortfolioSettingsDialog({
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+          disabled={settingsLoading}
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 dark:border-slate-700 px-3 py-2 text-[13px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Reset to defaults

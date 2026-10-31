@@ -26,6 +26,8 @@ const StockValuationPage = lazy(() => import('./features/valuation/StockValuatio
 const StatisticsPage = lazy(() => import('./features/statistics/StatisticsPage'));
 const HistoricalPage = lazy(() => import('./features/historical/HistoricalPage'));
 const ProfilePage = lazy(() => import('./features/profile/ProfilePage'));
+const RealEstatePage = lazy(() => import('./features/realEstate/RealEstatePage'));
+const PropertyDetailPage = lazy(() => import('./features/realEstate/PropertyDetailPage'));
 
 // Portfolio pages keep per-portfolio UI state (column config, chart start, sort,
 // filter) seeded from that portfolio's settings on mount. Keying the outlet by
@@ -56,6 +58,8 @@ export default function App() {
                 <Route path="diversification" element={<DiversificationPage />} />
                 <Route path="dividend-calendar" element={<DividendCalendarPage />} />
                 <Route path="custom-assets" element={<CustomAssetsPage />} />
+                <Route path="real-estate" element={<RealEstatePage />} />
+                <Route path="real-estate/:propertyId" element={<PropertyDetailPage />} />
                 <Route path="performance" element={<PerformancePage />} />
                 <Route path="tags" element={<TagMapPage />} />
                 <Route path="ownership" element={<OwnershipPage />} />

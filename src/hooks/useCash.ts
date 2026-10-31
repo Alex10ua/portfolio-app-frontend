@@ -16,6 +16,7 @@ export function useUpsertCashHolding(portfolioId: string) {
       upsertCashHolding(portfolioId, currency, amount),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['cashHoldings', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth', portfolioId] });
     },
   });
 }
@@ -26,6 +27,7 @@ export function useDeleteCashHolding(portfolioId: string) {
     mutationFn: (currency: string) => deleteCashHolding(portfolioId, currency),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['cashHoldings', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth', portfolioId] });
     },
   });
 }

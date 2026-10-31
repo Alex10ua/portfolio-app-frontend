@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getSettings, saveSettings } from '../api/users';
-import { writeLocalPortfolioSettings } from '../lib/portfolioSettingsStore';
+import { readLocalPortfolioSettings, writeLocalPortfolioSettings } from '../lib/portfolioSettingsStore';
 import type { UserSettings, PortfolioSettings } from '../types/settings';
 
 type Theme = 'light' | 'dark';
@@ -119,7 +119,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const getPortfolioSettings = (pid: string) => settings.portfolioSettings[pid];
 
   const updatePortfolioSettings = (pid: string, patch: Partial<PortfolioSettings>) => {
-    const merged = { ...settingsRef.current.portfolioSettings[pid], ...patch };
+    // Before the server copy lands the context holds nothing for pid; merging onto
+    // an empty object would cut the localStorage mirror down to this one patch
+    // (the dashboard's mount-time tableConfig echo wiped every other field).
+    const current = settingsRef.current.portfolioSettings[pid]
+      ?? (settingsLoadedRef.current ? undefined : readLocalPortfolioSettings(pid));
+    const merged = { ...current, ...patch };
     commit({
       ...settingsRef.current,
       portfolioSettings: { ...settingsRef.current.portfolioSettings, [pid]: merged },

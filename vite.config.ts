@@ -7,7 +7,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:8080',
-      '/login': 'http://localhost:8080',
+      '/login': {
+        target: 'http://localhost:8080',
+        // Spring handles form POSTs; a direct GET must load the SPA login route.
+        bypass: request => request.method === 'GET' ? '/' : undefined,
+      },
       '/logout': 'http://localhost:8080',
     },
   },

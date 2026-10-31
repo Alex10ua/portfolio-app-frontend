@@ -44,7 +44,7 @@ export default function PortfolioListPage() {
   const { mutateAsync: renamePortfolio, isPending: renaming } = useUpdatePortfolio();
   const { mutateAsync: removePortfolio, isPending: deleting } = useDeletePortfolio();
 
-  const { items, total, totalCost, totalCurrency, isLoading: isLoadingValues } = usePortfolioValues(portfolios);
+  const { items, total, totalCost, totalProfit, totalCurrency, isLoading: isLoadingValues, complete, investmentComplete, allocationValues } = usePortfolioValues(portfolios);
 
   // Biggest portfolio first; portfolios whose value hasn't loaded yet sink to the end.
   // Cards and the allocation summary use the same order so PALETTE colors line up.
@@ -98,7 +98,6 @@ export default function PortfolioListPage() {
   if (isLoading) return <FullPageSpinner />;
   if (error) return <ErrorAlert title="Error loading portfolios" message={(error as Error).message} />;
 
-  const totalProfit = total - totalCost;
   const totalProfitPct = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
 
   return (
@@ -118,12 +117,12 @@ export default function PortfolioListPage() {
                 {/* Net worth */}
                 <div className="flex-1">
                   <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
-                    Net Worth · All Portfolios
+                    Net Worth · All Portfolios{!complete ? ' · Incomplete subtotal' : ''}
                   </div>
                   <div className="text-[32px] font-bold text-slate-900 dark:text-white tabular-nums tracking-tight leading-none">
                     {formatCurrency(total, undefined, totalCurrency)}
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
+                  {investmentComplete ? <div className="flex items-center gap-2 mt-2">
                     <span className={`flex items-center gap-1 text-[13px] font-semibold tabular-nums ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                       <TrendingUp className="h-3.5 w-3.5" />
                       {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, undefined, totalCurrency)}
@@ -131,17 +130,17 @@ export default function PortfolioListPage() {
                     <span className={`text-[13px] font-semibold tabular-nums ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                       ({totalProfit >= 0 ? '+' : ''}{formatPercent(totalProfitPct)})
                     </span>
-                    <span className="text-[12px] text-slate-500 dark:text-slate-400">total unrealized P&amp;L</span>
-                  </div>
+                    <span className="text-[12px] text-slate-500 dark:text-slate-400">investment unrealized P&amp;L</span>
+                  </div> : <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Investment P&amp;L unavailable: prices or currency rates are missing.</p>}
                 </div>
 
                 <div className="hidden sm:block w-px self-stretch bg-slate-200 dark:bg-slate-700" />
 
                 {/* Cost basis */}
                 <div className="sm:w-48">
-                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">Cost Basis</div>
+                  <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">Investment Cost Basis</div>
                   <div className="text-[20px] font-semibold text-slate-900 dark:text-white tabular-nums">
-                    {formatCurrency(totalCost, undefined, totalCurrency)}
+                    {investmentComplete ? formatCurrency(totalCost, undefined, totalCurrency) : '—'}
                   </div>
                   <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1">across {portfolios.length} portfolios</div>
                 </div>
@@ -149,11 +148,12 @@ export default function PortfolioListPage() {
 
               {/* Allocation bar — one segment per portfolio */}
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
-                Allocation by Portfolio
+                Positive net worth by portfolio
               </div>
               <div className="flex w-full rounded-full overflow-hidden" style={{ height: 10 }}>
                 {orderedItems.map((item, i) => {
-                  const pct = total > 0 ? (item.value / total) * 100 : 0;
+                  const positiveTotal = Object.values(allocationValues).reduce((sum, value) => sum + Math.max(0, value), 0);
+                  const pct = positiveTotal > 0 ? Math.max(0, allocationValues[item.portfolioId] ?? 0) / positiveTotal * 100 : 0;
                   return (
                     <div
                       key={item.portfolioId}
@@ -164,9 +164,11 @@ export default function PortfolioListPage() {
                   );
                 })}
               </div>
+              {items.some(item => item.value < 0) && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">The allocation bar shows positive values. Negative portfolio values are included in net worth above.</p>}
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
                 {orderedItems.map((item, i) => {
-                  const pct = total > 0 ? (item.value / total) * 100 : 0;
+                  const positiveTotal = Object.values(allocationValues).reduce((sum, value) => sum + Math.max(0, value), 0);
+                  const pct = positiveTotal > 0 ? Math.max(0, allocationValues[item.portfolioId] ?? 0) / positiveTotal * 100 : 0;
                   return (
                     <div key={item.portfolioId} className="flex items-center gap-1.5 text-[12px]">
                       <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: PALETTE[i % PALETTE.length] }} />
@@ -226,7 +228,7 @@ export default function PortfolioListPage() {
                     </div>
                     {item && (
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                        {item.assetCount} assets · {item.currency}
+                        {item.assetCount} assets · {item.currency}{!item.complete ? ' · Incomplete' : ''}
                       </div>
                     )}
                   </div>
@@ -258,7 +260,7 @@ export default function PortfolioListPage() {
                   <>
                     {/* Value */}
                     <div className="mb-4">
-                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Total Value</div>
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Net Worth</div>
                       <div className="text-[20px] font-semibold text-slate-900 dark:text-white tabular-nums">
                         {formatCurrency(item.value, undefined, item.currency)}
                       </div>
@@ -267,17 +269,15 @@ export default function PortfolioListPage() {
                     {/* P&L */}
                     <div className="flex gap-6 mb-4">
                       <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Cost Basis</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Investment Cost</div>
                         <div className="text-[13px] font-medium text-slate-700 dark:text-slate-300 tabular-nums">
-                          {formatCurrency(item.cost, undefined, item.currency)}
+                          {item.investmentComplete ? formatCurrency(item.cost, undefined, item.currency) : '—'}
                         </div>
                       </div>
                       <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">P&amp;L</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Investment P&amp;L</div>
                         <div className={`text-[13px] font-semibold tabular-nums ${item.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                          {item.profit >= 0 ? '+' : ''}{formatCurrency(item.profit, undefined, item.currency)}
-                          {' '}
-                          <span className="font-medium opacity-85">({item.profit >= 0 ? '+' : ''}{formatPercent(item.profitPct)})</span>
+                          {item.investmentComplete ? <>{item.profit >= 0 ? '+' : ''}{formatCurrency(item.profit, undefined, item.currency)}{' '}<span className="font-medium opacity-85">({item.profit >= 0 ? '+' : ''}{formatPercent(item.profitPct)})</span></> : '—'}
                         </div>
                       </div>
                     </div>
@@ -390,7 +390,7 @@ export default function PortfolioListPage() {
               <p className="font-semibold mb-1">This cannot be undone.</p>
               <p>
                 Deleting <strong>{deleteTarget?.portfolioName}</strong> permanently removes all its data:
-                transactions, holdings, custom assets, cash holdings, imports, tags and notes.
+                        transactions, holdings, custom assets, cash holdings, properties, mortgages, imports, tags and notes.
               </p>
             </div>
           </div>

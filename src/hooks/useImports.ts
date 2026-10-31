@@ -26,6 +26,8 @@ export function useSubmitImportBatch(portfolioId: string, onSuccess?: () => void
       void qc.invalidateQueries({ queryKey: ['imports', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['holdings', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['performance', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth', portfolioId] });
+      void qc.invalidateQueries({ queryKey: ['wealth-history', portfolioId] });
       onSuccess?.();
     },
   });
@@ -41,7 +43,7 @@ export function useDeleteImport(portfolioId: string, onSuccess?: () => void) {
       void qc.invalidateQueries({ queryKey: ['transactions', portfolioId] });
       void qc.invalidateQueries({ queryKey: ['performance', portfolioId] });
       // positions the batch opened are closed again, and closing drops their tags
-      for (const key of ['tags', 'tagNames', 'tickerTags']) {
+      for (const key of ['tags', 'tagNames', 'tickerTags', 'wealth', 'wealth-history']) {
         void qc.invalidateQueries({ queryKey: [key, portfolioId] });
       }
       onSuccess?.();

@@ -22,6 +22,12 @@ export interface PortfolioSettings {
   /** per-ticker target % of portfolio; absent ticker = no target set */
   targets?: AllocationTarget[];
   chartRange?: ChartRange;  // value-chart window; default YTD
+  wealthChartView?: 'COMBINED' | 'INVESTMENTS';
+  /**
+   * Keeps property out of this portfolio: no Real Estate nav entry, no property card,
+   * totals and chart are investments (+ cash) only. Property records stay saved.
+   */
+  hideRealEstate?: boolean;
   sortBy?: string;          // holdings-table column key
   sortOrder?: 'asc' | 'desc';
   assetFilter?: string;     // 'ALL' or an AssetType

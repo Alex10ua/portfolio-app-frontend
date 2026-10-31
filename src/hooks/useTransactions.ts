@@ -13,7 +13,7 @@ export function useTransactions(portfolioId: string, year: number) {
 // Editing/removing a transaction changes every derived view (holdings recalc
 // server-side, cash, realized P&L) — mirror useCreateTransaction's invalidation.
 // A sale that closes a position also drops its tags server-side.
-const DERIVED_KEYS = ['holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags'];
+const DERIVED_KEYS = ['holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags', 'wealth', 'wealth-history'];
 
 export function useUpdateTransaction(portfolioId: string, year: number) {
   const qc = useQueryClient();

@@ -64,7 +64,7 @@ export function useCreateTransaction(portfolioId: string) {
     onSuccess: () => {
       // A new transaction affects every derived view, not just holdings/cash.
       // (partial key match also invalidates ['performance', portfolioId, period])
-      for (const key of ['transactions', 'holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags']) {
+      for (const key of ['transactions', 'holdings', 'cashBalance', 'portfolioHistory', 'dividends', 'dividendCalendar', 'diversification', 'performance', 'tags', 'tagNames', 'tickerTags', 'wealth', 'wealth-history']) {
         void qc.invalidateQueries({ queryKey: [key, portfolioId] });
       }
     },

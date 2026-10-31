@@ -5,12 +5,15 @@ import {
   TrendingUp, DollarSign, BarChart2, Percent, LayoutGrid, Banknote,
   Wallet, Pencil, Trash2,
 } from 'lucide-react';
-import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance, usePortfolioHistory } from '../../hooks/useHoldings';
+import { useHoldings, useFirstTradeYear, useCreateTransaction, useCashBalance } from '../../hooks/useHoldings';
+import { useWealth, useWealthHistory } from '../../hooks/useWealth';
+import { useRealEstateHidden } from '../../hooks/useRealEstate';
 import { useCashHoldings, useUpsertCashHolding, useDeleteCashHolding } from '../../hooks/useCash';
 import { usePnlSummary } from '../../hooks/usePerformance';
 import { useSettings } from '../../context/SettingsContext';
 import { useFxRates } from '../../hooks/useFxRates';
 import { convert, formatMoney, normalizeCurrency } from '../../lib/currency';
+import { summarizeWealth } from '../../lib/wealth';
 import { FullPageSpinner } from '../../components/ui/Spinner';
 import ErrorAlert from '../../components/ui/ErrorAlert';
 import EmptyState from '../../components/ui/EmptyState';
@@ -19,7 +22,8 @@ import Dialog from '../../components/ui/Dialog';
 import CreateTransactionDialog from './CreateTransactionDialog';
 import ImportTransactionsModal from './ImportTransactionsModal';
 import HoldingDetailDialog from './HoldingDetailDialog';
-import PortfolioValueChart from './PortfolioValueChart';
+import WealthHistoryChart from './WealthHistoryChart';
+import { NetWorthBand, RealEstateDashboardCard } from './WealthSummary';
 import PortfolioSettingsDialog from './PortfolioSettingsDialog';
 import TargetPercentCell, { formatTarget } from './TargetPercentCell';
 import { DEFAULT_COLUMNS, mergeColumns, type Column } from './holdingsColumns';
@@ -89,13 +93,15 @@ export default function HoldingsDashboardPage() {
   const { portfolioId } = useParams<{ portfolioId: string }>();
   const navigate = useNavigate();
   const pid = portfolioId!;
+  const includeProperty = !useRealEstateHidden(pid);
 
   const { data: holdings, isLoading, error } = useHoldings(pid);
   const { data: firstTradeYear } = useFirstTradeYear(pid);
   const { mutateAsync: createTransaction, isPending: creating } = useCreateTransaction(pid);
   const { data: cashBalance } = useCashBalance(pid);
   const { data: manualCash } = useCashHoldings(pid);
-  const { data: valueHistory } = usePortfolioHistory(pid);
+  const { data: valueHistory } = useWealthHistory(pid, includeProperty);
+  const { data: wealth } = useWealth(pid);
   const { data: pnlSummary } = usePnlSummary(pid);
   const { mutateAsync: saveCash, isPending: savingCash } = useUpsertCashHolding(pid);
   const { mutateAsync: removeCash } = useDeleteCashHolding(pid);
@@ -117,6 +123,7 @@ export default function HoldingsDashboardPage() {
   // portfolio (PortfolioScope in App.tsx), so these initializers re-run on switch.
   const [localSettings] = useState(() => readLocalPortfolioSettings(pid));
   const [chartRange, setChartRange]   = useState<ChartRange>(localSettings.chartRange ?? 'YTD');
+  const [wealthChartView, setWealthChartView] = useState<'COMBINED' | 'INVESTMENTS'>(localSettings.wealthChartView ?? 'COMBINED');
   const [orderBy, setOrderBy]         = useState<string>(localSettings.sortBy ?? 'ticker');
   const [order, setOrder]             = useState<SortOrder>(localSettings.sortOrder ?? 'asc');
   const [assetFilter, setAssetFilter] = useState<AssetType | 'ALL'>((localSettings.assetFilter as AssetType | 'ALL') ?? 'ALL');
@@ -133,6 +140,7 @@ export default function HoldingsDashboardPage() {
   // already touched the config this visit (dirtyRef guards their edits).
   const { settingsLoaded, getPortfolioSettings, updatePortfolioSettings } = useSettings();
   const settingsDirtyRef = useRef(false);
+  // Read live rather than seeded into state: the sidebar and the overview follow the same flag.
   useEffect(() => {
     if (!settingsLoaded || settingsDirtyRef.current) return;
     const server = getPortfolioSettings(pid);
@@ -146,6 +154,7 @@ export default function HoldingsDashboardPage() {
       setTargets((prev) => JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged);
     }
     if (server.chartRange) setChartRange((prev) => prev === server.chartRange ? prev : server.chartRange!);
+    if (server.wealthChartView) setWealthChartView(server.wealthChartView);
     if (server.sortBy) setOrderBy((prev) => prev === server.sortBy ? prev : server.sortBy!);
     if (server.sortOrder) setOrder((prev) => prev === server.sortOrder ? prev : server.sortOrder!);
     if (server.assetFilter) {
@@ -220,6 +229,7 @@ export default function HoldingsDashboardPage() {
     settingsDirtyRef.current = true;
     setColumns(DEFAULT_COLUMNS);   // persisted by the columns effect
     setChartRange('YTD');
+    setWealthChartView('COMBINED');
     setOrderBy('ticker');
     setOrder('asc');
     setAssetFilter('ALL');
@@ -227,7 +237,7 @@ export default function HoldingsDashboardPage() {
     setCurrencyDisplay('Symbol');
     updatePortfolioSettings(pid, {
       chartRange: 'YTD', sortBy: 'ticker', sortOrder: 'asc', assetFilter: 'ALL',
-      baseCurrency: undefined, currencyDisplay: 'Symbol',
+      baseCurrency: undefined, currencyDisplay: 'Symbol', hideRealEstate: false, wealthChartView: 'COMBINED',
     });
   };
 
@@ -274,14 +284,18 @@ export default function HoldingsDashboardPage() {
   // Currencies the portfolio actually holds — the picker lists them first and
   // they are the candidates for the auto-detected base.
   const heldCurrencies = useMemo(
-    () => [...new Set((holdings ?? []).map((h) => h.currency).filter((c): c is string => !!c))],
-    [holdings]);
+    () => [...new Set([
+      ...(holdings ?? []).map((h) => h.currency).filter((c): c is string => !!c),
+      ...(manualCash ?? []).map(c => c.currency),
+      ...(includeProperty ? wealth?.properties ?? [] : []).map(v => v.property.currency),
+    ])],
+    [holdings, manualCash, wealth, includeProperty]);
 
   // An explicit setting wins. Otherwise: single-currency portfolio → that
   // currency, mixed → USD (the long-standing default).
   const baseCurrency = currencyPref
     ?? (heldCurrencies.length === 1 ? normalizeCurrency(heldCurrencies[0])
-      : heldCurrencies.length ? 'USD' : '');
+      : 'USD');
 
   /** Native amount → the portfolio's base currency, using the rates held client-side. */
   const toBase = useMemo(
@@ -352,11 +366,6 @@ export default function HoldingsDashboardPage() {
     const avgYield    = holdings.length ? holdings.reduce((s, h) => s + (h.dividendYield ?? 0), 0) / holdings.length : 0;
     return { totalValue, totalCost, totalProfit, avgYield };
   }, [holdings, toBase]);
-
-  // Manual cash converted to the portfolio's base currency.
-  const cashInBase = useMemo(
-    () => (manualCash ?? []).reduce((s, c) => s + toBase(c.amount, c.currency), 0),
-    [manualCash, toBase]);
 
   // Distinct months of the value chart, ascending — options for the start-month select
   const chartMonths = useMemo(() => {
@@ -617,57 +626,21 @@ export default function HoldingsDashboardPage() {
         </div>
       </div>
 
-      {/* KPI stat cards */}
-      {stats && (
+      <NetWorthBand portfolioId={pid} baseCurrency={baseCurrency} currencyDisplay={currencyDisplay} includeProperty={includeProperty} />
+
+      {/* Investment metrics keep their FIFO/trade scope when property equity is added. */}
+      {stats && holdings && holdings.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="relative group h-full">
-            <StatCard
-              label={`Total Value${baseCurrency ? ` (${baseCurrency})` : ''}`}
-              value={money(stats.totalValue + cashInBase)}
-              icon={TrendingUp}
-              accent="#4F46E5"
-              sub={cashInBase !== 0 ? 'incl. cash' : undefined}
-            />
-            {cashInBase !== 0 && (
-              <div className="absolute left-0 top-full mt-1.5 z-30 hidden group-hover:block w-64 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 shadow-lg">
-                <div className="flex items-center justify-between text-[13px] mb-1.5">
-                  <span className="text-slate-500 dark:text-slate-400">Portfolio value</span>
-                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {money(stats.totalValue)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="text-slate-500 dark:text-slate-400">Cash</span>
-                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {money(cashInBase)}
-                  </span>
-                </div>
-                {(manualCash ?? []).map((c) => (
-                  <div key={c.currency} className="flex items-center justify-between text-[12px] pl-3 mt-0.5">
-                    <span className="text-slate-400 dark:text-slate-500">{c.currency}</span>
-                    <span className="tabular-nums text-slate-500 dark:text-slate-400">
-                      {c.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between text-[13px] mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">Total</span>
-                  <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-                    {money(stats.totalValue + cashInBase)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
+          <StatCard label={`Investments (${baseCurrency})`} value={money(stats.totalValue)} icon={TrendingUp} accent="#4F46E5" sub={includeProperty ? 'Holdings only · excludes cash and property' : 'Holdings only · excludes cash'} />
           <StatCard
-            label={`Cost Basis${baseCurrency ? ` (${baseCurrency})` : ''}`}
+            label={`Investment Cost Basis (${baseCurrency})`}
             value={money(stats.totalCost)}
             icon={DollarSign}
             accent="#14B8A6"
           />
           <div className="relative group h-full" tabIndex={0} aria-describedby="portfolio-pnl-breakdown">
             <StatCard
-              label={`Total P&L${baseCurrency ? ` (${baseCurrency})` : ''}`}
+              label={`Investment P&L (${baseCurrency})`}
               value={money(stats.totalProfit + realizedInBase)}
               icon={BarChart2}
               accent={stats.totalProfit + realizedInBase >= 0 ? '#10B981' : '#EF4444'}
@@ -712,7 +685,7 @@ export default function HoldingsDashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-[14px] font-semibold text-slate-900 dark:text-white">Cash Holdings</div>
-            <div className="text-[12px] text-slate-500 dark:text-slate-400">Updated manually — counted in Total Value, not in charts</div>
+            <div className="text-[12px] text-slate-500 dark:text-slate-400">Manual balances — included in today's net worth; excluded from history</div>
           </div>
           <button
             onClick={() => setCashDialog({ currency: '', amount: '' })}
@@ -792,14 +765,17 @@ export default function HoldingsDashboardPage() {
         </div>
       )}
 
-      {/* Portfolio value chart */}
-      {holdings && holdings.length > 0 && (
+      {includeProperty && <RealEstateDashboardCard portfolioId={pid} />}
+
+      {/* Combined history also works for a property-only portfolio. */}
+      {((holdings?.length ?? 0) > 0 || (includeProperty && (wealth?.properties.length ?? 0) > 0) || (valueHistory?.length ?? 0) > 1) && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Portfolio Value Over Time</div>
+              <div className="text-[14px] font-semibold text-slate-900 dark:text-white mb-1">Value over time</div>
               <div className="text-[12px] text-slate-500 dark:text-slate-400 mb-4">
-                {baseCurrency ? `All currencies converted to ${baseCurrency} at today's rate` : 'All currencies converted to base'}
+                Cash excluded; values converted at current FX.
+                {includeProperty && ' Property valuations are carried forward from their recorded dates.'}
               </div>
             </div>
             {chartMonths.length > 1 && (
@@ -820,12 +796,15 @@ export default function HoldingsDashboardPage() {
               </div>
             )}
           </div>
-          <div className="h-56">
-            <PortfolioValueChart
+          <div>
+            <WealthHistoryChart
               portfolioId={pid}
               startMonth={effectiveChartStart}
               baseCurrency={baseCurrency}
               currencyDisplay={currencyDisplay}
+              view={wealthChartView}
+              onViewChange={(view) => { settingsDirtyRef.current = true; setWealthChartView(view); updatePortfolioSettings(pid, { wealthChartView: view }); }}
+              includeProperty={includeProperty}
             />
           </div>
         </div>
@@ -835,8 +814,8 @@ export default function HoldingsDashboardPage() {
       {holdings?.length === 0 ? (
         <EmptyState
           icon={LayoutGrid}
-          title="No holdings yet"
-          description="Add a transaction to get started."
+          title="No securities in this portfolio"
+          description={`Investment positions, P&L, cost basis and yield appear after the first transaction.${includeProperty ? ' Property equity can be tracked without trades.' : ''}`}
         />
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -1127,7 +1106,11 @@ export default function HoldingsDashboardPage() {
         heldCurrencies={heldCurrencies}
         currencyDisplay={currencyDisplay}
         onCurrencyDisplayChange={changeCurrencyDisplay}
-        previewValue={(stats?.totalValue ?? 0) + cashInBase}
+        previewValue={wealth ? summarizeWealth(wealth, baseCurrency || 'USD', fxRates, includeProperty).total : stats?.totalValue ?? 0}
+        realEstateHidden={!includeProperty}
+        settingsLoading={!settingsLoaded}
+        onRealEstateHiddenChange={(hidden) => updatePortfolioSettings(pid, { hideRealEstate: hidden })}
+        propertyCount={wealth?.properties.length ?? 0}
         onReset={resetSettings}
       />
     </div>

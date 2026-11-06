@@ -34,7 +34,31 @@ export interface MortgagePayment {
   lowerInstallment?: boolean | null;
   /** The bank's installment after it; null = calculated over the installments left. */
   newInstallment?: number | null;
+  /** Paid into a building savings loan's savings account (before its switch). */
+  savingsPaid?: number | null;
   recordedAt?: string | null;
+}
+export interface SavingsCheckpoint {
+  id: string;
+  asOfDate: string;
+  balance: number;
+  source: 'BANK_STATEMENT' | 'USER_CONFIRMED';
+  note?: string | null;
+  recordedAt?: string | null;
+}
+/**
+ * A building savings loan (e.g. PSS môjÚVER): an interest-only bridging loan beside a savings account
+ * until the target amount is allocated; then the savings repay part of it and the rest is a building loan.
+ */
+export interface BuildingSavings {
+  monthlyDeposit: number;
+  savingsRatePercent?: number | null;
+  /** Expected allocation; the switch falls on the first installment date from it. */
+  allocationDate: string;
+  buildingLoanRatePercent: number;
+  /** The bank's building-loan installment; null = calculated. */
+  buildingLoanPayment?: number | null;
+  savingsCheckpoints: SavingsCheckpoint[];
 }
 export interface Mortgage {
   id: string;
@@ -55,6 +79,8 @@ export interface Mortgage {
   ratePeriods: MortgageRatePeriod[];
   balanceCheckpoints: MortgageCheckpoint[];
   payments: MortgagePayment[];
+  /** Null for an annuity loan. */
+  buildingSavings?: BuildingSavings | null;
   version: number;
 }
 
@@ -66,6 +92,8 @@ export interface MortgageBalance {
   rateNeeded: boolean;
   partialPeriodUnsupported: boolean;
   warnings: string[];
+  /** A building savings loan's savings account (0 after its switch); null for an annuity loan. */
+  savingsBalance?: number | null;
 }
 export interface MortgageSummary {
   balance: MortgageBalance;
@@ -79,10 +107,14 @@ export interface MortgageSummary {
   recordedPrincipal: number;
   recordedInterest: number;
   recordedFees: number;
+  /** Building savings loan: the switch to the building loan, what the savings repay there and the building loan left. */
+  switchDate?: string | null;
+  savingsAtSwitch?: number | null;
+  buildingLoanAtSwitch?: number | null;
 }
 export interface MortgageScheduleRow {
   date: string;
-  kind: 'OPENING' | 'INSTALLMENT' | 'PAYMENT' | 'CHECKPOINT' | 'RATE_NEEDED' | 'UNSUPPORTED_PERIOD' | 'PAID_OFF';
+  kind: 'OPENING' | 'INSTALLMENT' | 'PAYMENT' | 'CHECKPOINT' | 'RATE_NEEDED' | 'UNSUPPORTED_PERIOD' | 'PAID_OFF' | 'SAVINGS_CHECKPOINT' | 'SWITCH';
   scheduledDueDate: string | null;
   principal: number | null;
   extraPrincipal: number | null;
@@ -93,6 +125,9 @@ export interface MortgageScheduleRow {
   provenance: 'CONFIRMED' | 'CARRIED' | 'ESTIMATED' | 'PROJECTED' | 'UNRECORDED' | 'PAUSED' | 'UNKNOWN';
   annualNominalRatePercent: number | null;
   note: string | null;
+  /** Building savings loan only: paid into savings on this row (negative at the switch), and the savings balance. */
+  savings?: number | null;
+  savingsBalance?: number | null;
 }
 export interface MortgagePayload {
   lender?: string;
@@ -107,6 +142,8 @@ export interface MortgagePayload {
   balanceTrackingMode: BalanceTrackingMode;
   openingBalance: CheckpointPayload;
   ratePeriod?: RatePeriodPayload | null;
+  /** Null = an annuity loan; on an update, unchanged. savingsBalance is read on setup only. */
+  buildingSavings?: BuildingSavingsPayload | null;
   version?: number;
   propertyVersion?: number;
 }
@@ -120,6 +157,22 @@ export interface PaymentPayload {
   note?: string;
   lowerInstallment?: boolean | null;
   newInstallment?: DecimalInput | null;
+  savingsPaid?: DecimalInput | null;
+  version?: number;
+}
+export interface BuildingSavingsPayload {
+  monthlyDeposit: DecimalInput;
+  savingsBalance?: DecimalInput | null;
+  savingsRatePercent?: DecimalInput | null;
+  allocationDate: string;
+  buildingLoanRatePercent: DecimalInput;
+  buildingLoanPayment?: DecimalInput | null;
+}
+export interface SavingsPayload {
+  asOfDate: string;
+  balance: DecimalInput;
+  source: 'BANK_STATEMENT' | 'USER_CONFIRMED';
+  note?: string;
   version?: number;
 }
 /** One unsaved projection; remainingInterest counts from today. */

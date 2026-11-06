@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { CheckpointPayload, ExtraPaymentPreview, Mortgage, MortgagePayload, MortgageScheduleRow, MortgageSummary, PaymentPayload, RatePeriodPayload } from '../types/mortgage';
+import type { CheckpointPayload, ExtraPaymentPreview, Mortgage, MortgagePayload, MortgageScheduleRow, MortgageSummary, PaymentPayload, RatePeriodPayload, SavingsPayload } from '../types/mortgage';
 import type { DecimalInput, FinancingStatus, PropertyView } from '../types/realEstate';
 
 export const mortgagePath = (pid: string, propertyId: string, mortgageId?: string) => `${encodeURIComponent(pid)}/properties/${encodeURIComponent(propertyId)}/mortgages${mortgageId ? `/${encodeURIComponent(mortgageId)}` : ''}`;
@@ -15,7 +15,8 @@ export async function createMortgage(pid: string, propertyId: string, body: Mort
 export async function updateMortgage(pid: string, propertyId: string, id: string, body: Partial<MortgagePayload>, key: string): Promise<PropertyView> {
   return (await apiClient.patch<PropertyView>(mortgagePath(pid, propertyId, id), body, config(key))).data;
 }
-export async function saveMortgageEvent(pid: string, propertyId: string, id: string, kind: 'payments' | 'balance-checkpoints' | 'rate-periods', eventId: string | null, body: PaymentPayload | CheckpointPayload | RatePeriodPayload, key: string): Promise<PropertyView> {
+export type MortgageEventKind = 'payments' | 'balance-checkpoints' | 'rate-periods' | 'savings-checkpoints';
+export async function saveMortgageEvent(pid: string, propertyId: string, id: string, kind: MortgageEventKind, eventId: string | null, body: PaymentPayload | CheckpointPayload | RatePeriodPayload | SavingsPayload, key: string): Promise<PropertyView> {
   const path = `${mortgagePath(pid, propertyId, id)}/${kind}${eventId ? `/${encodeURIComponent(eventId)}` : ''}`;
   return eventId
     ? (await apiClient.patch<PropertyView>(path, body, config(key))).data

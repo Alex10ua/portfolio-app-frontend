@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { closeMortgage, createMortgage, deleteMortgage, getMortgage, getMortgageSchedule, previewExtraPayment, previewMortgage, saveMortgageEvent, updateMortgage } from '../api/mortgages';
-import type { CheckpointPayload, MortgagePayload, MortgageScheduleRow, PaymentPayload, RatePeriodPayload } from '../types/mortgage';
+import type { MortgageEventKind } from '../api/mortgages';
+import type { CheckpointPayload, MortgagePayload, MortgageScheduleRow, PaymentPayload, RatePeriodPayload, SavingsPayload } from '../types/mortgage';
 import type { FinancingStatus } from '../types/realEstate';
 import { useInvalidateRealEstate, useRealEstateRetryKey } from './useRealEstate';
 
@@ -21,7 +22,7 @@ export function useUpdateMortgage(pid: string, propertyId: string, id: string) {
 }
 export function useSaveMortgageEvent(pid: string, propertyId: string, mortgageId: string) {
   const invalidate = useInvalidateRealEstate(pid); const keys = useRealEstateRetryKey();
-  return useMutation({ mutationFn: async (input: { kind: 'payments' | 'balance-checkpoints' | 'rate-periods'; id: string | null; payload: PaymentPayload | CheckpointPayload | RatePeriodPayload }) => {
+  return useMutation({ mutationFn: async (input: { kind: MortgageEventKind; id: string | null; payload: PaymentPayload | CheckpointPayload | RatePeriodPayload | SavingsPayload }) => {
     const result = await saveMortgageEvent(pid, propertyId, mortgageId, input.kind, input.id, input.payload, keys.forPayload(input)); keys.succeeded(input); return result;
   }, onSuccess: invalidate });
 }

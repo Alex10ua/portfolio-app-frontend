@@ -49,6 +49,8 @@ export interface PropertyView {
   loanSummaries: Record<string, MortgageSummary>;
   /** The open loans together; null when none is open. */
   debt: DebtStatus | null;
+  /** Building savings counted against their loan in attributedMortgagePrincipal; null when no loan has savings. */
+  attributedBuildingSavings?: number | null;
 }
 
 /** Least certain balance and every warning (named by loan when there are several) of the open loans. */

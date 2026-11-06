@@ -4,13 +4,13 @@ import { useCloseMortgage, useDeleteMortgage, useExtraPaymentPreview, useMortgag
 import { cn } from '../../lib/cn';
 import { parseLocalDate } from '../../lib/dates';
 import type { FinancingStatus, PropertyView } from '../../types/realEstate';
-import type { ExtraPaymentOutcome, Mortgage, MortgageCheckpoint, MortgagePayment, MortgageRatePeriod, MortgageScheduleRow } from '../../types/mortgage';
+import type { ExtraPaymentOutcome, Mortgage, MortgageCheckpoint, MortgagePayment, MortgageRatePeriod, MortgageScheduleRow, SavingsCheckpoint } from '../../types/mortgage';
 import { Card, Editor, Notice, buttonClass, dateLabel, errorText, loanName, money, sourceLabels, today } from './realEstateUi';
 import type { FormField, FormValues } from './realEstateUi';
 import { lastDueOnOrBefore } from './mortgageDates';
 
 /** payment.extra: prefilled from the "Pay extra?" what-if */
-export type MortgageEdit = { kind: 'payment'; target?: MortgagePayment; dueDate?: string; extra?: { date: string; amount: string; lower: boolean } } | { kind: 'balance'; target?: MortgageCheckpoint } | { kind: 'rate'; target?: MortgageRatePeriod } | { kind: 'close' } | { kind: 'details' } | { kind: 'delete' } | { kind: 'extra' };
+export type MortgageEdit = { kind: 'payment'; target?: MortgagePayment; dueDate?: string; extra?: { date: string; amount: string; lower: boolean } } | { kind: 'balance'; target?: MortgageCheckpoint } | { kind: 'rate'; target?: MortgageRatePeriod } | { kind: 'close' } | { kind: 'details' } | { kind: 'delete' } | { kind: 'extra' } | { kind: 'savings'; target?: SavingsCheckpoint };
 const blankToNull = (value: string) => value.trim() || null;
 const after = (date: string) => { const d = new Date(`${date}T12:00:00`); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
@@ -70,6 +70,7 @@ export function MortgageEventEditor({ portfolioId, view, mortgage, edit, onClose
     // The backend locks the timeline and debt allocation once tracking starts (they anchor every
     // calculated installment); a wrong date is fixed by deleting the loan and setting it up again.
     const locked = 'Fixed once tracking starts. Entered wrong? Delete this mortgage and set it up again.';
+    const building = mortgage.buildingSavings;
     const fields: FormField[] = [
       { name: 'lender', label: 'Lender (optional)' }, { name: 'name', label: 'Loan name (optional)' },
       { name: 'originalPrincipal', label: `Original borrowed amount (${cur}, optional)`, type: 'number', min: 0 },
@@ -79,10 +80,18 @@ export function MortgageEventEditor({ portfolioId, view, mortgage, edit, onClose
       { name: 'maturityDate', label: 'Final maturity date', type: 'date', disabled: true, future: true },
       { name: 'paymentDay', label: 'Monthly payment day', disabled: true },
       { name: 'debtAllocationShare', label: 'Debt allocated to this portfolio (%)', disabled: true, help: locked },
+      ...(building ? [
+        { name: 'allocationDate', label: 'Expected switch to the building loan', type: 'date' as const, required: true, future: true, section: 'Building savings', help: 'Change it once the bank confirms the allocation. The switch falls on the next installment date.' },
+        { name: 'monthlyDeposit', label: `Monthly savings deposit (${cur})`, type: 'number' as const, required: true, min: 0 },
+        { name: 'buildingLoanRatePercent', label: 'Building loan rate (% p.a.)', type: 'number' as const, required: true, min: 0, max: 100 },
+        { name: 'buildingLoanPayment', label: `Building loan installment (${cur}, optional)`, type: 'number' as const, min: 0.01, help: 'Blank = calculated over the installments left after the switch.' },
+        { name: 'savingsRatePercent', label: 'Savings interest (% p.a., optional)', type: 'number' as const, min: 0, max: 100 },
+      ] : []),
     ];
     return <Editor title="Edit mortgage" subtitle={`${mortgage.lender || 'Mortgage'} · ${view.property.name}`} fields={fields} onClose={onClose} submitLabel="Save mortgage"
-      defaults={{ lender: mortgage.lender ?? '', name: mortgage.name ?? '', originalPrincipal: mortgage.originalPrincipal == null ? '' : String(mortgage.originalPrincipal), balanceTrackingMode: mortgage.balanceTrackingMode, loanStartDate: mortgage.loanStartDate, firstPaymentDate: mortgage.firstPaymentDate, maturityDate: mortgage.maturityDate, paymentDay: String(mortgage.paymentDay), debtAllocationShare: String(Number((mortgage.debtAllocationShare * 100).toFixed(4))) }}
-      onSubmit={async v => { await update.mutateAsync({ version: mortgage.version, lender: v.lender, name: v.name, originalPrincipal: blankToNull(v.originalPrincipal), balanceTrackingMode: v.balanceTrackingMode as Mortgage['balanceTrackingMode'] }); onClose(); }} />;
+      defaults={{ lender: mortgage.lender ?? '', name: mortgage.name ?? '', originalPrincipal: mortgage.originalPrincipal == null ? '' : String(mortgage.originalPrincipal), balanceTrackingMode: mortgage.balanceTrackingMode, loanStartDate: mortgage.loanStartDate, firstPaymentDate: mortgage.firstPaymentDate, maturityDate: mortgage.maturityDate, paymentDay: String(mortgage.paymentDay), debtAllocationShare: String(Number((mortgage.debtAllocationShare * 100).toFixed(4))), allocationDate: building?.allocationDate ?? '', monthlyDeposit: building ? String(building.monthlyDeposit) : '', buildingLoanRatePercent: building ? String(building.buildingLoanRatePercent) : '', buildingLoanPayment: building?.buildingLoanPayment == null ? '' : String(building.buildingLoanPayment), savingsRatePercent: building?.savingsRatePercent == null ? '' : String(building.savingsRatePercent) }}
+      onSubmit={async v => { await update.mutateAsync({ version: mortgage.version, lender: v.lender, name: v.name, originalPrincipal: blankToNull(v.originalPrincipal), balanceTrackingMode: v.balanceTrackingMode as Mortgage['balanceTrackingMode'],
+        buildingSavings: building ? { monthlyDeposit: v.monthlyDeposit, savingsRatePercent: blankToNull(v.savingsRatePercent), allocationDate: v.allocationDate, buildingLoanRatePercent: v.buildingLoanRatePercent, buildingLoanPayment: blankToNull(v.buildingLoanPayment) } : null }); onClose(); }} />;
   }
   if (edit.kind === 'delete') {
     const active = mortgage.status === 'ACTIVE';
@@ -120,10 +129,15 @@ export function MortgageEventEditor({ portfolioId, view, mortgage, edit, onClose
   }
   if (edit.kind === 'payment') {
     const p = edit.target, x = edit.extra;
-    const extraPaid = (v: FormValues) => v.paymentState !== 'MISSED' && Number(v.extraPrincipalPaid) > 0;
+    const building = mortgage.buildingSavings, switchDate = view.loanSummaries[mortgage.id]?.switchDate ?? null;
+    // Before the switch a building savings loan pays interest and a savings deposit; nothing there can be lowered.
+    const bridging = (date: string) => !!building && (!switchDate || !date || date <= switchDate);
+    const extraPaid = (v: FormValues) => v.paymentState !== 'MISSED' && Number(v.extraPrincipalPaid) > 0 && !bridging(v.paymentDate);
     const lastDue = lastDueOnOrBefore(today(), mortgage.paymentDay);
     const lastCheckpoint = [...mortgage.balanceCheckpoints].sort((a, b) => b.asOfDate.localeCompare(a.asOfDate))[0]?.asOfDate ?? '';
     const defaultDue = lastDue >= mortgage.firstPaymentDate && lastDue > lastCheckpoint ? lastDue : '';
+    const dueForDeposit = p ? '' : edit.dueDate ?? (x ? '' : defaultDue);
+    const defaultSavings = p?.savingsPaid ?? (building && dueForDeposit && bridging(dueForDeposit) ? building.monthlyDeposit : 0);
     const fields: FormField[] = [
       { name: 'paymentDate', label: 'Actual payment date', type: 'date', required: true },
       { name: 'scheduledDueDate', label: 'Replaces installment due on (optional)', type: 'date', future: true, help: 'Match the scheduled due date to replace its estimated repayment. An early payment can reference the next due date. Leave blank for standalone extra principal.' },
@@ -132,14 +146,24 @@ export function MortgageEventEditor({ portfolioId, view, mortgage, edit, onClose
       { name: 'extraPrincipalPaid', label: `Extra principal (${cur})`, type: 'number', required: true, min: 0, help: 'Exclude this amount from regular principal.' },
       { name: 'interestPaid', label: `Interest (${cur})`, type: 'number', required: true, min: 0 },
       { name: 'feesPaid', label: `Fees (${cur})`, type: 'number', required: true, min: 0 },
+      { name: 'savingsPaid', label: `Into the savings account (${cur})`, type: 'number', required: true, min: 0, visible: v => v.paymentState !== 'MISSED' && bridging(v.paymentDate), help: `The building savings deposit${building ? ` (${money(building.monthlyDeposit, cur)} a month)` : ''}, plus any top-up. It is not principal: the savings repay the loan at the switch.` },
       { name: 'afterExtra', label: 'After the extra principal', type: 'radio', options: AFTER_EXTRA, visible: extraPaid },
       { name: 'newInstallment', label: `New installment from the bank (${cur}, optional)`, type: 'number', min: 0.01, visible: v => extraPaid(v) && v.afterExtra === 'LOWER', help: 'Leave blank to work it out over the installments left. Enter the bank’s figure once it confirms one.' },
       { name: 'note', label: 'Note (optional)', type: 'textarea' },
     ];
-    return <Editor title={p ? 'Correct payment' : 'Record payment'} subtitle={`${view.property.name} · whole-loan amounts in ${cur}`} fields={fields} defaults={{ paymentDate: p?.paymentDate ?? x?.date ?? (edit.dueDate && edit.dueDate <= today() ? edit.dueDate : today()), scheduledDueDate: p?.scheduledDueDate ?? edit.dueDate ?? (x ? '' : defaultDue), paymentState: p && Number(p.principalPaid) + Number(p.extraPrincipalPaid) + Number(p.interestPaid) + Number(p.feesPaid) === 0 ? 'MISSED' : 'RECORDED', principalPaid: String(p?.principalPaid ?? 0), extraPrincipalPaid: String(p?.extraPrincipalPaid ?? x?.amount ?? 0), interestPaid: String(p?.interestPaid ?? 0), feesPaid: String(p?.feesPaid ?? 0), afterExtra: p?.lowerInstallment || x?.lower ? 'LOWER' : 'KEEP', newInstallment: p?.newInstallment == null ? '' : String(p.newInstallment), note: p?.note ?? '' }} onClose={onClose} submitLabel={p ? 'Save correction' : 'Record payment'}
+    return <Editor title={p ? 'Correct payment' : 'Record payment'} subtitle={`${view.property.name} · whole-loan amounts in ${cur}`} fields={fields} defaults={{ paymentDate: p?.paymentDate ?? x?.date ?? (edit.dueDate && edit.dueDate <= today() ? edit.dueDate : today()), scheduledDueDate: p?.scheduledDueDate ?? edit.dueDate ?? (x ? '' : defaultDue), paymentState: p && Number(p.principalPaid) + Number(p.extraPrincipalPaid) + Number(p.interestPaid) + Number(p.feesPaid) + Number(p.savingsPaid ?? 0) === 0 ? 'MISSED' : 'RECORDED', savingsPaid: String(defaultSavings), principalPaid: String(p?.principalPaid ?? 0), extraPrincipalPaid: String(p?.extraPrincipalPaid ?? x?.amount ?? 0), interestPaid: String(p?.interestPaid ?? 0), feesPaid: String(p?.feesPaid ?? 0), afterExtra: p?.lowerInstallment || x?.lower ? 'LOWER' : 'KEEP', newInstallment: p?.newInstallment == null ? '' : String(p.newInstallment), note: p?.note ?? '' }} onClose={onClose} submitLabel={p ? 'Save correction' : 'Record payment'}
       validate={v => !v.scheduledDueDate && (v.paymentState === 'MISSED' || Number(v.principalPaid) > 0 || Number(v.interestPaid) > 0) ? { scheduledDueDate: 'Choose the due installment so this payment replaces its estimate. Standalone extra principal can leave this blank.' } : {}}
-      preview={v => <><Card className="bg-slate-50 p-4 dark:bg-slate-900/40"><p className="text-xs font-semibold text-slate-900 dark:text-white">{v.paymentState === 'MISSED' ? 'No payment will be recorded for this installment' : `Total paid: ${money(['principalPaid', 'extraPrincipalPaid', 'interestPaid', 'feesPaid'].reduce((s, k) => s + (Number(v[k]) || 0), 0), cur)}`}</p><p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{v.paymentState === 'MISSED' ? 'All four amounts will be saved as zero. The matching scheduled repayment is suppressed.' : `Principal reduction: ${money((Number(v.principalPaid) || 0) + (Number(v.extraPrincipalPaid) || 0), cur)}. Interest and fees are costs and do not increase equity.`} {p ? 'Later estimates will be recalculated after this correction.' : 'Manual cash is updated separately.'}</p></Card>{!p && extraPaid(v) && <ExtraPaymentComparison portfolioId={portfolioId} propertyId={view.property.id} mortgage={mortgage} date={v.paymentDate} amount={v.extraPrincipalPaid} choice={v.afterExtra} />}</>}
-      onSubmit={async v => { const missed = v.paymentState === 'MISSED', lower = extraPaid(v) && v.afterExtra === 'LOWER'; await save.mutateAsync({ kind: 'payments', id: p?.id ?? null, payload: { version: mortgage.version, paymentDate: v.paymentDate, scheduledDueDate: blankToNull(v.scheduledDueDate), principalPaid: missed ? '0' : v.principalPaid, extraPrincipalPaid: missed ? '0' : v.extraPrincipalPaid, interestPaid: missed ? '0' : v.interestPaid, feesPaid: missed ? '0' : v.feesPaid, note: v.note || (missed ? 'Missed installment' : ''), lowerInstallment: lower || null, newInstallment: lower ? blankToNull(v.newInstallment) : null } }); onClose(); }} />;
+      preview={v => <><Card className="bg-slate-50 p-4 dark:bg-slate-900/40"><p className="text-xs font-semibold text-slate-900 dark:text-white">{v.paymentState === 'MISSED' ? 'No payment will be recorded for this installment' : `Total paid: ${money(['principalPaid', 'extraPrincipalPaid', 'interestPaid', 'feesPaid', ...(bridging(v.paymentDate) ? ['savingsPaid'] : [])].reduce((s, k) => s + (Number(v[k]) || 0), 0), cur)}`}</p><p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{v.paymentState === 'MISSED' ? 'All four amounts will be saved as zero. The matching scheduled repayment is suppressed.' : `Principal reduction: ${money((Number(v.principalPaid) || 0) + (Number(v.extraPrincipalPaid) || 0), cur)}.${bridging(v.paymentDate) ? ` Into savings: ${money(Number(v.savingsPaid) || 0, cur)}, counted against the debt.` : ''} Interest and fees are costs and do not increase equity.`} {p ? 'Later estimates will be recalculated after this correction.' : 'Manual cash is updated separately.'}</p></Card>{!p && extraPaid(v) && <ExtraPaymentComparison portfolioId={portfolioId} propertyId={view.property.id} mortgage={mortgage} date={v.paymentDate} amount={v.extraPrincipalPaid} choice={v.afterExtra} />}</>}
+      onSubmit={async v => { const missed = v.paymentState === 'MISSED', lower = extraPaid(v) && v.afterExtra === 'LOWER'; await save.mutateAsync({ kind: 'payments', id: p?.id ?? null, payload: { version: mortgage.version, paymentDate: v.paymentDate, scheduledDueDate: blankToNull(v.scheduledDueDate), principalPaid: missed ? '0' : v.principalPaid, extraPrincipalPaid: missed ? '0' : v.extraPrincipalPaid, interestPaid: missed ? '0' : v.interestPaid, feesPaid: missed ? '0' : v.feesPaid, note: v.note || (missed ? 'Missed installment' : ''), lowerInstallment: lower || null, newInstallment: lower ? blankToNull(v.newInstallment) : null, savingsPaid: missed || !bridging(v.paymentDate) ? null : blankToNull(v.savingsPaid) } }); onClose(); }} />;
+  }
+  if (edit.kind === 'savings') {
+    const sc = edit.target, switchDate = view.loanSummaries[mortgage.id]?.switchDate ?? null;
+    const baseline = sc?.balance ?? view.loanSummaries[mortgage.id]?.balance.savingsBalance;
+    const fields: FormField[] = [{ name: 'asOfDate', label: 'Savings balance as of (end of day)', type: 'date', required: true, help: switchDate ? `From the savings account statement, up to the switch on ${dateLabel(switchDate)}.` : 'From the savings account statement.' }, { name: 'balance', label: `Savings balance (${cur})`, type: 'number', required: true, min: 0 }, { name: 'source', label: 'Source', type: 'select', options: ['BANK_STATEMENT', 'USER_CONFIRMED'].map(value => ({ value, label: sourceLabels[value] })) }, { name: 'note', label: 'Note (optional)', type: 'textarea' }];
+    return <Editor title={sc ? 'Correct savings balance' : 'Update savings balance'} subtitle={`${loanName(mortgage)} · ${view.property.name} · building savings account`} fields={fields} defaults={{ asOfDate: sc?.asOfDate ?? today(), balance: sc ? String(sc.balance) : '', source: sc?.source ?? 'BANK_STATEMENT', note: sc?.note ?? '' }} onClose={onClose} submitLabel="Save savings balance"
+      validate={v => switchDate && v.asOfDate > switchDate ? { asOfDate: 'After the switch the savings have repaid the bridging loan; update the bank balance instead.' } : {}}
+      preview={v => <Card className="bg-slate-50 p-4 dark:bg-slate-900/40"><p className="text-xs font-semibold text-slate-900 dark:text-white">Reconciliation</p><p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{sc ? 'Stored savings balance' : 'Current tracked savings'}: {money(baseline, cur)}</p>{v.balance && <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">New confirmed savings: {money(Number(v.balance), cur)}</p>}<p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">It replaces the estimate from {dateLabel(v.asOfDate)}: deposits, savings interest and account fees. The savings count against the bridging loan, so equity moves with them.</p></Card>}
+      onSubmit={async v => { await save.mutateAsync({ kind: 'savings-checkpoints', id: sc?.id ?? null, payload: { version: mortgage.version, asOfDate: v.asOfDate, balance: v.balance, source: v.source as 'BANK_STATEMENT' | 'USER_CONFIRMED', note: v.note } }); onClose(); }} />;
   }
   if (edit.kind === 'balance') {
     const cp = edit.target;

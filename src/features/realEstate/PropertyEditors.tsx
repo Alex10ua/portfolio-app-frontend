@@ -72,19 +72,31 @@ export function MortgageSetupEditor({ portfolioId, view, onClose, onSaved }: { p
     return v.loanStartDate && Number.isInteger(day) && day >= 1 && day <= 31
       ? { day, ...setupDates(v.loanStartDate, day, now, { first: v.firstPaymentDate, balanceDate: v.asOfDate, rateFrom: v.effectiveFrom }) } : null;
   };
+  // A building savings loan (e.g. PSS môjÚVER) pays only interest plus a savings deposit until its switch.
+  const building = (v: FormValues) => v.loanType === 'BUILDING_SAVINGS';
   const estimate = (v: FormValues) => {
     const d = dates(v);
-    if (!d || !v.maturityDate || !v.principalBalance || !v.annualNominalRatePercent) return null;
+    if (!d || building(v) || !v.maturityDate || !v.principalBalance || !v.annualNominalRatePercent) return null;
     const count = installmentsAfter(d.balanceDate, d.first, v.maturityDate, d.day);
     return { count, payment: annuity(Number(v.principalBalance), Number(v.annualNominalRatePercent), count) };
   };
   const fields: FormField[] = [
     ...(adding ? [{ name: 'name', label: 'Loan name', section: 'This loan', help: 'Tells the loans apart, e.g. “Down-payment loan”.' }] : []),
-    { name: 'principalBalance', label: `Outstanding principal (${cur})`, type: 'number', required: true, min: 0, section: 'From your bank app', help: v => { const d = dates(v); return !d ? 'The whole loan, not only your share.' : v.asOfDate ? `The whole loan as of ${dateLabel(d.balanceDate)}.` : d.paidOnce ? 'The whole loan, as your bank app shows it today.' : `No installment paid yet: the whole amount paid out on ${dateLabel(d.balanceDate)}.`; } },
-    { name: 'annualNominalRatePercent', label: 'Nominal rate (% p.a.)', type: 'number', required: true, min: 0, max: 100, help: 'The contract rate, not RPMN / APR.' },
-    { name: 'monthlyPayment', label: `Monthly installment (${cur}, optional)`, type: 'number', min: 0.01, help: v => { const e = estimate(v); return e?.payment != null ? `Principal + interest. Blank = calculated ${money(e.payment, cur)} over ${e.count} installments.` : 'Principal + interest. Leave blank to calculate it.'; } },
-    { name: 'fixedUntil', label: 'Rate fixed through', type: 'date', required: true, future: true, help: 'Inclusive end of the current fixation. The app asks for the new rate after it. Fixed for the whole loan? Use its final maturity.' },
+    { name: 'loanType', label: 'Loan type', type: 'radio', section: adding ? undefined : 'Loan type', options: [
+      { value: 'ANNUITY', label: 'Mortgage or annuity loan', description: 'Equal installments that repay principal from the first one.' },
+      { value: 'BUILDING_SAVINGS', label: 'Building savings loan', description: 'e.g. PSS môjÚVER: interest only plus a savings deposit until the target amount is allocated, then a building loan.' },
+    ] },
+    { name: 'principalBalance', label: `Outstanding principal (${cur})`, type: 'number', required: true, min: 0, section: 'From your bank app', help: v => { const d = dates(v), whole = building(v) ? 'The bridging loan (medziúver), the whole loan' : 'The whole loan'; return !d ? `${whole}, not only your share.` : v.asOfDate ? `${whole} as of ${dateLabel(d.balanceDate)}.` : d.paidOnce ? `${whole}, as your bank app shows it today.` : `No installment paid yet: the whole amount paid out on ${dateLabel(d.balanceDate)}.`; } },
+    { name: 'annualNominalRatePercent', label: 'Nominal rate (% p.a.)', type: 'number', required: true, min: 0, max: 100, help: v => building(v) ? 'The bridging loan’s contract rate, not RPMN.' : 'The contract rate, not RPMN / APR.' },
+    { name: 'monthlyPayment', label: `Monthly installment (${cur}, optional)`, type: 'number', min: 0.01, visible: v => !building(v), help: v => { const e = estimate(v); return e?.payment != null ? `Principal + interest. Blank = calculated ${money(e.payment, cur)} over ${e.count} installments.` : 'Principal + interest. Leave blank to calculate it.'; } },
+    { name: 'fixedUntil', label: 'Rate fixed through', type: 'date', required: true, future: true, help: v => building(v) ? 'Inclusive end of the bridging rate’s fixation. Fixed until the allocation? Use the expected switch date; the building loan has its own rate.' : 'Inclusive end of the current fixation. The app asks for the new rate after it. Fixed for the whole loan? Use its final maturity.' },
     { name: 'paymentDay', label: 'Payment day', type: 'number', required: true, min: 1, max: 31, help: 'Day of the month the installment is paid. 31 = the last day of shorter months.' },
+    { name: 'savingsBalance', label: `Saved so far (${cur})`, type: 'number', required: true, min: 0, section: 'Building savings', visible: building, help: 'The savings account on the same date as the loan balance.' },
+    { name: 'monthlyDeposit', label: `Monthly savings deposit (${cur})`, type: 'number', required: true, min: 0, visible: building, help: 'Paid into the savings account with each installment.' },
+    { name: 'allocationDate', label: 'Expected switch to the building loan', type: 'date', required: true, future: true, visible: building, help: 'When the target amount should be allocated (pridelenie cieľovej sumy). The switch falls on the next installment date; change it once the bank confirms.' },
+    { name: 'buildingLoanRatePercent', label: 'Building loan rate (% p.a.)', type: 'number', required: true, min: 0, max: 100, visible: building, help: 'Guaranteed from the switch to the end.' },
+    { name: 'buildingLoanPayment', label: `Building loan installment (${cur}, optional)`, type: 'number', min: 0.01, visible: building, help: 'Blank = calculated over the installments left after the switch.' },
+    { name: 'savingsRatePercent', label: 'Savings interest (% p.a., optional)', type: 'number', min: 0, max: 100, advanced: true, visible: building, help: 'Credited monthly in the estimate. Statements correct it.' },
     { name: 'loanStartDate', label: 'Loan start', type: 'date', required: true, section: 'From your contract', help: 'When the bank paid out the loan.' },
     { name: 'maturityDate', label: 'Final maturity', type: 'date', required: true, future: true, help: 'The last installment: the end of the loan, not of the rate fixation.' },
     { name: 'debtAllocationShare', label: coOwned ? 'Your share of this loan (%)' : 'Debt allocated to this portfolio (%)', type: 'number', required: true, min: 0, max: 100, advanced: !coOwned, section: coOwned ? 'Your share' : undefined, help: coOwned ? `You own ${share(p.ownershipShare)}. Enter the part of the loan counted in this portfolio; it does not have to match.` : 'Part of the loan counted in this portfolio: a tracking choice, independent of ownership.' },
@@ -97,7 +109,7 @@ export function MortgageSetupEditor({ portfolioId, view, onClose, onSaved }: { p
     { name: 'balanceTrackingMode', label: 'Between bank balances', type: 'select', options: [{ value: 'SCHEDULE_ESTIMATE', label: 'Estimate scheduled repayments' }, { value: 'STATEMENT_ONLY', label: 'Confirmed records only' }], advanced: true },
   ];
   return <Editor title={adding ? 'Add loan' : 'Set up mortgage'} subtitle={adding ? `${p.name} · beside ${others.map(loanName).join(', ')} · amounts in ${cur}` : `${p.name} · Step 2 · amounts in ${cur}`} fields={fields} onClose={onClose} submitLabel={adding ? 'Save loan' : 'Save mortgage'}
-    defaults={{ principalBalance: '', annualNominalRatePercent: '', monthlyPayment: '', fixedUntil: '', paymentDay: '', loanStartDate: p.purchaseDate ?? '', maturityDate: '', debtAllocationShare: coOwned ? '' : '100', lender: '', name: '', originalPrincipal: '', firstPaymentDate: '', asOfDate: '', effectiveFrom: '', source: 'BANK_STATEMENT', balanceTrackingMode: 'SCHEDULE_ESTIMATE' }}
+    defaults={{ loanType: 'ANNUITY', savingsBalance: '', monthlyDeposit: '', allocationDate: '', buildingLoanRatePercent: '', buildingLoanPayment: '', savingsRatePercent: '', principalBalance: '', annualNominalRatePercent: '', monthlyPayment: '', fixedUntil: '', paymentDay: '', loanStartDate: p.purchaseDate ?? '', maturityDate: '', debtAllocationShare: coOwned ? '' : '100', lender: '', name: '', originalPrincipal: '', firstPaymentDate: '', asOfDate: '', effectiveFrom: '', source: 'BANK_STATEMENT', balanceTrackingMode: 'SCHEDULE_ESTIMATE' }}
     validate={v => {
       const e: Record<string, string> = {}, d = dates(v);
       if (!d) return { paymentDay: 'Enter a whole day of the month (1–31).' };
@@ -112,21 +124,28 @@ export function MortgageSetupEditor({ portfolioId, view, onClose, onSaved }: { p
       if (v.fixedUntil < d.balanceDate) e.fixedUntil = `This fixation ended before ${dateLabel(d.balanceDate)}. Enter the rate that applies now and when it ends.`;
       else if (v.fixedUntil > v.maturityDate) e.fixedUntil = 'The fixation cannot run past final maturity.';
       const interest = Number(v.principalBalance) * Number(v.annualNominalRatePercent) / 1200;
-      if (v.monthlyPayment && Number(v.monthlyPayment) <= interest) e.monthlyPayment = `Does not cover a month’s interest (${money(interest, cur)}). Interest-only loans are not supported.`;
+      if (building(v)) {
+        if (v.allocationDate && v.allocationDate <= d.balanceDate) e.allocationDate = `Must follow the balance date (${dateLabel(d.balanceDate)}). Already switched? Set it up as a mortgage or annuity loan with the building loan’s balance.`;
+        else if (v.allocationDate && v.maturityDate && v.allocationDate >= v.maturityDate) e.allocationDate = 'Must come before final maturity.';
+      } else if (v.monthlyPayment && Number(v.monthlyPayment) <= interest) e.monthlyPayment = `Does not cover a month’s interest (${money(interest, cur)}). Interest-only loans are not supported, except as a building savings loan.`;
       return e;
     }}
     preview={v => {
       const e = estimate(v);
-      const debt = v.principalBalance && v.debtAllocationShare ? Number(v.principalBalance) * Number(v.debtAllocationShare) / 100 : null;
+      // A building savings loan is owed net of its savings, which are bound to repay it.
+      const owed = building(v) ? Math.max(0, Number(v.principalBalance) - (Number(v.savingsBalance) || 0)) : Number(v.principalBalance);
+      const debt = v.principalBalance && v.debtAllocationShare ? owed * Number(v.debtAllocationShare) / 100 : null;
+      const bridging = building(v) && v.principalBalance && v.annualNominalRatePercent ? Number(v.principalBalance) * Number(v.annualNominalRatePercent) / 1200 : null;
       return <Card className="bg-slate-50 p-4 dark:bg-slate-900/40">
         <p className="text-xs font-semibold text-slate-900 dark:text-white">Equity after setup</p>
         <p className="mt-2 font-mono text-xl font-semibold text-teal-700 dark:text-teal-300">{debt == null ? '—' : money((view.ownedValue ?? 0) - otherDebt - debt, cur)}</p>
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{share(p.ownershipShare)} ownership · {v.debtAllocationShare || '—'}% of this loan tracked here.{adding ? ` Includes ${money(otherDebt, cur)} attributed to the other ${others.length === 1 ? 'loan' : 'loans'}.` : ''}{e?.payment != null ? ` Installment ${v.monthlyPayment ? `${money(Number(v.monthlyPayment), cur)} (bank agreed)` : `${money(e.payment, cur)} (calculated)`}, ${e.count} left.` : ''} Estimates never confirm a payment as paid.</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{share(p.ownershipShare)} ownership · {v.debtAllocationShare || '—'}% of this loan tracked here.{adding ? ` Includes ${money(otherDebt, cur)} attributed to the other ${others.length === 1 ? 'loan' : 'loans'}.` : ''}{e?.payment != null ? ` Installment ${v.monthlyPayment ? `${money(Number(v.monthlyPayment), cur)} (bank agreed)` : `${money(e.payment, cur)} (calculated)`}, ${e.count} left.` : ''}{bridging != null ? ` Until the switch: ${money(bridging, cur)} interest + ${money(Number(v.monthlyDeposit) || 0, cur)} into savings a month. The debt counts net of the ${money(Number(v.savingsBalance) || 0, cur)} saved.` : ''} Estimates never confirm a payment as paid.</p>
       </Card>;
     }}
     onSubmit={async v => {
       const d = dates(v)!;
-      await mutation.mutateAsync({ propertyVersion: p.version, currency: cur, lender: v.lender, name: v.name, originalPrincipal: nullable(v.originalPrincipal), loanStartDate: v.loanStartDate, firstPaymentDate: d.first, maturityDate: v.maturityDate, paymentDay: d.day, debtAllocationShare: Number(v.debtAllocationShare) / 100, balanceTrackingMode: v.balanceTrackingMode as BalanceTrackingMode, openingBalance: { asOfDate: d.balanceDate, principalBalance: v.principalBalance, source: v.source as 'BANK_STATEMENT' | 'USER_CONFIRMED' }, ratePeriod: { effectiveFrom: d.rateFrom, fixedUntil: v.fixedUntil, annualNominalRatePercent: v.annualNominalRatePercent, monthlyPayment: nullable(v.monthlyPayment), paymentSource: v.monthlyPayment ? 'BANK_AGREED' : 'CALCULATED' } });
+      await mutation.mutateAsync({ propertyVersion: p.version, currency: cur, lender: v.lender, name: v.name, originalPrincipal: nullable(v.originalPrincipal), loanStartDate: v.loanStartDate, firstPaymentDate: d.first, maturityDate: v.maturityDate, paymentDay: d.day, debtAllocationShare: Number(v.debtAllocationShare) / 100, balanceTrackingMode: v.balanceTrackingMode as BalanceTrackingMode, openingBalance: { asOfDate: d.balanceDate, principalBalance: v.principalBalance, source: v.source as 'BANK_STATEMENT' | 'USER_CONFIRMED' }, ratePeriod: { effectiveFrom: d.rateFrom, fixedUntil: v.fixedUntil, annualNominalRatePercent: v.annualNominalRatePercent, monthlyPayment: building(v) ? null : nullable(v.monthlyPayment), paymentSource: v.monthlyPayment && !building(v) ? 'BANK_AGREED' : 'CALCULATED' },
+        buildingSavings: building(v) ? { monthlyDeposit: v.monthlyDeposit, savingsBalance: v.savingsBalance, savingsRatePercent: nullable(v.savingsRatePercent), allocationDate: v.allocationDate, buildingLoanRatePercent: v.buildingLoanRatePercent, buildingLoanPayment: nullable(v.buildingLoanPayment) } : null });
       onSaved?.(); if (!onSaved) onClose();
     }}>
     {!adding && <Notice title="The property is already saved">If you leave now, finish mortgage setup from this property later. Until then, its debt and equity remain incomplete.</Notice>}
